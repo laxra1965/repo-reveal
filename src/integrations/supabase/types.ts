@@ -14,7 +14,155 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      profiles: {
+        Row: {
+          created_at: string | null
+          display_name: string | null
+          email: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          display_name?: string | null
+          email: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          display_name?: string | null
+          email?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      subscription_plans: {
+        Row: {
+          active: boolean | null
+          created_at: string | null
+          duration_type: string
+          features: Json | null
+          id: string
+          name: string
+          price: number
+        }
+        Insert: {
+          active?: boolean | null
+          created_at?: string | null
+          duration_type: string
+          features?: Json | null
+          id?: string
+          name: string
+          price: number
+        }
+        Update: {
+          active?: boolean | null
+          created_at?: string | null
+          duration_type?: string
+          features?: Json | null
+          id?: string
+          name?: string
+          price?: number
+        }
+        Relationships: []
+      }
+      transactions: {
+        Row: {
+          amount: number
+          confirmed_at: string | null
+          created_at: string | null
+          id: string
+          payment_proof: string | null
+          plan_id: string
+          status: string | null
+          transaction_id: string
+          usdt_address: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          confirmed_at?: string | null
+          created_at?: string | null
+          id?: string
+          payment_proof?: string | null
+          plan_id: string
+          status?: string | null
+          transaction_id: string
+          usdt_address: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          confirmed_at?: string | null
+          created_at?: string | null
+          id?: string
+          payment_proof?: string | null
+          plan_id?: string
+          status?: string | null
+          transaction_id?: string
+          usdt_address?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transactions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_subscriptions: {
+        Row: {
+          created_at: string | null
+          end_date: string
+          id: string
+          plan_id: string
+          start_date: string | null
+          status: string | null
+          transaction_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          end_date: string
+          id?: string
+          plan_id: string
+          start_date?: string | null
+          status?: string | null
+          transaction_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          end_date?: string
+          id?: string
+          plan_id?: string
+          start_date?: string | null
+          status?: string | null
+          transaction_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_subscriptions_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
