@@ -1,6 +1,7 @@
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
+import { PlansSection } from '@/components/plans/PlansSection';
 import { Button } from '@/components/ui/button';
 
 const Index = () => {
@@ -44,13 +45,14 @@ const Index = () => {
       </header>
       
       <main className="container mx-auto px-4 py-8">
-        <div className="text-center">
+        <div className="text-center mb-8">
           <h2 className="text-3xl font-bold mb-4">Choose Your Plan</h2>
-          <p className="text-xl text-muted-foreground mb-8">
+          <p className="text-xl text-muted-foreground">
             Select a subscription plan to get started
           </p>
-          {/* Plans will be added here next */}
         </div>
+        
+        <PlansSection />
       </main>
     </div>
   );
