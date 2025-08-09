@@ -14,6 +14,120 @@ export type Database = {
   }
   public: {
     Tables: {
+      arbitrage_opportunities: {
+        Row: {
+          base_symbol: string
+          detected_at: string | null
+          end_amount: number
+          exchange1: Database["public"]["Enums"]["exchange_name"]
+          exchange2: Database["public"]["Enums"]["exchange_name"]
+          exchange3: Database["public"]["Enums"]["exchange_name"]
+          expires_at: string | null
+          id: string
+          intermediate_symbol: string
+          profit_amount: number
+          profit_percent: number
+          quote_symbol: string
+          start_amount: number
+          step1_action: string
+          step1_amount: number
+          step1_price: number
+          step2_action: string
+          step2_amount: number
+          step2_price: number
+          step3_action: string
+          step3_amount: number
+          step3_price: number
+          user_id: string
+        }
+        Insert: {
+          base_symbol: string
+          detected_at?: string | null
+          end_amount: number
+          exchange1: Database["public"]["Enums"]["exchange_name"]
+          exchange2: Database["public"]["Enums"]["exchange_name"]
+          exchange3: Database["public"]["Enums"]["exchange_name"]
+          expires_at?: string | null
+          id?: string
+          intermediate_symbol: string
+          profit_amount: number
+          profit_percent: number
+          quote_symbol: string
+          start_amount: number
+          step1_action: string
+          step1_amount: number
+          step1_price: number
+          step2_action: string
+          step2_amount: number
+          step2_price: number
+          step3_action: string
+          step3_amount: number
+          step3_price: number
+          user_id: string
+        }
+        Update: {
+          base_symbol?: string
+          detected_at?: string | null
+          end_amount?: number
+          exchange1?: Database["public"]["Enums"]["exchange_name"]
+          exchange2?: Database["public"]["Enums"]["exchange_name"]
+          exchange3?: Database["public"]["Enums"]["exchange_name"]
+          expires_at?: string | null
+          id?: string
+          intermediate_symbol?: string
+          profit_amount?: number
+          profit_percent?: number
+          quote_symbol?: string
+          start_amount?: number
+          step1_action?: string
+          step1_amount?: number
+          step1_price?: number
+          step2_action?: string
+          step2_amount?: number
+          step2_price?: number
+          step3_action?: string
+          step3_amount?: number
+          step3_price?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      exchange_credentials: {
+        Row: {
+          api_key: string
+          api_secret: string
+          created_at: string | null
+          exchange: Database["public"]["Enums"]["exchange_name"]
+          id: string
+          is_connected: boolean | null
+          test_mode: boolean | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          api_key: string
+          api_secret: string
+          created_at?: string | null
+          exchange: Database["public"]["Enums"]["exchange_name"]
+          id?: string
+          is_connected?: boolean | null
+          test_mode?: boolean | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          api_key?: string
+          api_secret?: string
+          created_at?: string | null
+          exchange?: Database["public"]["Enums"]["exchange_name"]
+          id?: string
+          is_connected?: boolean | null
+          test_mode?: boolean | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string | null
@@ -34,6 +148,33 @@ export type Database = {
           display_name?: string | null
           email?: string
           id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      scanner_logs: {
+        Row: {
+          created_at: string | null
+          details: Json | null
+          id: string
+          log_type: string
+          message: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          log_type: string
+          message: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          log_type?: string
+          message?: string
           user_id?: string
         }
         Relationships: []
@@ -67,6 +208,77 @@ export type Database = {
           price?: number
         }
         Relationships: []
+      }
+      trade_history: {
+        Row: {
+          actual_profit: number | null
+          base_symbol: string
+          completed_at: string | null
+          completed_steps: number | null
+          created_at: string | null
+          error_message: string | null
+          execution_details: Json | null
+          expected_profit: number
+          final_amount: number | null
+          id: string
+          intermediate_symbol: string
+          opportunity_id: string | null
+          quote_symbol: string
+          start_amount: number
+          started_at: string | null
+          status: Database["public"]["Enums"]["trade_status"] | null
+          total_steps: number | null
+          user_id: string
+        }
+        Insert: {
+          actual_profit?: number | null
+          base_symbol: string
+          completed_at?: string | null
+          completed_steps?: number | null
+          created_at?: string | null
+          error_message?: string | null
+          execution_details?: Json | null
+          expected_profit: number
+          final_amount?: number | null
+          id?: string
+          intermediate_symbol: string
+          opportunity_id?: string | null
+          quote_symbol: string
+          start_amount: number
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["trade_status"] | null
+          total_steps?: number | null
+          user_id: string
+        }
+        Update: {
+          actual_profit?: number | null
+          base_symbol?: string
+          completed_at?: string | null
+          completed_steps?: number | null
+          created_at?: string | null
+          error_message?: string | null
+          execution_details?: Json | null
+          expected_profit?: number
+          final_amount?: number | null
+          id?: string
+          intermediate_symbol?: string
+          opportunity_id?: string | null
+          quote_symbol?: string
+          start_amount?: number
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["trade_status"] | null
+          total_steps?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trade_history_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "arbitrage_opportunities"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       transactions: {
         Row: {
@@ -114,6 +326,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_settings: {
+        Row: {
+          auto_trade: boolean | null
+          created_at: string | null
+          enabled_exchanges:
+            | Database["public"]["Enums"]["exchange_name"][]
+            | null
+          filter_profitable: boolean | null
+          id: string
+          max_profit_percent: number | null
+          min_profit_percent: number | null
+          refresh_rate: number | null
+          trade_amount: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          auto_trade?: boolean | null
+          created_at?: string | null
+          enabled_exchanges?:
+            | Database["public"]["Enums"]["exchange_name"][]
+            | null
+          filter_profitable?: boolean | null
+          id?: string
+          max_profit_percent?: number | null
+          min_profit_percent?: number | null
+          refresh_rate?: number | null
+          trade_amount?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          auto_trade?: boolean | null
+          created_at?: string | null
+          enabled_exchanges?:
+            | Database["public"]["Enums"]["exchange_name"][]
+            | null
+          filter_profitable?: boolean | null
+          id?: string
+          max_profit_percent?: number | null
+          min_profit_percent?: number | null
+          refresh_rate?: number | null
+          trade_amount?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       user_subscriptions: {
         Row: {
@@ -168,10 +428,33 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      cleanup_expired_opportunities: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
     }
     Enums: {
-      [_ in never]: never
+      exchange_name:
+        | "binance"
+        | "bybit"
+        | "okx"
+        | "bitget"
+        | "mexc"
+        | "gate"
+        | "htx"
+        | "kucoin"
+        | "bitfinex"
+        | "bingx"
+        | "coinbase"
+        | "upbit"
+        | "cryptocom"
+        | "kraken"
+      trade_status:
+        | "pending"
+        | "executing"
+        | "completed"
+        | "failed"
+        | "cancelled"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -298,6 +581,30 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      exchange_name: [
+        "binance",
+        "bybit",
+        "okx",
+        "bitget",
+        "mexc",
+        "gate",
+        "htx",
+        "kucoin",
+        "bitfinex",
+        "bingx",
+        "coinbase",
+        "upbit",
+        "cryptocom",
+        "kraken",
+      ],
+      trade_status: [
+        "pending",
+        "executing",
+        "completed",
+        "failed",
+        "cancelled",
+      ],
+    },
   },
 } as const
