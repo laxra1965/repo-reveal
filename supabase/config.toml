@@ -1,1 +1,4 @@
 project_id = "zupbliefzhnohsoguwuk"
+
+[functions.arbitrage-scanner]
+verify_jwt = true

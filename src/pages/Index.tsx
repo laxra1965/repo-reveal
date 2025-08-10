@@ -1,7 +1,7 @@
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
-import { PlansSection } from '@/components/plans/PlansSection';
+import { ArbitrageScanner } from '@/components/arbitrage/ArbitrageScanner';
 import { Button } from '@/components/ui/button';
 
 const Index = () => {
@@ -32,7 +32,7 @@ const Index = () => {
     <div className="min-h-screen bg-background">
       <header className="border-b">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold">Subscription App</h1>
+          <h1 className="text-2xl font-bold">Arbitrage Scanner</h1>
           <div className="flex items-center gap-4">
             <span className="text-sm text-muted-foreground">
               Welcome, {user.email}
@@ -45,14 +45,7 @@ const Index = () => {
       </header>
       
       <main className="container mx-auto px-4 py-8">
-        <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold mb-4">Choose Your Plan</h2>
-          <p className="text-xl text-muted-foreground">
-            Select a subscription plan to get started
-          </p>
-        </div>
-        
-        <PlansSection />
+        <ArbitrageScanner />
       </main>
     </div>
   );
