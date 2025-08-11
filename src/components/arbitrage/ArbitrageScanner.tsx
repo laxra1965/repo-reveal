@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useSubscription } from '@/hooks/useSubscription';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,7 +9,8 @@ import { useToast } from '@/hooks/use-toast';
 import { ArbitrageSettings } from './ArbitrageSettings';
 import { ArbitrageOpportunity } from './ArbitrageOpportunity';
 import { ArbitrageLogPanel } from './ArbitrageLogPanel';
-import { Play, Pause, Settings, TrendingUp } from 'lucide-react';
+import { PlansSection } from '@/components/plans/PlansSection';
+import { Play, Pause, Settings, TrendingUp, Lock, Crown } from 'lucide-react';
 
 interface Opportunity {
   id: string;
@@ -37,6 +39,7 @@ interface Opportunity {
 
 export const ArbitrageScanner = () => {
   const { user } = useAuth();
+  const { hasActiveSubscription, subscription, loading: subscriptionLoading } = useSubscription();
   const { toast } = useToast();
   const [isScanning, setIsScanning] = useState(false);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
@@ -46,7 +49,14 @@ export const ArbitrageScanner = () => {
   const [scanCount, setScanCount] = useState(0);
 
   const startScanning = useCallback(async () => {
-    if (!user) return;
+    if (!user || !hasActiveSubscription) {
+      toast({
+        title: "Subscription Required",
+        description: "Please subscribe to a plan to use the arbitrage scanner",
+        variant: "destructive",
+      });
+      return;
+    }
     
     setIsScanning(true);
     
@@ -64,7 +74,7 @@ export const ArbitrageScanner = () => {
       title: "Scanner Started",
       description: "Arbitrage scanner is now monitoring opportunities",
     });
-  }, [user]);
+  }, [user, hasActiveSubscription]);
 
   const stopScanning = useCallback(() => {
     setIsScanning(false);
@@ -155,6 +165,42 @@ export const ArbitrageScanner = () => {
           <p>Please log in to access the arbitrage scanner</p>
         </CardContent>
       </Card>
+    );
+  }
+
+  // Show subscription gate if no active subscription
+  if (!subscriptionLoading && !hasActiveSubscription) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Lock className="h-5 w-5" />
+              Subscription Required
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-center space-y-4">
+              <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                <Crown className="h-4 w-4" />
+                <p>Access to the Arbitrage Scanner requires an active subscription</p>
+              </div>
+              <div className="bg-muted/50 p-4 rounded-lg">
+                <h4 className="font-semibold mb-2">Premium Features Include:</h4>
+                <ul className="text-sm text-muted-foreground space-y-1 text-left max-w-md mx-auto">
+                  <li>• Real-time triangular arbitrage scanning</li>
+                  <li>• Multi-exchange opportunity detection</li>
+                  <li>• Automated profit calculations</li>
+                  <li>• Custom trading parameters</li>
+                  <li>• Detailed execution logs</li>
+                </ul>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <PlansSection />
+      </div>
     );
   }
 

@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Calendar, User, DollarSign, Trash2 } from 'lucide-react';
+import { Calendar, User, DollarSign, Trash2, CheckCircle, Pause, Play } from 'lucide-react';
 
 interface Subscription {
   id: string;
@@ -85,6 +85,66 @@ export const AdminSubscriptionList = () => {
     }
   };
 
+  const reactivateSubscription = async (subscriptionId: string) => {
+    try {
+      setProcessing(subscriptionId);
+
+      const { error } = await supabase
+        .from('user_subscriptions')
+        .update({ 
+          status: 'active'
+        })
+        .eq('id', subscriptionId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Subscription reactivated",
+      });
+
+      fetchSubscriptions();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to reactivate subscription",
+        variant: "destructive",
+      });
+    } finally {
+      setProcessing(null);
+    }
+  };
+
+  const suspendSubscription = async (subscriptionId: string) => {
+    try {
+      setProcessing(subscriptionId);
+
+      const { error } = await supabase
+        .from('user_subscriptions')
+        .update({ 
+          status: 'suspended'
+        })
+        .eq('id', subscriptionId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Subscription suspended",
+      });
+
+      fetchSubscriptions();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to suspend subscription",
+        variant: "destructive",
+      });
+    } finally {
+      setProcessing(null);
+    }
+  };
+
   const cancelSubscription = async (subscriptionId: string) => {
     try {
       setProcessing(subscriptionId);
@@ -121,6 +181,10 @@ export const AdminSubscriptionList = () => {
     
     if (status === 'cancelled') {
       return <Badge variant="destructive">Cancelled</Badge>;
+    }
+    
+    if (status === 'suspended') {
+      return <Badge className="bg-orange-500 text-white">Suspended</Badge>;
     }
     
     if (isExpired) {
@@ -213,8 +277,34 @@ export const AdminSubscriptionList = () => {
                   </div>
                 )}
 
-                {isSubscriptionActive(subscription.status, subscription.end_date) && (
-                  <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
+                  {subscription.status === 'active' && (
+                    <Button
+                      onClick={() => suspendSubscription(subscription.id)}
+                      disabled={processing === subscription.id}
+                      variant="outline"
+                      size="sm"
+                      className="bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100"
+                    >
+                      <Pause className="h-4 w-4 mr-2" />
+                      {processing === subscription.id ? 'Suspending...' : 'Suspend'}
+                    </Button>
+                  )}
+                  
+                  {subscription.status === 'suspended' && (
+                    <Button
+                      onClick={() => reactivateSubscription(subscription.id)}
+                      disabled={processing === subscription.id}
+                      variant="outline"
+                      size="sm"
+                      className="bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
+                    >
+                      <Play className="h-4 w-4 mr-2" />
+                      {processing === subscription.id ? 'Reactivating...' : 'Reactivate'}
+                    </Button>
+                  )}
+                  
+                  {(subscription.status === 'active' || subscription.status === 'suspended') && (
                     <Button
                       onClick={() => cancelSubscription(subscription.id)}
                       disabled={processing === subscription.id}
@@ -222,10 +312,10 @@ export const AdminSubscriptionList = () => {
                       size="sm"
                     >
                       <Trash2 className="h-4 w-4 mr-2" />
-                      {processing === subscription.id ? 'Cancelling...' : 'Cancel Subscription'}
+                      {processing === subscription.id ? 'Cancelling...' : 'Cancel'}
                     </Button>
-                  </div>
-                )}
+                  )}
+                </div>
 
                 <div className="text-xs text-muted-foreground">
                   Created: {new Date(subscription.created_at).toLocaleString()}
