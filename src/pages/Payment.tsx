@@ -74,7 +74,7 @@ const Payment = () => {
         description: "Transaction not found",
         variant: "destructive",
       });
-      navigate('/');
+      navigate('/dashboard');
     } finally {
       setLoading(false);
     }
@@ -101,22 +101,29 @@ const Payment = () => {
     try {
       setSubmitting(true);
       
+      if (!transaction?.id) {
+        throw new Error('Transaction not found');
+      }
+      
       const { error } = await supabase
         .from('transactions')
         .update({ 
-          payment_proof: paymentProof,
+          payment_proof: paymentProof.trim(),
           status: 'proof_submitted'
         })
-        .eq('id', transaction?.id);
+        .eq('id', transaction.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Payment proof submission error:', error);
+        throw error;
+      }
 
       toast({
         title: "Success",
         description: "Payment proof submitted successfully. We'll verify your payment shortly.",
       });
 
-      navigate('/');
+      navigate('/dashboard');
     } catch (error) {
       toast({
         title: "Error",
@@ -152,8 +159,8 @@ const Payment = () => {
     <div className="min-h-screen bg-background py-8">
       <div className="container mx-auto px-4 max-w-2xl">
         <div className="mb-6">
-          <Button variant="outline" onClick={() => navigate('/')}>
-            ← Back to Plans
+          <Button variant="outline" onClick={() => navigate('/dashboard')}>
+            ← Back to Dashboard
           </Button>
         </div>
 
