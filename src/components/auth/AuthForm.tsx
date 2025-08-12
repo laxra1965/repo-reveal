@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +13,7 @@ export const AuthForm = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,7 +43,11 @@ export const AuthForm = () => {
             variant: "destructive",
           });
         } else {
-          window.location.href = '/';
+          toast({
+            title: "Success",
+            description: "Successfully logged in",
+          });
+          navigate('/dashboard');
         }
       } else {
         const { error } = await supabase.auth.signUp({
@@ -127,7 +133,7 @@ export const AuthForm = () => {
             </Button>
           </form>
           
-          <div className="mt-4 text-center">
+          <div className="mt-4 text-center space-y-2">
             <button
               type="button"
               onClick={() => setIsLogin(!isLogin)}
@@ -138,6 +144,15 @@ export const AuthForm = () => {
                 : "Already have an account? Sign in"
               }
             </button>
+            <div>
+              <Button 
+                variant="ghost" 
+                onClick={() => navigate('/admin-login')}
+                className="text-sm"
+              >
+                Admin Login
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
