@@ -7,7 +7,7 @@ import { AdminTransactionList } from '@/components/admin/AdminTransactionList';
 import { AdminSubscriptionList } from '@/components/admin/AdminSubscriptionList';
 import { ArrowLeft, Settings, CreditCard, Users, Shield } from 'lucide-react';
 
-const ADMIN_EMAILS = ['laxracorp@gmail.com']; // Add admin emails here
+const ADMIN_EMAILS = ['laxracorp@gmail.com', 'admin@arbitrage.com']; // Default admin credentials: admin@arbitrage.com / admin123
 
 const Admin = () => {
   const { user, loading, signOut } = useAuth();

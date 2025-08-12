@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Calendar, User, DollarSign, Trash2, CheckCircle, Pause, Play } from 'lucide-react';
+import { Calendar, User, DollarSign, Trash2, CheckCircle, Pause, Play, X, Check } from 'lucide-react';
 
 interface Subscription {
   id: string;
@@ -24,6 +24,7 @@ interface Subscription {
   transactions: {
     transaction_id: string;
     amount: number;
+    status: string;
   };
 }
 
@@ -50,7 +51,8 @@ export const AdminSubscriptionList = () => {
           ),
           transactions (
             transaction_id,
-            amount
+            amount,
+            status
           )
         `)
         .order('created_at', { ascending: false });
@@ -176,11 +178,79 @@ export const AdminSubscriptionList = () => {
     }
   };
 
+  const approveSubscription = async (subscriptionId: string) => {
+    try {
+      setProcessing(subscriptionId);
+
+      const { error } = await supabase
+        .from('user_subscriptions')
+        .update({ 
+          status: 'active'
+        })
+        .eq('id', subscriptionId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Subscription approved",
+      });
+
+      fetchSubscriptions();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to approve subscription",
+        variant: "destructive",
+      });
+    } finally {
+      setProcessing(null);
+    }
+  };
+
+  const rejectSubscription = async (subscriptionId: string) => {
+    try {
+      setProcessing(subscriptionId);
+
+      const { error } = await supabase
+        .from('user_subscriptions')
+        .update({ 
+          status: 'rejected'
+        })
+        .eq('id', subscriptionId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Subscription rejected",
+      });
+
+      fetchSubscriptions();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to reject subscription",
+        variant: "destructive",
+      });
+    } finally {
+      setProcessing(null);
+    }
+  };
+
   const getStatusBadge = (status: string, endDate: string) => {
     const isExpired = new Date(endDate) < new Date();
     
     if (status === 'cancelled') {
       return <Badge variant="destructive">Cancelled</Badge>;
+    }
+    
+    if (status === 'rejected') {
+      return <Badge variant="destructive">Rejected</Badge>;
+    }
+    
+    if (status === 'pending') {
+      return <Badge className="bg-yellow-500 text-white">Pending Approval</Badge>;
     }
     
     if (status === 'suspended') {
@@ -278,6 +348,30 @@ export const AdminSubscriptionList = () => {
                 )}
 
                 <div className="flex gap-2 flex-wrap">
+                  {subscription.status === 'pending' && (
+                    <>
+                      <Button
+                        onClick={() => approveSubscription(subscription.id)}
+                        disabled={processing === subscription.id}
+                        variant="outline"
+                        size="sm"
+                        className="bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
+                      >
+                        <Check className="h-4 w-4 mr-2" />
+                        {processing === subscription.id ? 'Approving...' : 'Approve'}
+                      </Button>
+                      <Button
+                        onClick={() => rejectSubscription(subscription.id)}
+                        disabled={processing === subscription.id}
+                        variant="destructive"
+                        size="sm"
+                      >
+                        <X className="h-4 w-4 mr-2" />
+                        {processing === subscription.id ? 'Rejecting...' : 'Reject'}
+                      </Button>
+                    </>
+                  )}
+
                   {subscription.status === 'active' && (
                     <Button
                       onClick={() => suspendSubscription(subscription.id)}
