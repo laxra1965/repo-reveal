@@ -7,7 +7,7 @@ import { AdminTransactionList } from '@/components/admin/AdminTransactionList';
 import { AdminSubscriptionList } from '@/components/admin/AdminSubscriptionList';
 import { ArrowLeft, Settings, CreditCard, Users, Shield } from 'lucide-react';
 
-const ADMIN_EMAILS = ['laxracorp@gmail.com', 'admin@arbitrage.com']; // To create admin user, sign up with admin@arbitrage.com on the user registration page first
+const ADMIN_EMAILS = ['laxracorp@gmail.com', 'admin@arbitrage.com'];
 
 const Admin = () => {
   const { user, loading, signOut } = useAuth();
@@ -78,24 +78,24 @@ const Admin = () => {
       </header>
       
       <main className="container mx-auto px-4 py-8">
-        <Tabs defaultValue="transactions" className="space-y-6">
+        <Tabs defaultValue="subscriptions" className="space-y-6">
           <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="subscriptions" className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Subscription Requests
+            </TabsTrigger>
             <TabsTrigger value="transactions" className="flex items-center gap-2">
               <CreditCard className="h-4 w-4" />
               Transactions
             </TabsTrigger>
-            <TabsTrigger value="subscriptions" className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Subscriptions
-            </TabsTrigger>
           </TabsList>
-          
-          <TabsContent value="transactions">
-            <AdminTransactionList />
-          </TabsContent>
           
           <TabsContent value="subscriptions">
             <AdminSubscriptionList />
+          </TabsContent>
+          
+          <TabsContent value="transactions">
+            <AdminTransactionList />
           </TabsContent>
         </Tabs>
       </main>
