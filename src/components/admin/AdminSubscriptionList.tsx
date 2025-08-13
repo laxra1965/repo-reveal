@@ -72,10 +72,17 @@ export const AdminSubscriptionList = () => {
             ...subscription,
             user_email: profileData?.email || 'Unknown'
           };
-        })
-      );
-      
-      setSubscriptions(subscriptionsWithEmails);
+         })
+       );
+       
+       // Sort to show pending subscriptions first, then by creation date
+       const sortedSubscriptions = subscriptionsWithEmails.sort((a, b) => {
+         if (a.status === 'pending' && b.status !== 'pending') return -1;
+         if (b.status === 'pending' && a.status !== 'pending') return 1;
+         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+       });
+       
+       setSubscriptions(sortedSubscriptions);
     } catch (error) {
       toast({
         title: "Error",
@@ -283,10 +290,18 @@ export const AdminSubscriptionList = () => {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Active Subscriptions</h2>
+        <h2 className="text-2xl font-bold">Subscription Requests & Management</h2>
         <Button onClick={fetchSubscriptions} variant="outline">
           Refresh
         </Button>
+      </div>
+      
+      {/* Priority: Show pending subscriptions first */}
+      <div className="text-sm text-muted-foreground mb-4">
+        <Badge className="bg-yellow-500 text-white mr-2">Pending</Badge>
+        subscriptions require approval • 
+        <Badge className="bg-green-500 text-white ml-2 mr-2">Active</Badge>
+        subscriptions can be managed
       </div>
 
       {subscriptions.length === 0 ? (
