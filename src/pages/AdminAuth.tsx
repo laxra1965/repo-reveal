@@ -63,7 +63,12 @@ const AdminAuth = () => {
           title: "Welcome Admin",
           description: "Successfully logged in",
         });
-        navigate('/admin');
+        // Always check if the user is admin after login
+        if (ADMIN_EMAILS.includes(email)) {
+          navigate('/admin');
+        } else {
+          navigate('/dashboard');
+        }
       }
     } catch (error) {
       toast({

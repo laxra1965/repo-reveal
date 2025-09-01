@@ -168,39 +168,44 @@ const Payment = () => {
           <CardHeader>
             <CardTitle>Complete Your Payment</CardTitle>
             <CardDescription>
-              Transaction ID: {transaction.transaction_id}
+              <div style={{marginTop: 8, marginBottom: 8}}>
+                <span style={{fontWeight: 600, color: '#0070f3'}}>Transaction ID:</span>
+                <span style={{fontFamily: 'monospace', marginLeft: 8, color: '#222'}}>{transaction.transaction_id}</span>
+              </div>
             </CardDescription>
           </CardHeader>
-          
           <CardContent className="space-y-6">
+            {/* Info Message */}
+            <div className="bg-blue-50 border border-blue-200 text-blue-900 rounded-lg p-3 text-sm">
+              Please send the exact amount to the address below. Double-check the network and transaction ID. Your plan will be activated after payment is confirmed by admin.
+            </div>
             {/* Plan Details */}
             <div className="bg-muted p-4 rounded-lg">
               <h3 className="font-semibold mb-2">Plan Details</h3>
               <div className="space-y-1 text-sm">
                 <p><strong>Plan:</strong> {transaction.subscription_plans.name}</p>
                 <p><strong>Duration:</strong> {transaction.subscription_plans.duration_type}</p>
-                <p><strong>Amount:</strong> ${transaction.amount} USDT</p>
+                <p><strong>Amount:</strong> <span style={{color:'#0070f3', fontWeight:600}}>${transaction.amount} USDT</span></p>
               </div>
             </div>
-
-            {/* USDT Address */}
-            <div>
-              <Label className="text-base font-semibold">Send USDT (TRC20) to this address:</Label>
+            {/* Payment Address Section */}
+            <div className="bg-white p-4 rounded-lg border">
+              <h3 className="font-semibold mb-2">USDT-TRC20 Payment Address</h3>
               <div className="flex items-center gap-2 mt-2">
                 <Input 
                   value={USDT_ADDRESS} 
                   readOnly 
-                  className="font-mono text-sm"
+                  className="font-mono text-base font-bold"
+                  style={{background:'#f7f7fa', color:'#0070f3'}}
                 />
                 <Button onClick={copyAddress} size="icon" variant="outline">
                   <Copy className="h-4 w-4" />
                 </Button>
               </div>
               <p className="text-sm text-muted-foreground mt-1">
-                Network: TRON (TRC20) - Amount: ${transaction.amount} USDT
+                Network: <b>TRON (TRC20)</b> &nbsp; | &nbsp; Amount: <b>${transaction.amount} USDT</b>
               </p>
             </div>
-
             {/* Payment Proof */}
             <div>
               <Label htmlFor="payment-proof" className="text-base font-semibold">
@@ -218,7 +223,6 @@ const Payment = () => {
                 </p>
               </div>
             </div>
-
             <Button 
               onClick={submitPaymentProof} 
               disabled={submitting || !paymentProof.trim()}
