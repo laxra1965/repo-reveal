@@ -18,8 +18,11 @@ const Admin = () => {
   useEffect(() => {
     if (!loading && !user) {
       navigate('/auth');
+    } else if (!loading && user && !isAdmin) {
+      // Handle non-admin users in effect, not render
+      return;
     }
-  }, [user, loading, navigate]);
+  }, [user, loading, navigate, isAdmin]);
 
   if (loading) {
     return (
@@ -32,8 +35,7 @@ const Admin = () => {
   }
 
   if (!user) {
-    navigate('/auth');
-    return null;
+    return null; // useEffect will handle navigation
   }
 
   if (!isAdmin) {
