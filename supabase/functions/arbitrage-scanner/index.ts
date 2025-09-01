@@ -23,6 +23,52 @@ const API_CONFIG: Record<string, ExchangeConfig> = {
   Gate: { type: 'single', url: "https://api.gateio.ws/api/v4/spot/tickers" },
   HTX: { type: 'single', url: "https://api.htx.com/market/tickers" },
   KuCoin: { type: 'single', url: "https://api.kucoin.com/api/v1/market/allTickers" },
+  Bitfinex: { type: 'single', url: "https://api-pub.bitfinex.com/v2/tickers?symbols=ALL" },
+  BingX: { type: 'single', url: "https://open-api.bingx.com/openApi/spot/v1/market/ticker" },
+  Kraken: {
+    type: 'multi_step_batch',
+    list_url: "https://api.kraken.com/0/public/AssetPairs",
+    ticker_url_base: "https://api.kraken.com/0/public/Ticker?pair="
+  },
+  Coinbase: {
+    type: 'multi_step_individual',
+    list_url: "https://api.exchange.coinbase.com/products",
+    ticker_url_template: "https://api.exchange.coinbase.com/products/{id}/book?level=1"
+  }
+};
+
+// Symbol standardization function from advanced scanner
+const standardizeSymbol = (symbol: string, exchangeName: string): string | null => {
+  if (!symbol) return null;
+  
+  let s = symbol.toUpperCase();
+  s = s.replace(/[-_:\/\s]/g, '');
+  
+  // Exchange-specific symbol standardization
+  if (exchangeName === 'Kraken') {
+    if (s.startsWith('XBT')) s = s.replace('XBT', 'BTC');
+    else if (s.startsWith('XDG')) s = s.replace('XDG', 'DOGE');
+    else if (s.startsWith('XETH')) s = s.replace('XETH', 'ETH');
+    else if (s.startsWith('XLTC')) s = s.replace('XLTC', 'LTC');
+    if (s.endsWith('ZUSD')) s = s.replace('ZUSD', 'USD');
+    else if (s.endsWith('ZEUR')) s = s.replace('ZEUR', 'EUR');
+    if (s.includes('XXBT')) s = s.replace('XXBT', 'BTC');
+  } else if (exchangeName === 'Bitfinex') {
+    if (s.startsWith('T')) s = s.substring(1);
+  }
+  
+  // Convert USD to USDT for standardization
+  if (s.endsWith("USD") && !s.endsWith("USDT") && !s.endsWith("USDC")) {
+    s = s.substring(0, s.length - 3) + "USDT";
+  }
+  
+  // Fix double USDT
+  if (s.endsWith("USDTUSDT")) s = s.substring(0, s.length - 4);
+  
+  // Fix EUR pairs
+  if (s.endsWith("EURUSDT") && s.length > 7) s = s.replace("EURUSDT", "EUR");
+  
+  return s;
 };
 
 serve(async (req) => {
@@ -63,8 +109,8 @@ serve(async (req) => {
       // Clear expired opportunities
       await supabase.rpc('cleanup_expired_opportunities');
 
-      // Fetch price data from enabled exchanges
-      const priceData: Record<string, any[]> = {};
+      // Fetch price data from enabled exchanges using improved logic
+      let allPriceData: Record<string, any> = {};
       
       for (const exchangeName of enabledExchanges) {
         const config = API_CONFIG[exchangeName.charAt(0).toUpperCase() + exchangeName.slice(1)];
@@ -72,16 +118,25 @@ serve(async (req) => {
 
         try {
           console.log(`Fetching data from ${exchangeName}`);
-          const response = await fetch(config.url!, {
-            headers: {
-              'User-Agent': 'ArbitrageScanner/1.0',
-              'Accept': 'application/json',
+          const fetchedData = await fetchExchangeData(exchangeName, config);
+          
+          if (fetchedData && !fetchedData.error) {
+            const normalized = normalizeExchangeData(exchangeName, fetchedData.data);
+            
+            // Merge price data - use best bid/ask prices across exchanges
+            for (const [symbol, prices] of Object.entries(normalized)) {
+              if (!allPriceData[symbol]) {
+                allPriceData[symbol] = prices;
+              } else {
+                // Use highest bid and lowest ask across exchanges for better arbitrage
+                const current = allPriceData[symbol];
+                const newPrices = prices as any;
+                allPriceData[symbol] = {
+                  bidPrice: Math.max(current.bidPrice, newPrices.bidPrice),
+                  askPrice: Math.min(current.askPrice, newPrices.askPrice)
+                };
+              }
             }
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            priceData[exchangeName] = normalizeExchangeData(exchangeName, data);
           }
         } catch (error) {
           console.error(`Error fetching data from ${exchangeName}:`, error);
@@ -94,8 +149,10 @@ serve(async (req) => {
         }
       }
 
-      // Find arbitrage opportunities
-      const opportunities = findTriangularArbitrage(priceData, tradeAmount, minProfitPercent, maxProfitPercent);
+      console.log(`Combined price data for ${Object.keys(allPriceData).length} symbols`);
+
+      // Find triangular arbitrage opportunities using enhanced algorithm
+      const opportunities = findTriangularArbitrage(allPriceData, 'USDT', tradeAmount);
 
       // Store opportunities in database
       for (const opportunity of opportunities) {
@@ -137,140 +194,241 @@ serve(async (req) => {
   }
 });
 
-function normalizeExchangeData(exchange: string, data: any): any[] {
-  switch (exchange.toLowerCase()) {
-    case 'binance':
-    case 'mexc':
-      return data.map((item: any) => ({
-        symbol: item.symbol,
-        bidPrice: parseFloat(item.bidPrice),
-        askPrice: parseFloat(item.askPrice),
-        bidQty: parseFloat(item.bidQty || 0),
-        askQty: parseFloat(item.askQty || 0)
-      }));
-    
-    case 'bybit':
-      return data.result?.list?.map((item: any) => ({
-        symbol: item.symbol,
-        bidPrice: parseFloat(item.bid1Price),
-        askPrice: parseFloat(item.ask1Price),
-        bidQty: parseFloat(item.bid1Size || 0),
-        askQty: parseFloat(item.ask1Size || 0)
-      })) || [];
-    
-    case 'okx':
-      return data.data?.map((item: any) => ({
-        symbol: item.instId.replace('-', ''),
-        bidPrice: parseFloat(item.bidPx),
-        askPrice: parseFloat(item.askPx),
-        bidQty: parseFloat(item.bidSz || 0),
-        askQty: parseFloat(item.askSz || 0)
-      })) || [];
-    
-    default:
-      return [];
+// Enhanced fetch function for different exchange types
+async function fetchExchangeData(exchangeName: string, config: ExchangeConfig): Promise<any> {
+  try {
+    if (config.type === 'single') {
+      const response = await fetch(config.url!, {
+        headers: {
+          'User-Agent': 'ArbitrageScanner/1.0',
+          'Accept': 'application/json',
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Fetch failed: ${response.statusText} (${response.status})`);
+      }
+      
+      const data = await response.json();
+      return { exchangeName, data };
+    }
+    // Add support for multi-step exchanges if needed
+    else {
+      console.log(`Multi-step exchanges not yet implemented for ${exchangeName}`);
+      return { exchangeName, error: 'Multi-step not implemented' };
+    }
+  } catch (error) {
+    console.error(`Error fetching ${exchangeName}:`, error);
+    return { exchangeName, error: error.message };
   }
 }
 
-function findTriangularArbitrage(
-  priceData: Record<string, any[]>,
-  tradeAmount: number,
-  minProfitPercent: number,
-  maxProfitPercent: number
-): any[] {
-  const opportunities: any[] = [];
-  const exchangeNames = Object.keys(priceData);
-
-  // Common trading pairs for triangular arbitrage
-  const commonBases = ['BTC', 'ETH', 'BNB', 'USDT', 'USDC'];
-  const commonQuotes = ['USDT', 'USDC', 'BTC', 'ETH'];
-
-  for (let i = 0; i < exchangeNames.length; i++) {
-    for (let j = i; j < exchangeNames.length; j++) {
-      for (let k = j; k < exchangeNames.length; k++) {
-        const exchange1 = exchangeNames[i];
-        const exchange2 = exchangeNames[j];
-        const exchange3 = exchangeNames[k];
-
-        const data1 = priceData[exchange1];
-        const data2 = priceData[exchange2];
-        const data3 = priceData[exchange3];
-
-        // Try different currency combinations
-        for (const base of commonBases) {
-          for (const quote of commonQuotes) {
-            for (const intermediate of commonBases) {
-              if (base === quote || base === intermediate || quote === intermediate) continue;
-
-              const opportunity = calculateTriangularArbitrage(
-                data1, data2, data3,
-                exchange1, exchange2, exchange3,
-                base, quote, intermediate,
-                tradeAmount
-              );
-
-              if (opportunity && 
-                  opportunity.profit_percent >= minProfitPercent && 
-                  opportunity.profit_percent <= maxProfitPercent) {
-                opportunities.push(opportunity);
-              }
-            }
+function normalizeExchangeData(exchange: string, data: any): Record<string, any> {
+  const priceMap: Record<string, any> = {};
+  
+  try {
+    const exchangeName = exchange.charAt(0).toUpperCase() + exchange.slice(1);
+    
+    if (exchangeName === 'Binance' && Array.isArray(data)) {
+      data.forEach((ticker: any) => {
+        if (ticker.symbol && ticker.bidPrice && ticker.askPrice) {
+          const standardSymbol = standardizeSymbol(ticker.symbol, exchangeName);
+          if (standardSymbol) {
+            priceMap[standardSymbol] = {
+              bidPrice: parseFloat(ticker.bidPrice),
+              askPrice: parseFloat(ticker.askPrice)
+            };
           }
+        }
+      });
+    } else if (exchangeName === 'Bybit' && data.retCode === 0 && data.result?.list) {
+      data.result.list.forEach((ticker: any) => {
+        if (ticker.symbol && ticker.bid1Price && ticker.ask1Price) {
+          const standardSymbol = standardizeSymbol(ticker.symbol, exchangeName);
+          if (standardSymbol) {
+            priceMap[standardSymbol] = {
+              bidPrice: parseFloat(ticker.bid1Price),
+              askPrice: parseFloat(ticker.ask1Price)
+            };
+          }
+        }
+      });
+    } else if (exchangeName === 'OKX' && data.code === "0" && Array.isArray(data.data)) {
+      data.data.forEach((ticker: any) => {
+        if (ticker.instId && ticker.bidPx && ticker.askPx) {
+          const standardSymbol = standardizeSymbol(ticker.instId, exchangeName);
+          if (standardSymbol) {
+            priceMap[standardSymbol] = {
+              bidPrice: parseFloat(ticker.bidPx),
+              askPrice: parseFloat(ticker.askPx)
+            };
+          }
+        }
+      });
+    } else if (exchangeName === 'KuCoin' && data.code === "200000" && data.data?.ticker) {
+      data.data.ticker.forEach((ticker: any) => {
+        if (ticker.symbol && ticker.buy && ticker.sell) {
+          const standardSymbol = standardizeSymbol(ticker.symbol, exchangeName);
+          if (standardSymbol) {
+            priceMap[standardSymbol] = {
+              bidPrice: parseFloat(ticker.buy),
+              askPrice: parseFloat(ticker.sell)
+            };
+          }
+        }
+      });
+    } else if (exchangeName === 'Gate' && Array.isArray(data)) {
+      data.forEach((ticker: any) => {
+        if (ticker.currency_pair && ticker.highest_bid && ticker.lowest_ask) {
+          const standardSymbol = standardizeSymbol(ticker.currency_pair, exchangeName);
+          if (standardSymbol) {
+            priceMap[standardSymbol] = {
+              bidPrice: parseFloat(ticker.highest_bid),
+              askPrice: parseFloat(ticker.lowest_ask)
+            };
+          }
+        }
+      });
+    } else if (exchangeName === 'MEXC' && Array.isArray(data)) {
+      data.forEach((ticker: any) => {
+        if (ticker.symbol && ticker.bidPrice && ticker.askPrice) {
+          const standardSymbol = standardizeSymbol(ticker.symbol, exchangeName);
+          if (standardSymbol) {
+            priceMap[standardSymbol] = {
+              bidPrice: parseFloat(ticker.bidPrice),
+              askPrice: parseFloat(ticker.askPrice)
+            };
+          }
+        }
+      });
+    } else if (exchangeName === 'HTX' && data.status === 'ok' && Array.isArray(data.data)) {
+      data.data.forEach((ticker: any) => {
+        if (ticker.symbol && ticker.bid && ticker.ask) {
+          const standardSymbol = standardizeSymbol(ticker.symbol, exchangeName);
+          if (standardSymbol) {
+            priceMap[standardSymbol] = {
+              bidPrice: parseFloat(ticker.bid),
+              askPrice: parseFloat(ticker.ask)
+            };
+          }
+        }
+      });
+    } else if (exchangeName === 'Bitget' && data.code === "00000" && Array.isArray(data.data)) {
+      data.data.forEach((ticker: any) => {
+        if ((ticker.symbolName || ticker.symbol) && ticker.buyOne && ticker.sellOne) {
+          const standardSymbol = standardizeSymbol(ticker.symbolName || ticker.symbol, exchangeName);
+          if (standardSymbol) {
+            priceMap[standardSymbol] = {
+              bidPrice: parseFloat(ticker.buyOne),
+              askPrice: parseFloat(ticker.sellOne)
+            };
+          }
+        }
+      });
+    }
+    
+    console.log(`${exchangeName}: Normalized ${Object.keys(priceMap).length} symbols`);
+    return priceMap;
+  } catch (error) {
+    console.error(`Error normalizing ${exchange} data:`, error);
+    return {};
+  }
+}
+
+// Enhanced triangular arbitrage finder
+function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: string, tradeAmount: number): any[] {
+  const opportunities: any[] = [];
+  const symbols = Object.keys(priceMap);
+  
+  // Common base currencies to check for triangular opportunities
+  const commonBases = ['BTC', 'ETH', 'BNB', 'ADA', 'SOL', 'MATIC', 'DOT', 'LINK', 'AVAX', 'UNI'];
+  
+  for (const base of commonBases) {
+    for (const intermediate of commonBases) {
+      if (base === intermediate) continue;
+      
+      const pair1 = `${base}${quoteCurrency}`; // BTC/USDT
+      const pair2 = `${intermediate}${quoteCurrency}`; // ETH/USDT  
+      const pair3 = `${base}${intermediate}`; // BTC/ETH
+      
+      if (priceMap[pair1] && priceMap[pair2] && priceMap[pair3]) {
+        // Forward path: USDT -> BTC -> ETH -> USDT
+        try {
+          const step1Amount = tradeAmount / priceMap[pair1].askPrice; // Buy BTC with USDT
+          const step2Amount = step1Amount * priceMap[pair3].bidPrice; // Sell BTC for ETH
+          const step3Amount = step2Amount * priceMap[pair2].bidPrice; // Sell ETH for USDT
+          
+          const profit = step3Amount - tradeAmount;
+          const profitPercent = (profit / tradeAmount) * 100;
+          
+          if (profit > 0 && profitPercent > 0.001) { // Minimum 0.001% profit
+            opportunities.push({
+              base_symbol: base,
+              intermediate_symbol: intermediate,
+              quote_symbol: quoteCurrency,
+              exchange1: 'mixed',
+              exchange2: 'mixed', 
+              exchange3: 'mixed',
+              step1_action: 'BUY',
+              step1_price: priceMap[pair1].askPrice,
+              step1_amount: step1Amount,
+              step2_action: 'SELL',
+              step2_price: priceMap[pair3].bidPrice,
+              step2_amount: step1Amount,
+              step3_action: 'SELL',
+              step3_price: priceMap[pair2].bidPrice,
+              step3_amount: step2Amount,
+              start_amount: tradeAmount,
+              end_amount: step3Amount,
+              profit_amount: profit,
+              profit_percent: profitPercent
+            });
+          }
+        } catch (error) {
+          console.log(`Error calculating forward path for ${base}-${intermediate}:`, error);
+        }
+        
+        // Reverse path: USDT -> ETH -> BTC -> USDT
+        try {
+          const step1Amount = tradeAmount / priceMap[pair2].askPrice; // Buy ETH with USDT
+          const step2Amount = step1Amount / priceMap[pair3].askPrice; // Buy BTC with ETH
+          const step3Amount = step2Amount * priceMap[pair1].bidPrice; // Sell BTC for USDT
+          
+          const profit = step3Amount - tradeAmount;
+          const profitPercent = (profit / tradeAmount) * 100;
+          
+          if (profit > 0 && profitPercent > 0.001) { // Minimum 0.001% profit
+            opportunities.push({
+              base_symbol: intermediate,
+              intermediate_symbol: base,
+              quote_symbol: quoteCurrency,
+              exchange1: 'mixed',
+              exchange2: 'mixed',
+              exchange3: 'mixed',
+              step1_action: 'BUY',
+              step1_price: priceMap[pair2].askPrice,
+              step1_amount: step1Amount,
+              step2_action: 'BUY',
+              step2_price: priceMap[pair3].askPrice,
+              step2_amount: step2Amount,
+              step3_action: 'SELL',
+              step3_price: priceMap[pair1].bidPrice,
+              step3_amount: step2Amount,
+              start_amount: tradeAmount,
+              end_amount: step3Amount,
+              profit_amount: profit,
+              profit_percent: profitPercent
+            });
+          }
+        } catch (error) {
+          console.log(`Error calculating reverse path for ${base}-${intermediate}:`, error);
         }
       }
     }
   }
-
-  return opportunities.sort((a, b) => b.profit_percent - a.profit_percent).slice(0, 10);
-}
-
-function calculateTriangularArbitrage(
-  data1: any[], data2: any[], data3: any[],
-  exchange1: string, exchange2: string, exchange3: string,
-  base: string, quote: string, intermediate: string,
-  startAmount: number
-): any | null {
   
-  // Find required pairs
-  const pair1Symbol = `${base}${intermediate}`;
-  const pair2Symbol = `${intermediate}${quote}`;
-  const pair3Symbol = `${base}${quote}`;
-
-  const pair1 = data1.find(p => p.symbol === pair1Symbol);
-  const pair2 = data2.find(p => p.symbol === pair2Symbol);
-  const pair3 = data3.find(p => p.symbol === pair3Symbol);
-
-  if (!pair1 || !pair2 || !pair3) return null;
-
-  // Calculate path: base -> intermediate -> quote -> base
-  const step1Amount = startAmount / pair1.askPrice; // Buy intermediate with base
-  const step2Amount = step1Amount * pair2.bidPrice; // Sell intermediate for quote
-  const step3Amount = step2Amount / pair3.askPrice; // Buy base with quote
-  
-  const profit = step3Amount - startAmount;
-  const profitPercent = (profit / startAmount) * 100;
-
-  if (profit <= 0) return null;
-
-  return {
-    base_symbol: base,
-    quote_symbol: quote,
-    intermediate_symbol: intermediate,
-    exchange1: exchange1.toLowerCase(),
-    exchange2: exchange2.toLowerCase(),
-    exchange3: exchange3.toLowerCase(),
-    step1_action: 'BUY',
-    step1_price: pair1.askPrice,
-    step1_amount: step1Amount,
-    step2_action: 'SELL',
-    step2_price: pair2.bidPrice,
-    step2_amount: step1Amount,
-    step3_action: 'BUY',
-    step3_price: pair3.askPrice,
-    step3_amount: step3Amount,
-    start_amount: startAmount,
-    end_amount: step3Amount,
-    profit_amount: profit,
-    profit_percent: profitPercent
-  };
+  // Sort by profit percentage and return top 10
+  return opportunities
+    .sort((a, b) => b.profit_percent - a.profit_percent)
+    .slice(0, 10);
 }
