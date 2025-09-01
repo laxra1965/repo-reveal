@@ -82,6 +82,8 @@ export const AdminTransactionList = () => {
     try {
       setProcessing(transaction.id);
 
+      console.log('Starting transaction approval for:', transaction.id);
+
       // Update transaction status
       const { error: transactionError } = await supabase
         .from('transactions')
@@ -91,7 +93,12 @@ export const AdminTransactionList = () => {
         })
         .eq('id', transaction.id);
 
-      if (transactionError) throw transactionError;
+      if (transactionError) {
+        console.error('Transaction update error:', transactionError);
+        throw transactionError;
+      }
+
+      console.log('Transaction status updated successfully');
 
       // Calculate subscription end date
       const startDate = new Date();
@@ -102,6 +109,11 @@ export const AdminTransactionList = () => {
       } else {
         endDate.setMonth(endDate.getMonth() + 1);
       }
+
+      console.log('Creating subscription with dates:', {
+        start: startDate.toISOString(),
+        end: endDate.toISOString()
+      });
 
       // Create user subscription
       const { error: subscriptionError } = await supabase
@@ -115,7 +127,12 @@ export const AdminTransactionList = () => {
           status: 'active'
         });
 
-      if (subscriptionError) throw subscriptionError;
+      if (subscriptionError) {
+        console.error('Subscription creation error:', subscriptionError);
+        throw subscriptionError;
+      }
+
+      console.log('Subscription created successfully');
 
       toast({
         title: "Success",
@@ -124,9 +141,10 @@ export const AdminTransactionList = () => {
 
       fetchTransactions();
     } catch (error) {
+      console.error('Approval process failed:', error);
       toast({
         title: "Error",
-        description: "Failed to approve transaction",
+        description: `Failed to approve transaction: ${error.message || 'Unknown error'}`,
         variant: "destructive",
       });
     } finally {
