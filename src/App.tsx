@@ -12,6 +12,8 @@ import AdminAuth from "./pages/AdminAuth";
 import Payment from "./pages/Payment";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
+import Pricing from "./pages/Pricing";
+import AdminApprove from "./pages/AdminApprove";
 
 const queryClient = new QueryClient();
 
@@ -30,6 +32,8 @@ const App = () => (
             <Route path="/admin-login" element={<AdminAuth />} />
             <Route path="/payment/:transactionId" element={<Payment />} />
             <Route path="/admin" element={<Admin />} />
+            <Route path="/admin-approve" element={<AdminApprove />} />
+            <Route path="/pricing" element={<Pricing />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
