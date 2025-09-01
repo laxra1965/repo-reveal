@@ -1,0 +1,46 @@
+## Revised Pricing Structure (Binance & Bybit Only)
+
+### Tier 1: Scanner Only - $9/week
+**Core Features:**
+- Real-time triangular arbitrage opportunities on **Binance & Bybit**
+- **Historical data**: 7 days of opportunity tracking
+- **Basic filters**: Minimum profit threshold settings
+
+**Pricing:**
+- Weekly: $9
+- Monthly: $35 (3% discount)
+- 6 Months: $195 (28% discount)  
+- Annual: $360 (31% discount)
+
+### Tier 2: Trader Pro ($500 Max) - $25/week
+**Everything in Tier 1 plus:**
+- **Automated trading** via Binance & Bybit APIs
+- **Position limit**: $500 maximum per trade
+- **Basic analytics**: Trade history, P&L tracking
+
+**Pricing:**
+- Weekly: $25
+- Monthly: $95 (5% discount)
+- 6 Months: $540 (17% discount)
+- Annual: $1,000 (23% discount)
+
+### Tier 3: Trader Elite ($1,000 Max) - $50/week
+**Everything in Tier 2 plus:**
+- **Position limit**: $1,000 maximum per trade
+- **Priority execution**: Faster opportunity detection & execution
+- **Advanced analytics**: 
+  - Success rate tracking
+  - Average profit per trade
+  - Best performing pairs analysis
+  - Time-of-day performance metrics
+- **Historical data**: 90 days
+- **Custom settings**: Personalized trading parameters
+- **Priority support**: Email support with faster response
+
+**Pricing:**
+- Weekly: $50
+- Monthly: $190 (5% discount)
+- 6 Months: $1,080 (17% discount)
+- Annual: $2,000 (23% discount)
+
+Clean and focused structure! The core value is now very clear: Scanner → Scanner + Basic Trading → Scanner + Advanced Trading with higher limits.
