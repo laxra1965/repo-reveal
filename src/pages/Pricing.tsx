@@ -129,7 +129,7 @@ const Pricing = () => {
       alert("Failed to create transaction. Please try again.");
       return;
     }
-    navigate(`/payment/${txn.id}`);
+    navigate(`/payment/${transaction_id}`);
   };
 
   return (

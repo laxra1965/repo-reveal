@@ -60,7 +60,7 @@ export const PlansSection = () => {
       if (!selectedPlan) throw new Error('Plan not found');
 
       // Create transaction record
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('transactions')
         .insert({
           user_id: user.id,
@@ -69,11 +69,13 @@ export const PlansSection = () => {
           amount: selectedPlan.price,
           usdt_address: 'TRC20_ADDRESS_HERE', // This will be replaced with actual address
           status: 'pending'
-        });
+        })
+        .select()
+        .single();
 
       if (error) throw error;
 
-      // Navigate to payment page with transaction ID
+      // Navigate to payment page with the generated transaction ID (not the database ID)
       navigate(`/payment/${transactionId}`);
 
     } catch (error) {
