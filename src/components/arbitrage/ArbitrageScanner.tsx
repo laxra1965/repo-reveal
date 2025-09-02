@@ -9,8 +9,9 @@ import { useToast } from '@/hooks/use-toast';
 import { ArbitrageSettings } from './ArbitrageSettings';
 import { ArbitrageOpportunity } from './ArbitrageOpportunity';
 import { ArbitrageLogPanel } from './ArbitrageLogPanel';
+import { BinancePriceStream } from './BinancePriceStream';
 import { PlansSection } from '@/components/plans/PlansSection';
-import { Play, Pause, Settings, TrendingUp, Lock, Crown } from 'lucide-react';
+import { Play, Pause, Settings, TrendingUp, Lock, Crown, Activity } from 'lucide-react';
 
 interface Opportunity {
   id: string;
@@ -44,6 +45,7 @@ export const ArbitrageScanner = () => {
   const [isScanning, setIsScanning] = useState(false);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [showSettings, setShowSettings] = useState(false);
+  const [showPriceStream, setShowPriceStream] = useState(false);
   const [scanInterval, setScanInterval] = useState<NodeJS.Timeout | null>(null);
   const [lastScanTime, setLastScanTime] = useState<Date | null>(null);
   const [scanCount, setScanCount] = useState(0);
@@ -128,26 +130,92 @@ export const ArbitrageScanner = () => {
   useEffect(() => {
     if (!user) return;
 
+    const handleOpportunityUpdate = (payload: any) => {
+      const newOpportunity = payload.new as Opportunity;
+      setOpportunities(prev => {
+        // Remove duplicates and add new opportunity
+        const filtered = prev.filter(op => op.id !== newOpportunity.id);
+        return [newOpportunity, ...filtered].slice(0, 20); // Keep last 20
+      });
+    };
+
     const channel = supabase
-      .channel('arbitrage-updates')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'arbitrage_opportunities',
-          filter: `user_id=eq.${user.id}`
-        },
-        (payload) => {
-          setOpportunities(current => [payload.new as Opportunity, ...current].slice(0, 10));
-        }
-      )
+      .channel('schema-db-changes')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'arbitrage_opportunities',
+        filter: `user_id=eq.${user.id}`
+      }, handleOpportunityUpdate)
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
   }, [user]);
+
+  // WebSocket connection for real-time Binance data
+  useEffect(() => {
+    if (!user || !hasActiveSubscription) return;
+
+    let ws: WebSocket | null = null;
+    
+    const connectWebSocket = () => {
+      console.log('Connecting to Binance WebSocket stream...');
+      ws = new WebSocket('wss://zupbliefzhnohsoguwuk.functions.supabase.co/binance-websocket');
+      
+      ws.onopen = () => {
+        console.log('Connected to Binance WebSocket');
+        setLastScanTime(new Date());
+      };
+      
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          if (data.type === 'arbitrage_opportunities') {
+            console.log(`Received ${data.data.length} real-time arbitrage opportunities`);
+            
+            // Filter opportunities for current user and update state
+            const userOpportunities = data.data.map((opp: any) => ({
+              ...opp,
+              id: `rt_${Date.now()}_${Math.random()}`,
+              user_id: user.id,
+              detected_at: new Date().toISOString(),
+              expires_at: new Date(Date.now() + 30000).toISOString()
+            }));
+            
+            setOpportunities(prev => {
+              const combined = [...userOpportunities, ...prev];
+              return combined.slice(0, 20); // Keep last 20
+            });
+          } else if (data.type === 'price_update') {
+            console.log(`Received price update for ${data.data.length} BNB pairs`);
+            setLastScanTime(new Date());
+          }
+        } catch (error) {
+          console.error('Error processing WebSocket message:', error);
+        }
+      };
+      
+      ws.onclose = () => {
+        console.log('WebSocket connection closed, reconnecting...');
+        setTimeout(connectWebSocket, 5000);
+      };
+      
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+    };
+    
+    connectWebSocket();
+    
+    return () => {
+      if (ws) {
+        ws.close();
+      }
+    };
+  }, [user, hasActiveSubscription]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -228,6 +296,16 @@ export const ArbitrageScanner = () => {
                 <Settings className="h-4 w-4 mr-2" />
                 Settings
               </Button>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowPriceStream(!showPriceStream)}
+              >
+                <Activity className="h-4 w-4 mr-2" />
+                {showPriceStream ? 'Hide' : 'Show'} Live Prices
+              </Button>
+              
               {isScanning ? (
                 <Button onClick={stopScanning} variant="destructive" size="sm">
                   <Pause className="h-4 w-4 mr-2" />
@@ -250,9 +328,10 @@ export const ArbitrageScanner = () => {
               </Badge></span>
               <span>Scans: {scanCount}</span>
               <span>Opportunities: {opportunities.length}</span>
+              <span>Mode: <Badge variant="outline">BNB Pairs + WebSocket</Badge></span>
             </div>
             {lastScanTime && (
-              <span>Last scan: {lastScanTime.toLocaleTimeString()}</span>
+              <span>Last update: {lastScanTime.toLocaleTimeString()}</span>
             )}
           </div>
         </CardContent>
@@ -290,6 +369,9 @@ export const ArbitrageScanner = () => {
 
       {/* Log Panel */}
       <ArbitrageLogPanel />
+      
+      {/* Real-time BNB Price Stream */}
+      <BinancePriceStream isVisible={showPriceStream} />
 
       {/* Settings Modal */}
       {showSettings && (

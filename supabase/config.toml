@@ -2,3 +2,6 @@ project_id = "zupbliefzhnohsoguwuk"
 
 [functions.arbitrage-scanner]
 verify_jwt = true
+
+[functions.binance-websocket]
+verify_jwt = false
