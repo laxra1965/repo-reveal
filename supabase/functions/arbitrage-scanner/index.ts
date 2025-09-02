@@ -340,8 +340,14 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
   const opportunities: any[] = [];
   const symbols = Object.keys(priceMap);
   
-  // Common base currencies to check for triangular opportunities
-  const commonBases = ['BTC', 'ETH', 'BNB', 'ADA', 'SOL', 'MATIC', 'DOT', 'LINK', 'AVAX', 'UNI'];
+  // Expanded base currencies for more arbitrage opportunities
+  const commonBases = [
+    'BTC', 'ETH', 'BNB', 'ADA', 'SOL', 'MATIC', 'DOT', 'LINK', 'AVAX', 'UNI',
+    'LTC', 'BCH', 'XRP', 'DOGE', 'SHIB', 'ATOM', 'NEAR', 'FTM', 'ALGO', 'XLM',
+    'VET', 'ICP', 'THETA', 'TRX', 'EOS', 'AAVE', 'MKR', 'SNX', 'COMP', 'YFI',
+    'SUSHI', 'CRV', '1INCH', 'RUNE', 'CAKE', 'ALPHA', 'BAND', 'KNC', 'ZRX', 'BAL',
+    'REN', 'LRC', 'STORJ', 'ANT', 'BNT', 'MLN', 'REP', 'NMR', 'GRT', 'SKL'
+  ];
   
   for (const base of commonBases) {
     for (const intermediate of commonBases) {

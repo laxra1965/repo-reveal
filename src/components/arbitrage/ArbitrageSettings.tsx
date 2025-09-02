@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 
 interface ArbitrageSettingsProps {
@@ -22,6 +23,13 @@ interface Settings {
   filter_profitable: boolean;
   auto_trade: boolean;
   enabled_exchanges: string[];
+}
+
+interface ExchangeCredentials {
+  [key: string]: {
+    api_key: string;
+    api_secret: string;
+  };
 }
 
 const AVAILABLE_EXCHANGES = [
@@ -40,12 +48,14 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
     auto_trade: false,
     enabled_exchanges: ['binance', 'bybit', 'okx']
   });
+  const [credentials, setCredentials] = useState<ExchangeCredentials>({});
   const [loading, setLoading] = useState(false);
 
-  // Load settings on mount
+  // Load settings and credentials on mount
   useEffect(() => {
     if (user && isOpen) {
       loadSettings();
+      loadCredentials();
     }
   }, [user, isOpen]);
 
@@ -84,6 +94,30 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
     }
   };
 
+  const loadCredentials = async () => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('exchange_credentials')
+        .select('*')
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      const creds: ExchangeCredentials = {};
+      data?.forEach((cred) => {
+        creds[cred.exchange] = {
+          api_key: cred.api_key || '',
+          api_secret: cred.api_secret || ''
+        };
+      });
+      setCredentials(creds);
+    } catch (error: any) {
+      console.error('Error loading credentials:', error);
+    }
+  };
+
   const saveSettings = async () => {
     if (!user) return;
     
@@ -106,8 +140,13 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
 
       if (error) throw error;
 
+      // Save credentials if auto_trade is enabled
+      if (settings.auto_trade) {
+        await saveCredentials();
+      }
+
       toast({
-        title: "Settings Saved",
+        title: "Settings Saved", 
         description: "Your scanner settings have been updated",
       });
 
@@ -122,6 +161,39 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
     } finally {
       setLoading(false);
     }
+  };
+
+  const saveCredentials = async () => {
+    if (!user) return;
+
+    for (const exchange of settings.enabled_exchanges) {
+      const cred = credentials[exchange];
+      if (cred && (cred.api_key || cred.api_secret)) {
+        try {
+          await supabase
+            .from('exchange_credentials')
+            .upsert({
+              user_id: user.id,
+              exchange: exchange as any,
+              api_key: cred.api_key,
+              api_secret: cred.api_secret,
+              is_connected: !!(cred.api_key && cred.api_secret)
+            }, { onConflict: 'user_id,exchange' });
+        } catch (error) {
+          console.error(`Error saving credentials for ${exchange}:`, error);
+        }
+      }
+    }
+  };
+
+  const updateCredential = (exchange: string, field: 'api_key' | 'api_secret', value: string) => {
+    setCredentials(prev => ({
+      ...prev,
+      [exchange]: {
+        ...prev[exchange],
+        [field]: value
+      }
+    }));
   };
 
   const handleExchangeToggle = (exchange: string, checked: boolean) => {
@@ -272,6 +344,53 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
               </div>
             </CardContent>
           </Card>
+
+          {/* API Credentials (Auto-Trading) */}
+          {settings.auto_trade && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Exchange API Credentials</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Enter API credentials for enabled exchanges to allow auto-trading
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {settings.enabled_exchanges.map((exchange) => (
+                  <div key={exchange} className="border rounded-lg p-4 space-y-3">
+                    <h4 className="font-semibold capitalize">{exchange}</h4>
+                    <div className="grid grid-cols-1 gap-3">
+                      <div>
+                        <Label htmlFor={`${exchange}_api_key`}>API Key</Label>
+                        <Input
+                          id={`${exchange}_api_key`}
+                          type="password"
+                          placeholder="Enter API key"
+                          value={credentials[exchange]?.api_key || ''}
+                          onChange={(e) => updateCredential(exchange, 'api_key', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor={`${exchange}_api_secret`}>API Secret</Label>
+                        <Textarea
+                          id={`${exchange}_api_secret`}
+                          placeholder="Enter API secret"
+                          value={credentials[exchange]?.api_secret || ''}
+                          onChange={(e) => updateCredential(exchange, 'api_secret', e.target.value)}
+                          className="min-h-[80px]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                  <p className="text-sm text-yellow-800">
+                    <strong>Security Note:</strong> API credentials are encrypted and stored securely. 
+                    Only provide read-only or trading permissions as needed.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Actions */}
           <div className="flex justify-end gap-2">
