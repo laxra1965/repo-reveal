@@ -19,12 +19,14 @@ export type Database = {
           base_symbol: string
           detected_at: string | null
           end_amount: number
+          estimated_slippage: number | null
           exchange1: Database["public"]["Enums"]["exchange_name"]
           exchange2: Database["public"]["Enums"]["exchange_name"]
           exchange3: Database["public"]["Enums"]["exchange_name"]
           expires_at: string | null
           id: string
           intermediate_symbol: string
+          liquidity_score: number | null
           profit_amount: number
           profit_percent: number
           quote_symbol: string
@@ -32,24 +34,29 @@ export type Database = {
           step1_action: string
           step1_amount: number
           step1_price: number
+          step1_volume: number | null
           step2_action: string
           step2_amount: number
           step2_price: number
+          step2_volume: number | null
           step3_action: string
           step3_amount: number
           step3_price: number
+          step3_volume: number | null
           user_id: string
         }
         Insert: {
           base_symbol: string
           detected_at?: string | null
           end_amount: number
+          estimated_slippage?: number | null
           exchange1: Database["public"]["Enums"]["exchange_name"]
           exchange2: Database["public"]["Enums"]["exchange_name"]
           exchange3: Database["public"]["Enums"]["exchange_name"]
           expires_at?: string | null
           id?: string
           intermediate_symbol: string
+          liquidity_score?: number | null
           profit_amount: number
           profit_percent: number
           quote_symbol: string
@@ -57,24 +64,29 @@ export type Database = {
           step1_action: string
           step1_amount: number
           step1_price: number
+          step1_volume?: number | null
           step2_action: string
           step2_amount: number
           step2_price: number
+          step2_volume?: number | null
           step3_action: string
           step3_amount: number
           step3_price: number
+          step3_volume?: number | null
           user_id: string
         }
         Update: {
           base_symbol?: string
           detected_at?: string | null
           end_amount?: number
+          estimated_slippage?: number | null
           exchange1?: Database["public"]["Enums"]["exchange_name"]
           exchange2?: Database["public"]["Enums"]["exchange_name"]
           exchange3?: Database["public"]["Enums"]["exchange_name"]
           expires_at?: string | null
           id?: string
           intermediate_symbol?: string
+          liquidity_score?: number | null
           profit_amount?: number
           profit_percent?: number
           quote_symbol?: string
@@ -82,12 +94,15 @@ export type Database = {
           step1_action?: string
           step1_amount?: number
           step1_price?: number
+          step1_volume?: number | null
           step2_action?: string
           step2_amount?: number
           step2_price?: number
+          step2_volume?: number | null
           step3_action?: string
           step3_amount?: number
           step3_price?: number
+          step3_volume?: number | null
           user_id?: string
         }
         Relationships: []

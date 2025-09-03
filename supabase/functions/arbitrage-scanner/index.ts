@@ -6,70 +6,146 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface ExchangeConfig {
-  type: 'single' | 'multi_step_individual' | 'multi_step_batch';
-  url?: string;
-  list_url?: string;
-  ticker_url_template?: string;
-  ticker_url_base?: string;
+// Rate limiting configuration
+const API_RATE_LIMITS = new Map<string, { requests: number; resetTime: number }>();
+const RATE_LIMIT_WINDOW = 60000; // 1 minute
+const MAX_REQUESTS_PER_MINUTE = 30;
+
+// Enhanced API configurations with failover and rate limiting
+const API_CONFIG: Record<string, any> = {
+  Binance: { 
+    type: 'single', 
+    url: "https://api.binance.com/api/v3/ticker/bookTicker",
+    fallbackUrl: "https://api1.binance.com/api/v3/ticker/bookTicker",
+    rateLimit: 1200 // requests per minute
+  },
+  Bybit: { 
+    type: 'single', 
+    url: "https://api.bybit.com/v5/market/tickers?category=spot",
+    rateLimit: 600
+  },
+  OKX: { 
+    type: 'single', 
+    url: "https://www.okx.com/api/v5/market/tickers?instType=SPOT",
+    rateLimit: 300
+  },
+  KuCoin: { 
+    type: 'single', 
+    url: "https://api.kucoin.com/api/v1/market/allTickers",
+    rateLimit: 300
+  },
+  Gate: { 
+    type: 'single', 
+    url: "https://api.gateio.ws/api/v4/spot/tickers",
+    rateLimit: 300
+  },
+  MEXC: { 
+    type: 'single', 
+    url: "https://api.mexc.com/api/v3/ticker/bookTicker",
+    rateLimit: 300
+  }
+};
+
+// Enhanced retry logic with exponential backoff
+async function fetchWithRetry(url: string, options: any = {}, maxRetries: number = 3): Promise<any> {
+  let lastError: Error;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+      
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'ArbitrageScanner/2.0',
+          'Accept': 'application/json',
+          ...options.headers
+        }
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      lastError = error as Error;
+      
+      if (attempt < maxRetries - 1) {
+        const backoffTime = Math.min(1000 * Math.pow(2, attempt), 5000);
+        console.log(`Attempt ${attempt + 1} failed for ${url}, retrying in ${backoffTime}ms:`, error.message);
+        await new Promise(resolve => setTimeout(resolve, backoffTime));
+      }
+    }
+  }
+  
+  throw lastError!;
 }
 
-const API_CONFIG: Record<string, ExchangeConfig> = {
-  Binance: { type: 'single', url: "https://api.binance.com/api/v3/ticker/bookTicker" },
-  Bybit: { type: 'single', url: "https://api.bybit.com/v5/market/tickers?category=spot" },
-  OKX: { type: 'single', url: "https://www.okx.com/api/v5/market/tickers?instType=SPOT" },
-  Bitget: { type: 'single', url: "https://api.bitget.com/api/v2/spot/market/tickers" },
-  MEXC: { type: 'single', url: "https://api.mexc.com/api/v3/ticker/bookTicker" },
-  Gate: { type: 'single', url: "https://api.gateio.ws/api/v4/spot/tickers" },
-  HTX: { type: 'single', url: "https://api.htx.com/market/tickers" },
-  KuCoin: { type: 'single', url: "https://api.kucoin.com/api/v1/market/allTickers" },
-  Bitfinex: { type: 'single', url: "https://api-pub.bitfinex.com/v2/tickers?symbols=ALL" },
-  BingX: { type: 'single', url: "https://open-api.bingx.com/openApi/spot/v1/market/ticker" },
-  Kraken: {
-    type: 'multi_step_batch',
-    list_url: "https://api.kraken.com/0/public/AssetPairs",
-    ticker_url_base: "https://api.kraken.com/0/public/Ticker?pair="
-  },
-  Coinbase: {
-    type: 'multi_step_individual',
-    list_url: "https://api.exchange.coinbase.com/products",
-    ticker_url_template: "https://api.exchange.coinbase.com/products/{id}/book?level=1"
+// Rate limiting check
+function checkRateLimit(exchangeName: string): boolean {
+  const now = Date.now();
+  const key = exchangeName;
+  const limit = API_RATE_LIMITS.get(key);
+  
+  if (!limit || now > limit.resetTime) {
+    API_RATE_LIMITS.set(key, { requests: 1, resetTime: now + RATE_LIMIT_WINDOW });
+    return true;
   }
-};
+  
+  if (limit.requests >= MAX_REQUESTS_PER_MINUTE) {
+    return false;
+  }
+  
+  limit.requests++;
+  return true;
+}
 
-// Symbol standardization function from advanced scanner
-const standardizeSymbol = (symbol: string, exchangeName: string): string | null => {
+// Enhanced symbol standardization
+function standardizeSymbol(symbol: string, exchangeName: string): string | null {
   if (!symbol) return null;
   
-  let s = symbol.toUpperCase();
-  s = s.replace(/[-_:\/\s]/g, '');
+  let s = symbol.toUpperCase().replace(/[-_:\/\s]/g, '');
   
-  // Exchange-specific symbol standardization
-  if (exchangeName === 'Kraken') {
-    if (s.startsWith('XBT')) s = s.replace('XBT', 'BTC');
-    else if (s.startsWith('XDG')) s = s.replace('XDG', 'DOGE');
-    else if (s.startsWith('XETH')) s = s.replace('XETH', 'ETH');
-    else if (s.startsWith('XLTC')) s = s.replace('XLTC', 'LTC');
-    if (s.endsWith('ZUSD')) s = s.replace('ZUSD', 'USD');
-    else if (s.endsWith('ZEUR')) s = s.replace('ZEUR', 'EUR');
-    if (s.includes('XXBT')) s = s.replace('XXBT', 'BTC');
-  } else if (exchangeName === 'Bitfinex') {
-    if (s.startsWith('T')) s = s.substring(1);
+  // Exchange-specific normalization
+  switch (exchangeName) {
+    case 'Binance':
+      // Binance symbols are already in correct format
+      break;
+    case 'Bybit':
+      // Remove PERP suffix for futures
+      s = s.replace(/PERP$/, '');
+      break;
+    case 'OKX':
+      // OKX uses - separator
+      s = s.replace(/-/g, '');
+      break;
+    case 'KuCoin':
+      // KuCoin uses - separator
+      s = s.replace(/-/g, '');
+      break;
+    case 'Gate':
+      // Gate.io uses _ separator
+      s = s.replace(/_/g, '');
+      break;
   }
   
-  // Convert USD to USDT for standardization
-  if (s.endsWith("USD") && !s.endsWith("USDT") && !s.endsWith("USDC")) {
-    s = s.substring(0, s.length - 3) + "USDT";
+  // Standardize quote currencies
+  if (s.endsWith('USD') && !s.endsWith('USDT') && !s.endsWith('USDC')) {
+    s = s.replace('USD', 'USDT');
   }
   
-  // Fix double USDT
-  if (s.endsWith("USDTUSDT")) s = s.substring(0, s.length - 4);
-  
-  // Fix EUR pairs
-  if (s.endsWith("EURUSDT") && s.length > 7) s = s.replace("EURUSDT", "EUR");
+  // Remove duplicate suffixes
+  if (s.endsWith('USDTUSDT')) {
+    s = s.replace('USDTUSDT', 'USDT');
+  }
   
   return s;
-};
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -89,10 +165,10 @@ serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    const { action, exchanges = [] } = await req.json();
+    const { action } = await req.json();
 
     if (action === 'scan') {
-      console.log(`Starting arbitrage scan for user ${user.id}`);
+      console.log(`Starting enhanced arbitrage scan for user ${user.id}`);
       
       // Get user settings
       const { data: settings } = await supabase
@@ -106,75 +182,146 @@ serve(async (req) => {
       const minProfitPercent = settings?.min_profit_percent || 0.0005;
       const maxProfitPercent = settings?.max_profit_percent || 50;
 
-      // Clear expired opportunities
+      // Clear expired opportunities first
       await supabase.rpc('cleanup_expired_opportunities');
 
-      // Fetch price data from enabled exchanges using improved logic
-      let allPriceData: Record<string, any> = {};
-      
-      for (const exchangeName of enabledExchanges) {
-        const config = API_CONFIG[exchangeName.charAt(0).toUpperCase() + exchangeName.slice(1)];
-        if (!config) continue;
-
-        try {
-          console.log(`Fetching data from ${exchangeName}`);
-          const fetchedData = await fetchExchangeData(exchangeName, config);
+      // Fetch price data concurrently from all enabled exchanges
+      const fetchPromises = enabledExchanges
+        .filter(exchange => API_CONFIG[exchange.charAt(0).toUpperCase() + exchange.slice(1)])
+        .map(async (exchangeName) => {
+          const exchangeKey = exchangeName.charAt(0).toUpperCase() + exchangeName.slice(1);
+          const config = API_CONFIG[exchangeKey];
           
-          if (fetchedData && !fetchedData.error) {
-            const normalized = normalizeExchangeData(exchangeName, fetchedData.data);
-            
-            // Merge price data - use best bid/ask prices across exchanges
-            for (const [symbol, prices] of Object.entries(normalized)) {
-              if (!allPriceData[symbol]) {
-                allPriceData[symbol] = prices;
-              } else {
-                // Use highest bid and lowest ask across exchanges for better arbitrage
-                const current = allPriceData[symbol];
-                const newPrices = prices as any;
-                allPriceData[symbol] = {
-                  bidPrice: Math.max(current.bidPrice, newPrices.bidPrice),
-                  askPrice: Math.min(current.askPrice, newPrices.askPrice)
-                };
-              }
-            }
+          // Check rate limiting
+          if (!checkRateLimit(exchangeName)) {
+            console.log(`Rate limit exceeded for ${exchangeName}, skipping`);
+            return { exchangeName, error: 'Rate limit exceeded' };
           }
-        } catch (error) {
-          console.error(`Error fetching data from ${exchangeName}:`, error);
-          await supabase.from('scanner_logs').insert({
-            user_id: user.id,
-            log_type: 'error',
-            message: `Failed to fetch data from ${exchangeName}`,
-            details: { error: error.message }
+          
+          try {
+            console.log(`Fetching data from ${exchangeName}`);
+            const data = await fetchWithRetry(config.url);
+            return { exchangeName, data };
+          } catch (error) {
+            console.error(`Error fetching ${exchangeName}:`, error.message);
+            
+            // Log error to scanner_logs
+            await supabase.from('scanner_logs').insert({
+              user_id: user.id,
+              log_type: 'error',
+              message: `Failed to fetch data from ${exchangeName}`,
+              details: { error: error.message }
+            });
+            
+            return { exchangeName, error: error.message };
+          }
+        });
+
+      const results = await Promise.allSettled(fetchPromises);
+      let combinedPriceData: Record<string, any> = {};
+
+      // Process results and normalize data
+      for (const result of results) {
+        if (result.status === 'fulfilled' && result.value && !result.value.error) {
+          const { exchangeName, data } = result.value;
+          const normalizedData = normalizeExchangeData(exchangeName, data);
+          
+          // Merge price data with volume analysis
+          Object.entries(normalizedData).forEach(([symbol, priceData]: [string, any]) => {
+            if (!combinedPriceData[symbol]) {
+              combinedPriceData[symbol] = {};
+            }
+            
+            // Store multiple exchange data for depth analysis
+            combinedPriceData[symbol][exchangeName.toLowerCase()] = {
+              ...priceData,
+              volume: priceData.volume || 0,
+              depth: priceData.depth || 1
+            };
           });
+          
+          console.log(`${exchangeName}: Processed ${Object.keys(normalizedData).length} symbols`);
         }
       }
 
-      console.log(`Combined price data for ${Object.keys(allPriceData).length} symbols`);
+      console.log(`Combined price data for ${Object.keys(combinedPriceData).length} symbols`);
 
-      // Find triangular arbitrage opportunities using enhanced algorithm
-      const opportunities = findTriangularArbitrage(allPriceData, 'USDT', tradeAmount);
+      // Enhanced arbitrage detection with volume and slippage analysis
+      const opportunities = findTriangularArbitrageEnhanced(
+        combinedPriceData, 
+        'USDT', 
+        tradeAmount,
+        minProfitPercent,
+        maxProfitPercent
+      );
 
-      // Store opportunities in database
+      console.log(`Found ${opportunities.length} enhanced opportunities`);
+
+      // Save opportunities to database with enhanced data
+      let savedCount = 0;
       for (const opportunity of opportunities) {
-        await supabase.from('arbitrage_opportunities').insert({
-          user_id: user.id,
-          ...opportunity
-        });
+        try {
+          const { error } = await supabase
+            .from('arbitrage_opportunities')
+            .insert({
+              user_id: user.id,
+              base_symbol: opportunity.base_symbol,
+              quote_symbol: opportunity.quote_symbol,
+              intermediate_symbol: opportunity.intermediate_symbol,
+              exchange1: opportunity.exchange1,
+              exchange2: opportunity.exchange2,
+              exchange3: opportunity.exchange3,
+              step1_action: opportunity.step1_action,
+              step1_price: opportunity.step1_price,
+              step1_amount: opportunity.step1_amount,
+              step2_action: opportunity.step2_action,
+              step2_price: opportunity.step2_price,
+              step2_amount: opportunity.step2_amount,
+              step3_action: opportunity.step3_action,
+              step3_price: opportunity.step3_price,
+              step3_amount: opportunity.step3_amount,
+              start_amount: opportunity.start_amount,
+              end_amount: opportunity.end_amount,
+              profit_amount: opportunity.profit_amount,
+              profit_percent: opportunity.profit_percent,
+              step1_volume: opportunity.step1_volume || 0,
+              step2_volume: opportunity.step2_volume || 0,
+              step3_volume: opportunity.step3_volume || 0,
+              estimated_slippage: opportunity.estimated_slippage || 0,
+              liquidity_score: opportunity.liquidity_score || 0
+            });
+          
+          if (!error) {
+            savedCount++;
+          } else {
+            console.error('Error saving opportunity:', error);
+          }
+        } catch (error) {
+          console.error('Exception saving opportunity:', error);
+        }
       }
 
-      console.log(`Found ${opportunities.length} opportunities for user ${user.id}`);
+      console.log(`Saved ${savedCount}/${opportunities.length} opportunities to database`);
       
+      // Log successful scan
       await supabase.from('scanner_logs').insert({
         user_id: user.id,
         log_type: 'info',
-        message: `Scan completed: ${opportunities.length} opportunities found`,
-        details: { opportunities_count: opportunities.length }
+        message: `Enhanced scan completed: ${savedCount} opportunities found and saved`,
+        details: { 
+          opportunitiesFound: opportunities.length,
+          opportunitiesSaved: savedCount,
+          exchangesScanned: enabledExchanges.length,
+          timestamp: new Date().toISOString()
+        }
       });
 
       return new Response(JSON.stringify({
         success: true,
-        opportunities_count: opportunities.length,
-        message: 'Scan completed successfully'
+        opportunities_found: opportunities.length,
+        opportunities_saved: savedCount,
+        exchanges_scanned: enabledExchanges.length,
+        message: `Enhanced scan completed: ${savedCount} opportunities found and saved`
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
@@ -186,255 +333,286 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('Error in arbitrage scanner:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    console.error('Error in enhanced arbitrage scanner:', error);
+    return new Response(JSON.stringify({ 
+      error: error.message,
+      timestamp: new Date().toISOString()
+    }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
 });
 
-// Enhanced fetch function for different exchange types
-async function fetchExchangeData(exchangeName: string, config: ExchangeConfig): Promise<any> {
-  try {
-    if (config.type === 'single') {
-      const response = await fetch(config.url!, {
-        headers: {
-          'User-Agent': 'ArbitrageScanner/1.0',
-          'Accept': 'application/json',
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Fetch failed: ${response.statusText} (${response.status})`);
-      }
-      
-      const data = await response.json();
-      return { exchangeName, data };
-    }
-    // Add support for multi-step exchanges if needed
-    else {
-      console.log(`Multi-step exchanges not yet implemented for ${exchangeName}`);
-      return { exchangeName, error: 'Multi-step not implemented' };
-    }
-  } catch (error) {
-    console.error(`Error fetching ${exchangeName}:`, error);
-    return { exchangeName, error: error.message };
-  }
-}
-
-function normalizeExchangeData(exchange: string, data: any): Record<string, any> {
+// Enhanced exchange data normalization with volume analysis
+function normalizeExchangeData(exchangeName: string, data: any): Record<string, any> {
   const priceMap: Record<string, any> = {};
   
   try {
-    const exchangeName = exchange.charAt(0).toUpperCase() + exchange.slice(1);
+    const name = exchangeName.charAt(0).toUpperCase() + exchangeName.slice(1);
     
-    if (exchangeName === 'Binance' && Array.isArray(data)) {
-      data.forEach((ticker: any) => {
-        if (ticker.symbol && ticker.bidPrice && ticker.askPrice) {
-          const standardSymbol = standardizeSymbol(ticker.symbol, exchangeName);
-          if (standardSymbol) {
-            priceMap[standardSymbol] = {
-              bidPrice: parseFloat(ticker.bidPrice),
-              askPrice: parseFloat(ticker.askPrice)
-            };
-          }
+    switch (name) {
+      case 'Binance':
+        if (Array.isArray(data)) {
+          data.forEach((ticker: any) => {
+            if (ticker.symbol && ticker.bidPrice && ticker.askPrice) {
+              const symbol = standardizeSymbol(ticker.symbol, name);
+              if (symbol) {
+                priceMap[symbol] = {
+                  bidPrice: parseFloat(ticker.bidPrice),
+                  askPrice: parseFloat(ticker.askPrice),
+                  volume: parseFloat(ticker.bidQty || 0) + parseFloat(ticker.askQty || 0),
+                  spread: parseFloat(ticker.askPrice) - parseFloat(ticker.bidPrice)
+                };
+              }
+            }
+          });
         }
-      });
-    } else if (exchangeName === 'Bybit' && data.retCode === 0 && data.result?.list) {
-      data.result.list.forEach((ticker: any) => {
-        if (ticker.symbol && ticker.bid1Price && ticker.ask1Price) {
-          const standardSymbol = standardizeSymbol(ticker.symbol, exchangeName);
-          if (standardSymbol) {
-            priceMap[standardSymbol] = {
-              bidPrice: parseFloat(ticker.bid1Price),
-              askPrice: parseFloat(ticker.ask1Price)
-            };
-          }
+        break;
+        
+      case 'Bybit':
+        if (data.retCode === 0 && data.result?.list) {
+          data.result.list.forEach((ticker: any) => {
+            if (ticker.symbol && ticker.bid1Price && ticker.ask1Price) {
+              const symbol = standardizeSymbol(ticker.symbol, name);
+              if (symbol) {
+                priceMap[symbol] = {
+                  bidPrice: parseFloat(ticker.bid1Price),
+                  askPrice: parseFloat(ticker.ask1Price),
+                  volume: parseFloat(ticker.volume24h || 0),
+                  spread: parseFloat(ticker.ask1Price) - parseFloat(ticker.bid1Price)
+                };
+              }
+            }
+          });
         }
-      });
-    } else if (exchangeName === 'OKX' && data.code === "0" && Array.isArray(data.data)) {
-      data.data.forEach((ticker: any) => {
-        if (ticker.instId && ticker.bidPx && ticker.askPx) {
-          const standardSymbol = standardizeSymbol(ticker.instId, exchangeName);
-          if (standardSymbol) {
-            priceMap[standardSymbol] = {
-              bidPrice: parseFloat(ticker.bidPx),
-              askPrice: parseFloat(ticker.askPx)
-            };
-          }
+        break;
+        
+      case 'OKX':
+        if (data.code === "0" && Array.isArray(data.data)) {
+          data.data.forEach((ticker: any) => {
+            if (ticker.instId && ticker.bidPx && ticker.askPx) {
+              const symbol = standardizeSymbol(ticker.instId, name);
+              if (symbol) {
+                priceMap[symbol] = {
+                  bidPrice: parseFloat(ticker.bidPx),
+                  askPrice: parseFloat(ticker.askPx),
+                  volume: parseFloat(ticker.vol24h || 0),
+                  spread: parseFloat(ticker.askPx) - parseFloat(ticker.bidPx)
+                };
+              }
+            }
+          });
         }
-      });
-    } else if (exchangeName === 'KuCoin' && data.code === "200000" && data.data?.ticker) {
-      data.data.ticker.forEach((ticker: any) => {
-        if (ticker.symbol && ticker.buy && ticker.sell) {
-          const standardSymbol = standardizeSymbol(ticker.symbol, exchangeName);
-          if (standardSymbol) {
-            priceMap[standardSymbol] = {
-              bidPrice: parseFloat(ticker.buy),
-              askPrice: parseFloat(ticker.sell)
-            };
-          }
+        break;
+        
+      case 'KuCoin':
+        if (data.code === "200000" && data.data?.ticker) {
+          data.data.ticker.forEach((ticker: any) => {
+            if (ticker.symbol && ticker.buy && ticker.sell) {
+              const symbol = standardizeSymbol(ticker.symbol, name);
+              if (symbol) {
+                priceMap[symbol] = {
+                  bidPrice: parseFloat(ticker.buy),
+                  askPrice: parseFloat(ticker.sell),
+                  volume: parseFloat(ticker.vol || 0),
+                  spread: parseFloat(ticker.sell) - parseFloat(ticker.buy)
+                };
+              }
+            }
+          });
         }
-      });
-    } else if (exchangeName === 'Gate' && Array.isArray(data)) {
-      data.forEach((ticker: any) => {
-        if (ticker.currency_pair && ticker.highest_bid && ticker.lowest_ask) {
-          const standardSymbol = standardizeSymbol(ticker.currency_pair, exchangeName);
-          if (standardSymbol) {
-            priceMap[standardSymbol] = {
-              bidPrice: parseFloat(ticker.highest_bid),
-              askPrice: parseFloat(ticker.lowest_ask)
-            };
-          }
+        break;
+        
+      case 'Gate':
+        if (Array.isArray(data)) {
+          data.forEach((ticker: any) => {
+            if (ticker.currency_pair && ticker.highest_bid && ticker.lowest_ask) {
+              const symbol = standardizeSymbol(ticker.currency_pair, name);
+              if (symbol) {
+                priceMap[symbol] = {
+                  bidPrice: parseFloat(ticker.highest_bid),
+                  askPrice: parseFloat(ticker.lowest_ask),
+                  volume: parseFloat(ticker.base_volume || 0),
+                  spread: parseFloat(ticker.lowest_ask) - parseFloat(ticker.highest_bid)
+                };
+              }
+            }
+          });
         }
-      });
-    } else if (exchangeName === 'MEXC' && Array.isArray(data)) {
-      data.forEach((ticker: any) => {
-        if (ticker.symbol && ticker.bidPrice && ticker.askPrice) {
-          const standardSymbol = standardizeSymbol(ticker.symbol, exchangeName);
-          if (standardSymbol) {
-            priceMap[standardSymbol] = {
-              bidPrice: parseFloat(ticker.bidPrice),
-              askPrice: parseFloat(ticker.askPrice)
-            };
-          }
+        break;
+        
+      case 'MEXC':
+        if (Array.isArray(data)) {
+          data.forEach((ticker: any) => {
+            if (ticker.symbol && ticker.bidPrice && ticker.askPrice) {
+              const symbol = standardizeSymbol(ticker.symbol, name);
+              if (symbol) {
+                priceMap[symbol] = {
+                  bidPrice: parseFloat(ticker.bidPrice),
+                  askPrice: parseFloat(ticker.askPrice),
+                  volume: parseFloat(ticker.bidQty || 0) + parseFloat(ticker.askQty || 0),
+                  spread: parseFloat(ticker.askPrice) - parseFloat(ticker.bidPrice)
+                };
+              }
+            }
+          });
         }
-      });
-    } else if (exchangeName === 'HTX' && data.status === 'ok' && Array.isArray(data.data)) {
-      data.data.forEach((ticker: any) => {
-        if (ticker.symbol && ticker.bid && ticker.ask) {
-          const standardSymbol = standardizeSymbol(ticker.symbol, exchangeName);
-          if (standardSymbol) {
-            priceMap[standardSymbol] = {
-              bidPrice: parseFloat(ticker.bid),
-              askPrice: parseFloat(ticker.ask)
-            };
-          }
-        }
-      });
-    } else if (exchangeName === 'Bitget' && data.code === "00000" && Array.isArray(data.data)) {
-      data.data.forEach((ticker: any) => {
-        if ((ticker.symbolName || ticker.symbol) && ticker.buyOne && ticker.sellOne) {
-          const standardSymbol = standardizeSymbol(ticker.symbolName || ticker.symbol, exchangeName);
-          if (standardSymbol) {
-            priceMap[standardSymbol] = {
-              bidPrice: parseFloat(ticker.buyOne),
-              askPrice: parseFloat(ticker.sellOne)
-            };
-          }
-        }
-      });
+        break;
     }
     
-    console.log(`${exchangeName}: Normalized ${Object.keys(priceMap).length} symbols`);
+    console.log(`${name}: Normalized ${Object.keys(priceMap).length} symbols`);
     return priceMap;
   } catch (error) {
-    console.error(`Error normalizing ${exchange} data:`, error);
+    console.error(`Error normalizing ${exchangeName} data:`, error);
     return {};
   }
 }
 
-// Enhanced triangular arbitrage finder
-function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: string, tradeAmount: number): any[] {
+// Enhanced triangular arbitrage finder with volume analysis and slippage estimation
+function findTriangularArbitrageEnhanced(
+  priceData: Record<string, any>, 
+  quoteCurrency: string, 
+  tradeAmount: number,
+  minProfitPercent: number,
+  maxProfitPercent: number
+): any[] {
   const opportunities: any[] = [];
-  const symbols = Object.keys(priceMap);
   
-  // Expanded base currencies for more arbitrage opportunities
-  const commonBases = [
+  // Focus on high-volume, liquid pairs
+  const baseCurrencies = [
     'BTC', 'ETH', 'BNB', 'ADA', 'SOL', 'MATIC', 'DOT', 'LINK', 'AVAX', 'UNI',
-    'LTC', 'BCH', 'XRP', 'DOGE', 'SHIB', 'ATOM', 'NEAR', 'FTM', 'ALGO', 'XLM',
-    'VET', 'ICP', 'THETA', 'TRX', 'EOS', 'AAVE', 'MKR', 'SNX', 'COMP', 'YFI',
-    'SUSHI', 'CRV', '1INCH', 'RUNE', 'CAKE', 'ALPHA', 'BAND', 'KNC', 'ZRX', 'BAL',
-    'REN', 'LRC', 'STORJ', 'ANT', 'BNT', 'MLN', 'REP', 'NMR', 'GRT', 'SKL'
+    'LTC', 'BCH', 'XRP', 'DOGE', 'ATOM', 'NEAR', 'FTM', 'ALGO', 'VET', 'ICP'
   ];
   
-  for (const base of commonBases) {
-    for (const intermediate of commonBases) {
+  const exchanges = ['binance', 'bybit', 'okx', 'kucoin', 'gate', 'mexc'];
+  
+  for (const base of baseCurrencies) {
+    for (const intermediate of baseCurrencies) {
       if (base === intermediate) continue;
       
-      const pair1 = `${base}${quoteCurrency}`; // BTC/USDT
-      const pair2 = `${intermediate}${quoteCurrency}`; // ETH/USDT  
-      const pair3 = `${base}${intermediate}`; // BTC/ETH
+      const pair1 = `${base}${quoteCurrency}`;
+      const pair2 = `${intermediate}${quoteCurrency}`;
+      const pair3 = `${base}${intermediate}`;
       
-      if (priceMap[pair1] && priceMap[pair2] && priceMap[pair3]) {
-        // Forward path: USDT -> BTC -> ETH -> USDT
-        try {
-          const step1Amount = tradeAmount / priceMap[pair1].askPrice; // Buy BTC with USDT
-          const step2Amount = step1Amount * priceMap[pair3].bidPrice; // Sell BTC for ETH
-          const step3Amount = step2Amount * priceMap[pair2].bidPrice; // Sell ETH for USDT
-          
-          const profit = step3Amount - tradeAmount;
-          const profitPercent = (profit / tradeAmount) * 100;
-          
-          if (profit > 0 && profitPercent > 0.001) { // Minimum 0.001% profit
-            opportunities.push({
-              base_symbol: base,
-              intermediate_symbol: intermediate,
-              quote_symbol: quoteCurrency,
-              exchange1: 'mixed',
-              exchange2: 'mixed', 
-              exchange3: 'mixed',
-              step1_action: 'BUY',
-              step1_price: priceMap[pair1].askPrice,
-              step1_amount: step1Amount,
-              step2_action: 'SELL',
-              step2_price: priceMap[pair3].bidPrice,
-              step2_amount: step1Amount,
-              step3_action: 'SELL',
-              step3_price: priceMap[pair2].bidPrice,
-              step3_amount: step2Amount,
-              start_amount: tradeAmount,
-              end_amount: step3Amount,
-              profit_amount: profit,
-              profit_percent: profitPercent
-            });
-          }
-        } catch (error) {
-          console.log(`Error calculating forward path for ${base}-${intermediate}:`, error);
-        }
+      // Check if we have price data for all pairs
+      if (priceData[pair1] && priceData[pair2] && priceData[pair3]) {
         
-        // Reverse path: USDT -> ETH -> BTC -> USDT
-        try {
-          const step1Amount = tradeAmount / priceMap[pair2].askPrice; // Buy ETH with USDT
-          const step2Amount = step1Amount / priceMap[pair3].askPrice; // Buy BTC with ETH
-          const step3Amount = step2Amount * priceMap[pair1].bidPrice; // Sell BTC for USDT
-          
-          const profit = step3Amount - tradeAmount;
-          const profitPercent = (profit / tradeAmount) * 100;
-          
-          if (profit > 0 && profitPercent > 0.001) { // Minimum 0.001% profit
-            opportunities.push({
-              base_symbol: intermediate,
-              intermediate_symbol: base,
-              quote_symbol: quoteCurrency,
-              exchange1: 'mixed',
-              exchange2: 'mixed',
-              exchange3: 'mixed',
-              step1_action: 'BUY',
-              step1_price: priceMap[pair2].askPrice,
-              step1_amount: step1Amount,
-              step2_action: 'BUY',
-              step2_price: priceMap[pair3].askPrice,
-              step2_amount: step2Amount,
-              step3_action: 'SELL',
-              step3_price: priceMap[pair1].bidPrice,
-              step3_amount: step2Amount,
-              start_amount: tradeAmount,
-              end_amount: step3Amount,
-              profit_amount: profit,
-              profit_percent: profitPercent
-            });
+        // Find best prices across exchanges
+        const best1 = findBestPrice(priceData[pair1], 'buy');  // Buy base with quote
+        const best2 = findBestPrice(priceData[pair3], 'sell'); // Sell base for intermediate
+        const best3 = findBestPrice(priceData[pair2], 'sell'); // Sell intermediate for quote
+        
+        if (best1 && best2 && best3) {
+          try {
+            // Calculate arbitrage path
+            const step1Amount = tradeAmount / best1.price;
+            const step2Amount = step1Amount * best2.price;
+            const step3Amount = step2Amount * best3.price;
+            
+            const profit = step3Amount - tradeAmount;
+            const profitPercent = (profit / tradeAmount) * 100;
+            
+            // Enhanced filtering with volume and slippage analysis
+            if (profit > 0 && 
+                profitPercent >= minProfitPercent && 
+                profitPercent <= maxProfitPercent) {
+              
+              // Calculate liquidity score and estimated slippage
+              const liquidityScore = calculateLiquidityScore(best1, best2, best3, tradeAmount);
+              const estimatedSlippage = calculateSlippage(best1, best2, best3, tradeAmount);
+              
+              // Only include opportunities with sufficient liquidity
+              if (liquidityScore >= 3 && estimatedSlippage < profitPercent * 0.5) {
+                opportunities.push({
+                  base_symbol: base,
+                  intermediate_symbol: intermediate,
+                  quote_symbol: quoteCurrency,
+                  exchange1: best1.exchange,
+                  exchange2: best2.exchange,
+                  exchange3: best3.exchange,
+                  step1_action: 'BUY',
+                  step1_price: best1.price,
+                  step1_amount: step1Amount,
+                  step2_action: 'SELL',
+                  step2_price: best2.price,
+                  step2_amount: step1Amount,
+                  step3_action: 'SELL',
+                  step3_price: best3.price,
+                  step3_amount: step2Amount,
+                  start_amount: tradeAmount,
+                  end_amount: step3Amount,
+                  profit_amount: profit,
+                  profit_percent: profitPercent,
+                  step1_volume: best1.volume,
+                  step2_volume: best2.volume,
+                  step3_volume: best3.volume,
+                  estimated_slippage: estimatedSlippage,
+                  liquidity_score: liquidityScore
+                });
+              }
+            }
+          } catch (error) {
+            console.log(`Error calculating arbitrage for ${base}-${intermediate}:`, error);
           }
-        } catch (error) {
-          console.log(`Error calculating reverse path for ${base}-${intermediate}:`, error);
         }
       }
     }
   }
   
-  // Sort by profit percentage and return top 10
+  // Sort by profit percentage (descending) and return top 20
   return opportunities
     .sort((a, b) => b.profit_percent - a.profit_percent)
-    .slice(0, 10);
+    .slice(0, 20);
+}
+
+// Find best price across exchanges
+function findBestPrice(exchangeData: Record<string, any>, action: 'buy' | 'sell'): any {
+  let bestPrice = null;
+  let bestExchange = null;
+  let bestVolume = 0;
+  
+  for (const [exchange, data] of Object.entries(exchangeData)) {
+    const price = action === 'buy' ? data.askPrice : data.bidPrice;
+    const volume = data.volume || 0;
+    
+    if (price && price > 0) {
+      if (!bestPrice || 
+          (action === 'buy' && price < bestPrice) || 
+          (action === 'sell' && price > bestPrice)) {
+        bestPrice = price;
+        bestExchange = exchange;
+        bestVolume = volume;
+      }
+    }
+  }
+  
+  return bestPrice ? { 
+    price: bestPrice, 
+    exchange: bestExchange, 
+    volume: bestVolume 
+  } : null;
+}
+
+// Calculate liquidity score (1-10)
+function calculateLiquidityScore(step1: any, step2: any, step3: any, tradeAmount: number): number {
+  const volumes = [step1.volume, step2.volume, step3.volume];
+  const minVolume = Math.min(...volumes);
+  
+  if (minVolume > tradeAmount * 100) return 10;
+  if (minVolume > tradeAmount * 50) return 8;
+  if (minVolume > tradeAmount * 20) return 6;
+  if (minVolume > tradeAmount * 10) return 4;
+  if (minVolume > tradeAmount * 5) return 3;
+  return 1;
+}
+
+// Estimate slippage based on volume and trade size
+function calculateSlippage(step1: any, step2: any, step3: any, tradeAmount: number): number {
+  const slippages = [step1, step2, step3].map(step => {
+    const ratio = tradeAmount / Math.max(step.volume, 1);
+    return Math.min(ratio * 100, 5); // Cap at 5%
+  });
+  
+  return slippages.reduce((sum, slippage) => sum + slippage, 0);
 }
