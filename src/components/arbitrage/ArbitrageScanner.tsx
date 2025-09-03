@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { ArbitrageSettings } from './ArbitrageSettings';
-import { ArbitrageOpportunity } from './ArbitrageOpportunity';
+import { ArbitrageOpportunityCard } from './ArbitrageOpportunityCard';
 import { ArbitrageLogPanel } from './ArbitrageLogPanel';
 import { BinancePriceStream } from './BinancePriceStream';
 import { PlansSection } from '@/components/plans/PlansSection';
@@ -359,10 +359,11 @@ export const ArbitrageScanner = () => {
           </Card>
         )}
         
-        {opportunities.map((opportunity) => (
-          <ArbitrageOpportunity 
+        {opportunities.map((opportunity, index) => (
+          <ArbitrageOpportunityCard 
             key={opportunity.id} 
             opportunity={opportunity}
+            rank={index + 1}
           />
         ))}
       </div>

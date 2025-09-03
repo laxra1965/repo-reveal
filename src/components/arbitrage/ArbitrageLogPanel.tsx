@@ -106,6 +106,9 @@ export const ArbitrageLogPanel = () => {
     return new Date(timestamp).toLocaleTimeString();
   };
 
+  const [isExpanded, setIsExpanded] = useState(false);
+  const latestLog = logs.length > 0 ? logs[0] : null;
+
   return (
     <Card>
       <CardHeader>
@@ -130,41 +133,74 @@ export const ArbitrageLogPanel = () => {
               <Download className="h-4 w-4 mr-2" />
               Download
             </Button>
+            {logs.length > 1 && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setIsExpanded(!isExpanded)}
+              >
+                {isExpanded ? 'Show Less' : `Show All (${logs.length})`}
+              </Button>
+            )}
           </div>
         </div>
       </CardHeader>
       <CardContent>
-        <div className="space-y-2 max-h-96 overflow-y-auto">
-          {logs.length === 0 ? (
-            <p className="text-center text-muted-foreground py-4">
-              No logs available. Start the scanner to see activity.
-            </p>
-          ) : (
-            logs.map((log) => (
-              <div 
-                key={log.id} 
-                className="flex justify-between items-start p-3 bg-muted rounded-lg"
-              >
+        {logs.length === 0 ? (
+          <p className="text-center text-muted-foreground py-4">
+            No logs available. Start the scanner to see activity.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {/* Latest log always visible */}
+            {latestLog && (
+              <div className="flex justify-between items-start p-3 bg-muted rounded-lg border-l-4 border-l-primary">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <Badge variant={getLogBadgeVariant(log.log_type)}>
-                      {log.log_type.toUpperCase()}
+                    <Badge variant={getLogBadgeVariant(latestLog.log_type)}>
+                      {latestLog.log_type.toUpperCase()}
                     </Badge>
                     <span className="text-sm text-muted-foreground">
-                      {formatTime(log.created_at)}
+                      {formatTime(latestLog.created_at)}
                     </span>
+                    <Badge variant="outline" className="text-xs">LATEST</Badge>
                   </div>
-                  <p className="text-sm">{log.message}</p>
-                  {log.details && Object.keys(log.details).length > 0 && (
+                  <p className="text-sm font-medium">{latestLog.message}</p>
+                  {latestLog.details && Object.keys(latestLog.details).length > 0 && (
                     <pre className="text-xs text-muted-foreground mt-1 bg-background p-2 rounded">
-                      {JSON.stringify(log.details, null, 2)}
+                      {JSON.stringify(latestLog.details, null, 2)}
                     </pre>
                   )}
                 </div>
               </div>
-            ))
-          )}
-        </div>
+            )}
+            
+            {/* Expandable older logs */}
+            {isExpanded && logs.length > 1 && (
+              <div className="space-y-2 max-h-60 overflow-y-auto border-t pt-2">
+                <h4 className="text-sm font-medium text-muted-foreground">Previous Logs</h4>
+                {logs.slice(1).map((log) => (
+                  <div 
+                    key={log.id} 
+                    className="flex justify-between items-start p-2 bg-muted/50 rounded text-sm"
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Badge variant={getLogBadgeVariant(log.log_type)} className="text-xs">
+                          {log.log_type.toUpperCase()}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {formatTime(log.created_at)}
+                        </span>
+                      </div>
+                      <p className="text-xs">{log.message}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
