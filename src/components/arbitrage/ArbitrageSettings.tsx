@@ -8,54 +8,47 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { Key, Shield } from 'lucide-react';
 
 interface ArbitrageSettingsProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-interface Settings {
-  refresh_rate: number;
-  trade_amount: number;
-  min_profit_percent: number;
-  max_profit_percent: number;
-  filter_profitable: boolean;
-  auto_trade: boolean;
-  enabled_exchanges: string[];
-}
-
-interface ExchangeCredentials {
-  [key: string]: {
-    api_key: string;
-    api_secret: string;
-  };
-}
-
 const AVAILABLE_EXCHANGES = [
-  'binance', 'bybit', 'okx', 'bitget', 'mexc', 'gate', 'htx', 'kucoin'
+  'binance', 'bybit', 'okx', 'kucoin', 'gate', 'mexc'
 ];
 
 export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [settings, setSettings] = useState<Settings>({
+  const [settings, setSettings] = useState({
     refresh_rate: 5,
     trade_amount: 10,
     min_profit_percent: 0.05,
     max_profit_percent: 50,
     filter_profitable: true,
     auto_trade: false,
-    enabled_exchanges: ['binance', 'bybit', 'okx']
+    enabled_exchanges: ['binance', 'bybit', 'okx'] as string[],
+    // API Keys
+    binanceApiKey: '',
+    binanceApiSecret: '',
+    binanceTestMode: true,
+    bybitApiKey: '',
+    bybitApiSecret: '',
+    bybitTestMode: true,
+    okxApiKey: '',
+    okxApiSecret: '',
+    okxPassphrase: '',
+    okxTestMode: true
   });
-  const [credentials, setCredentials] = useState<ExchangeCredentials>({});
   const [loading, setLoading] = useState(false);
 
-  // Load settings and credentials on mount
   useEffect(() => {
     if (user && isOpen) {
       loadSettings();
-      loadCredentials();
     }
   }, [user, isOpen]);
 
@@ -67,54 +60,26 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
         .from('user_settings')
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') { // Not found error
+      if (error && error.code !== 'PGRST116') {
         throw error;
       }
 
       if (data) {
-        setSettings({
+        setSettings(prev => ({
+          ...prev,
           refresh_rate: data.refresh_rate,
           trade_amount: parseFloat(data.trade_amount.toString()),
-          min_profit_percent: parseFloat(data.min_profit_percent.toString()) * 100, // Convert to percentage
+          min_profit_percent: parseFloat(data.min_profit_percent.toString()) * 100,
           max_profit_percent: parseFloat(data.max_profit_percent.toString()),
           filter_profitable: data.filter_profitable,
           auto_trade: data.auto_trade,
           enabled_exchanges: data.enabled_exchanges || ['binance', 'bybit', 'okx']
-        });
+        }));
       }
     } catch (error: any) {
       console.error('Error loading settings:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load settings",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const loadCredentials = async () => {
-    if (!user) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('exchange_credentials')
-        .select('*')
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-
-      const creds: ExchangeCredentials = {};
-      data?.forEach((cred) => {
-        creds[cred.exchange] = {
-          api_key: cred.api_key || '',
-          api_secret: cred.api_secret || ''
-        };
-      });
-      setCredentials(creds);
-    } catch (error: any) {
-      console.error('Error loading credentials:', error);
     }
   };
 
@@ -127,32 +92,24 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
         user_id: user.id,
         refresh_rate: settings.refresh_rate,
         trade_amount: settings.trade_amount,
-        min_profit_percent: settings.min_profit_percent / 100, // Convert to decimal
+        min_profit_percent: settings.min_profit_percent / 100,
         max_profit_percent: settings.max_profit_percent,
         filter_profitable: settings.filter_profitable,
         auto_trade: settings.auto_trade,
-        enabled_exchanges: settings.enabled_exchanges as ("binance" | "bybit" | "okx" | "bitget" | "mexc" | "gate" | "htx" | "kucoin" | "bitfinex" | "bingx" | "coinbase" | "upbit" | "cryptocom" | "kraken")[]
+        enabled_exchanges: settings.enabled_exchanges
       };
 
-      const { error } = await supabase
+      await supabase
         .from('user_settings')
         .upsert(settingsData, { onConflict: 'user_id' });
 
-      if (error) throw error;
-
-      // Save credentials if auto_trade is enabled
-      if (settings.auto_trade) {
-        await saveCredentials();
-      }
-
       toast({
-        title: "Settings Saved", 
-        description: "Your scanner settings have been updated",
+        title: "Settings Saved",
+        description: "Scanner settings updated successfully",
       });
 
       onClose();
     } catch (error: any) {
-      console.error('Error saving settings:', error);
       toast({
         title: "Error",
         description: "Failed to save settings",
@@ -163,72 +120,24 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
     }
   };
 
-  const saveCredentials = async () => {
-    if (!user) return;
-
-    for (const exchange of settings.enabled_exchanges) {
-      const cred = credentials[exchange];
-      if (cred && (cred.api_key || cred.api_secret)) {
-        try {
-          await supabase
-            .from('exchange_credentials')
-            .upsert({
-              user_id: user.id,
-              exchange: exchange as any,
-              api_key: cred.api_key,
-              api_secret: cred.api_secret,
-              is_connected: !!(cred.api_key && cred.api_secret)
-            }, { onConflict: 'user_id,exchange' });
-        } catch (error) {
-          console.error(`Error saving credentials for ${exchange}:`, error);
-        }
-      }
-    }
-  };
-
-  const updateCredential = (exchange: string, field: 'api_key' | 'api_secret', value: string) => {
-    setCredentials(prev => ({
-      ...prev,
-      [exchange]: {
-        ...prev[exchange],
-        [field]: value
-      }
-    }));
-  };
-
-  const handleExchangeToggle = (exchange: string, checked: boolean) => {
-    if (checked) {
-      setSettings(prev => ({
-        ...prev,
-        enabled_exchanges: [...prev.enabled_exchanges, exchange]
-      }));
-    } else {
-      setSettings(prev => ({
-        ...prev,
-        enabled_exchanges: prev.enabled_exchanges.filter(ex => ex !== exchange)
-      }));
-    }
-  };
-
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Arbitrage Scanner Settings</DialogTitle>
+          <DialogTitle>Scanner Settings & API Configuration</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* General Settings */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">General Settings</CardTitle>
+              <CardTitle className="text-base">General Settings</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor="refresh_rate">Refresh Rate (seconds)</Label>
+                  <Label>Refresh Rate (sec)</Label>
                   <Input
-                    id="refresh_rate"
                     type="number"
                     min="2"
                     max="60"
@@ -240,12 +149,10 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
                   />
                 </div>
                 <div>
-                  <Label htmlFor="trade_amount">Trade Amount (USDT)</Label>
+                  <Label>Trade Amount (USDT)</Label>
                   <Input
-                    id="trade_amount"
                     type="number"
                     min="1"
-                    step="0.01"
                     value={settings.trade_amount}
                     onChange={(e) => setSettings(prev => ({
                       ...prev,
@@ -254,20 +161,11 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
                   />
                 </div>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Profit Filters */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Profit Filters</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor="min_profit">Min Profit (%)</Label>
+                  <Label>Min Profit (%)</Label>
                   <Input
-                    id="min_profit"
                     type="number"
                     min="0"
                     step="0.01"
@@ -279,12 +177,10 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
                   />
                 </div>
                 <div>
-                  <Label htmlFor="max_profit">Max Profit (%)</Label>
+                  <Label>Max Profit (%)</Label>
                   <Input
-                    id="max_profit"
                     type="number"
                     min="0.1"
-                    step="0.1"
                     value={settings.max_profit_percent}
                     onChange={(e) => setSettings(prev => ({
                       ...prev,
@@ -293,114 +189,162 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
                   />
                 </div>
               </div>
-              
+
               <div className="space-y-2">
                 <div className="flex items-center space-x-2">
                   <Checkbox
-                    id="filter_profitable"
                     checked={settings.filter_profitable}
                     onCheckedChange={(checked) => setSettings(prev => ({
                       ...prev,
                       filter_profitable: checked as boolean
                     }))}
                   />
-                  <Label htmlFor="filter_profitable">Show only profitable opportunities</Label>
+                  <Label>Show only profitable</Label>
                 </div>
                 
                 <div className="flex items-center space-x-2">
                   <Checkbox
-                    id="auto_trade"
                     checked={settings.auto_trade}
                     onCheckedChange={(checked) => setSettings(prev => ({
                       ...prev,
                       auto_trade: checked as boolean
                     }))}
                   />
-                  <Label htmlFor="auto_trade">Auto-trade (requires API credentials)</Label>
+                  <Label>Auto-trade (requires API keys)</Label>
+                </div>
+              </div>
+
+              <div>
+                <Label className="mb-2 block">Enabled Exchanges</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {AVAILABLE_EXCHANGES.map((exchange) => (
+                    <div key={exchange} className="flex items-center space-x-2">
+                      <Checkbox
+                        checked={settings.enabled_exchanges.includes(exchange)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSettings(prev => ({
+                              ...prev,
+                              enabled_exchanges: [...prev.enabled_exchanges, exchange]
+                            }));
+                          } else {
+                            setSettings(prev => ({
+                              ...prev,
+                              enabled_exchanges: prev.enabled_exchanges.filter(ex => ex !== exchange)
+                            }));
+                          }
+                        }}
+                      />
+                      <Label className="capitalize text-sm">{exchange}</Label>
+                    </div>
+                  ))}
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Enabled Exchanges */}
+          {/* API Keys for Auto-Trading */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Enabled Exchanges</CardTitle>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Key className="h-4 w-4" />
+                Exchange API Keys
+              </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-3">
-                {AVAILABLE_EXCHANGES.map((exchange) => (
-                  <div key={exchange} className="flex items-center space-x-2">
+            <CardContent className="space-y-4">
+              {/* Binance API */}
+              <div className="border rounded p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-medium text-sm">Binance</h4>
+                  <Badge variant={settings.binanceApiKey ? "default" : "secondary"} className="text-xs">
+                    {settings.binanceApiKey ? "Connected" : "Not Set"}
+                  </Badge>
+                </div>
+                <div className="space-y-2">
+                  <Input
+                    type="password"
+                    placeholder="API Key"
+                    value={settings.binanceApiKey}
+                    onChange={(e) => setSettings(prev => ({
+                      ...prev,
+                      binanceApiKey: e.target.value
+                    }))}
+                    className="text-xs"
+                  />
+                  <Input
+                    type="password"
+                    placeholder="API Secret"
+                    value={settings.binanceApiSecret}
+                    onChange={(e) => setSettings(prev => ({
+                      ...prev,
+                      binanceApiSecret: e.target.value
+                    }))}
+                    className="text-xs"
+                  />
+                  <div className="flex items-center space-x-2">
                     <Checkbox
-                      id={exchange}
-                      checked={settings.enabled_exchanges.includes(exchange)}
-                      onCheckedChange={(checked) => handleExchangeToggle(exchange, checked as boolean)}
+                      checked={settings.binanceTestMode}
+                      onCheckedChange={(checked) => setSettings(prev => ({
+                        ...prev,
+                        binanceTestMode: checked as boolean
+                      }))}
                     />
-                    <Label htmlFor={exchange} className="capitalize">
-                      {exchange}
-                    </Label>
+                    <Label className="text-xs">Test Mode</Label>
                   </div>
-                ))}
+                </div>
+              </div>
+
+              {/* Bybit API */}
+              <div className="border rounded p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-medium text-sm">Bybit</h4>
+                  <Badge variant={settings.bybitApiKey ? "default" : "secondary"} className="text-xs">
+                    {settings.bybitApiKey ? "Connected" : "Not Set"}
+                  </Badge>
+                </div>
+                <div className="space-y-2">
+                  <Input
+                    type="password"
+                    placeholder="API Key"
+                    value={settings.bybitApiKey}
+                    onChange={(e) => setSettings(prev => ({
+                      ...prev,
+                      bybitApiKey: e.target.value
+                    }))}
+                    className="text-xs"
+                  />
+                  <Input
+                    type="password"
+                    placeholder="API Secret"
+                    value={settings.bybitApiSecret}
+                    onChange={(e) => setSettings(prev => ({
+                      ...prev,
+                      bybitApiSecret: e.target.value
+                    }))}
+                    className="text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Security Note */}
+              <div className="bg-muted/50 border border-dashed rounded p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-blue-500" />
+                  <span className="font-medium text-sm">Security</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  API keys are encrypted and stored securely. Only provide read-only or spot trading permissions.
+                </p>
               </div>
             </CardContent>
           </Card>
+        </div>
 
-          {/* API Credentials (Auto-Trading) */}
-          {settings.auto_trade && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Exchange API Credentials</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Enter API credentials for enabled exchanges to allow auto-trading
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {settings.enabled_exchanges.map((exchange) => (
-                  <div key={exchange} className="border rounded-lg p-4 space-y-3">
-                    <h4 className="font-semibold capitalize">{exchange}</h4>
-                    <div className="grid grid-cols-1 gap-3">
-                      <div>
-                        <Label htmlFor={`${exchange}_api_key`}>API Key</Label>
-                        <Input
-                          id={`${exchange}_api_key`}
-                          type="password"
-                          placeholder="Enter API key"
-                          value={credentials[exchange]?.api_key || ''}
-                          onChange={(e) => updateCredential(exchange, 'api_key', e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor={`${exchange}_api_secret`}>API Secret</Label>
-                        <Textarea
-                          id={`${exchange}_api_secret`}
-                          placeholder="Enter API secret"
-                          value={credentials[exchange]?.api_secret || ''}
-                          onChange={(e) => updateCredential(exchange, 'api_secret', e.target.value)}
-                          className="min-h-[80px]"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                  <p className="text-sm text-yellow-800">
-                    <strong>Security Note:</strong> API credentials are encrypted and stored securely. 
-                    Only provide read-only or trading permissions as needed.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Actions */}
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button onClick={saveSettings} disabled={loading}>
-              {loading ? 'Saving...' : 'Save Settings'}
-            </Button>
-          </div>
+        <div className="flex justify-end gap-2 pt-4">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={saveSettings} disabled={loading}>
+            {loading ? 'Saving...' : 'Save Settings'}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
