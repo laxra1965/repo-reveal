@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import type { Database } from '@/integrations/supabase/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -17,7 +18,9 @@ interface ArbitrageSettingsProps {
   onClose: () => void;
 }
 
-const AVAILABLE_EXCHANGES = [
+type ExchangeName = Database['public']['Enums']['exchange_name'];
+
+const AVAILABLE_EXCHANGES: ExchangeName[] = [
   'binance', 'bybit', 'okx', 'kucoin', 'gate', 'mexc'
 ];
 
@@ -31,7 +34,7 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
     max_profit_percent: 50,
     filter_profitable: true,
     auto_trade: false,
-    enabled_exchanges: ['binance', 'bybit', 'okx'] as string[],
+    enabled_exchanges: ['binance', 'bybit', 'okx'] as ExchangeName[],
     // API Keys
     binanceApiKey: '',
     binanceApiSecret: '',
@@ -75,7 +78,7 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
           max_profit_percent: parseFloat(data.max_profit_percent.toString()),
           filter_profitable: data.filter_profitable,
           auto_trade: data.auto_trade,
-          enabled_exchanges: data.enabled_exchanges || ['binance', 'bybit', 'okx']
+          enabled_exchanges: data.enabled_exchanges || (['binance', 'bybit', 'okx'] as ExchangeName[])
         }));
       }
     } catch (error: any) {
