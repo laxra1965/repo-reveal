@@ -35,19 +35,50 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
     filter_profitable: true,
     auto_trade: false,
     enabled_exchanges: ['binance', 'bybit', 'okx'] as ExchangeName[],
-    // API Keys
-    binanceApiKey: '',
-    binanceApiSecret: '',
-    binanceTestMode: true,
-    bybitApiKey: '',
-    bybitApiSecret: '',
-    bybitTestMode: true,
-    okxApiKey: '',
-    okxApiSecret: '',
-    okxPassphrase: '',
-    okxTestMode: true
+    // API Keys storage
+    apiKeys: {} as Record<string, { key: string; secret: string; passphrase?: string; testMode: boolean }>
   });
   const [loading, setLoading] = useState(false);
+
+  // Helper functions for API key management
+  const getApiKeyStatus = (exchange: string): boolean => {
+    const keys = settings.apiKeys[exchange];
+    return !!(keys?.key && keys?.secret);
+  };
+
+  const getApiKeyValue = (exchange: string, field: 'key' | 'secret' | 'passphrase'): string => {
+    return settings.apiKeys[exchange]?.[field] || '';
+  };
+
+  const getTestModeStatus = (exchange: string): boolean => {
+    return settings.apiKeys[exchange]?.testMode || true;
+  };
+
+  const handleApiKeyChange = (exchange: string, field: 'key' | 'secret' | 'passphrase', value: string) => {
+    setSettings(prev => ({
+      ...prev,
+      apiKeys: {
+        ...prev.apiKeys,
+        [exchange]: {
+          ...prev.apiKeys[exchange],
+          [field]: value
+        }
+      }
+    }));
+  };
+
+  const handleTestModeChange = (exchange: string, testMode: boolean) => {
+    setSettings(prev => ({
+      ...prev,
+      apiKeys: {
+        ...prev.apiKeys,
+        [exchange]: {
+          ...prev.apiKeys[exchange],
+          testMode
+        }
+      }
+    }));
+  };
 
   useEffect(() => {
     if (user && isOpen) {
@@ -255,79 +286,54 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Binance API */}
-              <div className="border rounded p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-medium text-sm">Binance</h4>
-                  <Badge variant={settings.binanceApiKey ? "default" : "secondary"} className="text-xs">
-                    {settings.binanceApiKey ? "Connected" : "Not Set"}
-                  </Badge>
-                </div>
-                <div className="space-y-2">
-                  <Input
-                    type="password"
-                    placeholder="API Key"
-                    value={settings.binanceApiKey}
-                    onChange={(e) => setSettings(prev => ({
-                      ...prev,
-                      binanceApiKey: e.target.value
-                    }))}
-                    className="text-xs"
-                  />
-                  <Input
-                    type="password"
-                    placeholder="API Secret"
-                    value={settings.binanceApiSecret}
-                    onChange={(e) => setSettings(prev => ({
-                      ...prev,
-                      binanceApiSecret: e.target.value
-                    }))}
-                    className="text-xs"
-                  />
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      checked={settings.binanceTestMode}
-                      onCheckedChange={(checked) => setSettings(prev => ({
-                        ...prev,
-                        binanceTestMode: checked as boolean
-                      }))}
+              {/* API Keys for enabled exchanges */}
+              {AVAILABLE_EXCHANGES.filter(exchange => 
+                settings.enabled_exchanges.includes(exchange)
+              ).map((exchange) => (
+                <div key={exchange} className="border rounded p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium text-sm capitalize">{exchange}</h4>
+                    <Badge 
+                      variant={getApiKeyStatus(exchange) ? "default" : "secondary"} 
+                      className="text-xs"
+                    >
+                      {getApiKeyStatus(exchange) ? "Connected" : "Not Set"}
+                    </Badge>
+                  </div>
+                  <div className="space-y-2">
+                    <Input
+                      type="password"
+                      placeholder="API Key"
+                      value={getApiKeyValue(exchange, 'key')}
+                      onChange={(e) => handleApiKeyChange(exchange, 'key', e.target.value)}
+                      className="text-xs"
                     />
-                    <Label className="text-xs">Test Mode</Label>
+                    <Input
+                      type="password"
+                      placeholder="API Secret"
+                      value={getApiKeyValue(exchange, 'secret')}
+                      onChange={(e) => handleApiKeyChange(exchange, 'secret', e.target.value)}
+                      className="text-xs"
+                    />
+                    {exchange === 'okx' && (
+                      <Input
+                        type="password"
+                        placeholder="Passphrase"
+                        value={getApiKeyValue(exchange, 'passphrase')}
+                        onChange={(e) => handleApiKeyChange(exchange, 'passphrase', e.target.value)}
+                        className="text-xs"
+                      />
+                    )}
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        checked={getTestModeStatus(exchange)}
+                        onCheckedChange={(checked) => handleTestModeChange(exchange, checked as boolean)}
+                      />
+                      <Label className="text-xs">Test Mode</Label>
+                    </div>
                   </div>
                 </div>
-              </div>
-
-              {/* Bybit API */}
-              <div className="border rounded p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-medium text-sm">Bybit</h4>
-                  <Badge variant={settings.bybitApiKey ? "default" : "secondary"} className="text-xs">
-                    {settings.bybitApiKey ? "Connected" : "Not Set"}
-                  </Badge>
-                </div>
-                <div className="space-y-2">
-                  <Input
-                    type="password"
-                    placeholder="API Key"
-                    value={settings.bybitApiKey}
-                    onChange={(e) => setSettings(prev => ({
-                      ...prev,
-                      bybitApiKey: e.target.value
-                    }))}
-                    className="text-xs"
-                  />
-                  <Input
-                    type="password"
-                    placeholder="API Secret"
-                    value={settings.bybitApiSecret}
-                    onChange={(e) => setSettings(prev => ({
-                      ...prev,
-                      bybitApiSecret: e.target.value
-                    }))}
-                    className="text-xs"
-                  />
-                </div>
-              </div>
+              ))}
 
               {/* Security Note */}
               <div className="bg-muted/50 border border-dashed rounded p-3 space-y-2">

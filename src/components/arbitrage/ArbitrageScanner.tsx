@@ -10,8 +10,9 @@ import { ArbitrageSettings } from './ArbitrageSettings';
 import { ArbitrageOpportunityCard } from './ArbitrageOpportunityCard';
 import { ArbitrageLogPanel } from './ArbitrageLogPanel';
 import { BinancePriceStream } from './BinancePriceStream';
+import { RealTimePrices } from './RealTimePrices';
 import { PlansSection } from '@/components/plans/PlansSection';
-import { Play, Pause, Settings, TrendingUp, Lock, Crown, Activity } from 'lucide-react';
+import { Play, Pause, Settings, TrendingUp, Lock, Crown, Activity, Wifi } from 'lucide-react';
 
 interface Opportunity {
   id: string;
@@ -46,9 +47,20 @@ export const ArbitrageScanner = () => {
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [showPriceStream, setShowPriceStream] = useState(false);
+  const [showRealTimePrices, setShowRealTimePrices] = useState(true);
   const [scanInterval, setScanInterval] = useState<NodeJS.Timeout | null>(null);
   const [lastScanTime, setLastScanTime] = useState<Date | null>(null);
   const [scanCount, setScanCount] = useState(0);
+  const [realTimePriceData, setRealTimePriceData] = useState<Record<string, any>>({});
+
+  const handleRealTimePriceUpdate = useCallback((prices: Record<string, any>) => {
+    setRealTimePriceData(prices);
+    // Optionally trigger a scan with new price data if scanning is active
+    if (isScanning && Object.keys(prices).length > 0) {
+      // Could trigger analysis here with new price data
+      setLastScanTime(new Date());
+    }
+  }, [isScanning]);
 
   const startScanning = useCallback(async () => {
     if (!user || !hasActiveSubscription) {
@@ -300,10 +312,19 @@ export const ArbitrageScanner = () => {
               <Button
                 variant="outline"
                 size="sm"
+                onClick={() => setShowRealTimePrices(!showRealTimePrices)}
+              >
+                <Wifi className="h-4 w-4 mr-2" />
+                {showRealTimePrices ? 'Hide' : 'Show'} Real-Time Prices
+              </Button>
+              
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setShowPriceStream(!showPriceStream)}
               >
                 <Activity className="h-4 w-4 mr-2" />
-                {showPriceStream ? 'Hide' : 'Show'} Live Prices
+                {showPriceStream ? 'Hide' : 'Show'} BNB Stream
               </Button>
               
               {isScanning ? (
@@ -336,6 +357,11 @@ export const ArbitrageScanner = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Real-Time Prices */}
+      {showRealTimePrices && (
+        <RealTimePrices onPriceUpdate={handleRealTimePriceUpdate} />
+      )}
 
       {/* Opportunities */}
       <div className="grid gap-4">

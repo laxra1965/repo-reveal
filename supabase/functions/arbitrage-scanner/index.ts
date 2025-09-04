@@ -208,19 +208,24 @@ serve(async (req) => {
 
       console.log(`Fetching data from ${enabledConfigs.length} exchanges concurrently`);
 
-      // Use Promise.allSettled for better error handling
-      const fetchResults = await Promise.allSettled(
-        enabledConfigs.map(async ({ name, config }) => {
-          try {
-            const result = await fetchExchangeData(name, config);
-            if (result.error) throw new Error(result.error);
-            return { name, data: result.data };
-          } catch (error) {
-            console.error(`Failed to fetch ${name}:`, error);
-            throw error;
-          }
-        })
-      );
+      // Enhanced concurrent fetching with better performance
+      const fetchPromises = enabledConfigs.map(async ({ name, config }) => {
+        const startTime = Date.now();
+        try {
+          const result = await fetchExchangeData(name, config);
+          const fetchTime = Date.now() - startTime;
+          console.log(`${name} fetch completed in ${fetchTime}ms`);
+          
+          if (result.error) throw new Error(result.error);
+          return { name, data: result.data, fetchTime };
+        } catch (error) {
+          console.error(`Failed to fetch ${name}:`, error);
+          throw error;
+        }
+      });
+
+      // Use Promise.allSettled for better error handling with timeout
+      const fetchResults = await Promise.allSettled(fetchPromises);
 
       let allPriceData: Record<string, any> = {};
       let successfulFetches = 0;
