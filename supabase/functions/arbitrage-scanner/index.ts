@@ -246,12 +246,19 @@ serve(async (req) => {
           
           // Log error to database for monitoring
           EdgeRuntime.waitUntil(
-            supabase.from('scanner_logs').insert({
-              user_id: user.id,
-              log_type: 'error',
-              message: `Failed to fetch data from ${exchangeName}`,
-              details: { error: result.reason?.message || 'Unknown error' }
-            }).catch(error => console.error('Failed to log error:', error))
+            (async () => {
+              try {
+                const { error } = await supabase.from('scanner_logs').insert({
+                  user_id: user.id,
+                  log_type: 'error',
+                  message: `Failed to fetch data from ${exchangeName}`,
+                  details: { error: result.reason?.message || 'Unknown error' }
+                });
+                if (error) console.error('Failed to log error:', error);
+              } catch (error) {
+                console.error('Failed to log error:', error);
+              }
+            })()
           );
         }
       });
@@ -306,10 +313,11 @@ serve(async (req) => {
 
           if (insertError) {
             console.error('Error saving opportunities:', insertError);
-            throw insertError;
+            console.error('Database insert failed:', insertError);
+            // Don't fail the entire request if database insert fails
+          } else {
+            console.log(`Successfully saved ${opportunities.length} opportunities to database`);
           }
-
-          console.log(`Successfully saved ${opportunities.length} opportunities to database`);
         } catch (error) {
           console.error('Database insert failed:', error);
           // Don't fail the entire request if database insert fails
@@ -318,18 +326,25 @@ serve(async (req) => {
 
       // Log scan results
       EdgeRuntime.waitUntil(
-        supabase.from('scanner_logs').insert({
-          user_id: user.id,
-          log_type: 'scan',
-          message: `Scan completed: ${opportunities.length} opportunities found`,
-          details: { 
-            opportunitiesFound: opportunities.length,
-            exchangesSuccessful: successfulFetches,
-            exchangesFailed: failedFetches,
-            totalSymbols: Object.keys(allPriceData).length,
-            timestamp: new Date().toISOString()
+        (async () => {
+          try {
+            const { error } = await supabase.from('scanner_logs').insert({
+              user_id: user.id,
+              log_type: 'scan',
+              message: `Scan completed: ${opportunities.length} opportunities found`,
+              details: { 
+                opportunitiesFound: opportunities.length,
+                exchangesSuccessful: successfulFetches,
+                exchangesFailed: failedFetches,
+                totalSymbols: Object.keys(allPriceData).length,
+                timestamp: new Date().toISOString()
+              }
+            });
+            if (error) console.error('Failed to log scan result:', error);
+          } catch (error) {
+            console.error('Failed to log scan result:', error);
           }
-        }).catch(error => console.error('Failed to log scan result:', error))
+        })()
       );
 
       return new Response(JSON.stringify({
@@ -527,9 +542,9 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
               base_symbol: base,
               intermediate_symbol: intermediate,
               quote_symbol: quoteCurrency,
-              exchange1: 'mixed',
-              exchange2: 'mixed', 
-              exchange3: 'mixed',
+              exchange1: 'binance',
+              exchange2: 'binance', 
+              exchange3: 'binance',
               step1_action: 'BUY',
               step1_price: priceMap[pair1].askPrice,
               step1_amount: step1Amount,
@@ -579,9 +594,9 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
               base_symbol: base,
               intermediate_symbol: intermediate,
               quote_symbol: quoteCurrency,
-              exchange1: 'mixed',
-              exchange2: 'mixed',
-              exchange3: 'mixed',
+              exchange1: 'binance',
+              exchange2: 'binance',
+              exchange3: 'binance',
               step1_action: 'BUY',
               step1_price: priceMap[pair2].askPrice,
               step1_amount: step1Amount,
