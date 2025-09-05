@@ -33,41 +33,75 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get token from URL parameters for WebSocket authentication
-    const url = new URL(req.url);
-    const token = url.searchParams.get('token');
-    
-    if (!token) {
-      throw new Error('Unauthorized: Missing token parameter');
-    }
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
-    if (authError || !user) {
-      throw new Error('Unauthorized: Invalid token');
-    }
-
     const { socket, response } = Deno.upgradeWebSocket(req);
+    let user: any = null;
+    let authenticated = false;
 
     socket.onopen = () => {
-      console.log(`WebSocket connection opened for user ${user.id}`);
-      connections.set(user.id, socket);
-      userSubscriptions.set(user.id, new Set());
-      
-      // Send initial connection confirmation
+      console.log('WebSocket connection opened, waiting for authentication');
       socket.send(JSON.stringify({
-        type: 'connected',
-        message: 'Real-time price stream connected',
+        type: 'auth_required',
+        message: 'Please send authentication token',
         timestamp: Date.now()
       }));
-
-      // Start price streaming for BNB pairs
-      startPriceStreaming(user.id, socket);
     };
 
-    socket.onmessage = (event) => {
+    socket.onmessage = async (event) => {
       try {
         const message = JSON.parse(event.data);
+        
+        if (message.type === 'auth' && !authenticated) {
+          // Authenticate user
+          try {
+            const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(message.token);
+            
+            if (authError || !authUser) {
+              socket.send(JSON.stringify({
+                type: 'auth_error',
+                message: 'Authentication failed',
+                timestamp: Date.now()
+              }));
+              socket.close();
+              return;
+            }
+            
+            user = authUser;
+            authenticated = true;
+            
+            console.log(`User ${user.id} authenticated successfully`);
+            connections.set(user.id, socket);
+            userSubscriptions.set(user.id, new Set());
+            
+            // Send authentication success
+            socket.send(JSON.stringify({
+              type: 'authenticated',
+              message: 'Authentication successful',
+              timestamp: Date.now()
+            }));
+            
+            // Start price streaming for BNB pairs
+            startPriceStreaming(user.id, socket);
+            
+          } catch (error) {
+            console.error('Authentication error:', error);
+            socket.send(JSON.stringify({
+              type: 'auth_error',
+              message: 'Authentication failed',
+              timestamp: Date.now()
+            }));
+            socket.close();
+          }
+          return;
+        }
+        
+        if (!authenticated) {
+          socket.send(JSON.stringify({
+            type: 'auth_required',
+            message: 'Authentication required',
+            timestamp: Date.now()
+          }));
+          return;
+        }
         
         switch (message.type) {
           case 'subscribe':
@@ -86,13 +120,21 @@ serve(async (req) => {
     };
 
     socket.onclose = () => {
-      console.log(`WebSocket connection closed for user ${user.id}`);
-      connections.delete(user.id);
-      userSubscriptions.delete(user.id);
+      if (user) {
+        console.log(`WebSocket connection closed for user ${user.id}`);
+        connections.delete(user.id);
+        userSubscriptions.delete(user.id);
+      } else {
+        console.log('WebSocket connection closed (unauthenticated)');
+      }
     };
 
     socket.onerror = (error) => {
-      console.error(`WebSocket error for user ${user.id}:`, error);
+      if (user) {
+        console.error(`WebSocket error for user ${user.id}:`, error);
+      } else {
+        console.error('WebSocket error (unauthenticated):', error);
+      }
     };
 
     return response;

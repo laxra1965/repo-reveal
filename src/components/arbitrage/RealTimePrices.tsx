@@ -41,25 +41,21 @@ export const RealTimePrices = ({ onPriceUpdate }: RealTimePricesProps) => {
       }
 
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//zupbliefzhnohsoguwuk.supabase.co/functions/v1/price-websocket?token=${session.access_token}`;
+      const wsUrl = `${protocol}//zupbliefzhnohsoguwuk.supabase.co/functions/v1/price-websocket`;
       
+      // Create WebSocket with proper headers
       const newWs = new WebSocket(wsUrl);
       
-      newWs.onopen = () => {
-        console.log('Connected to price WebSocket');
-        setIsConnected(true);
-        setConnectionStatus('connected');
-        
-        // Subscribe to BNB pairs
+      // Set authorization header after connection
+      newWs.addEventListener('open', () => {
         newWs.send(JSON.stringify({
-          type: 'subscribe',
-          symbols: ['BNBUSDT', 'BNBBTC', 'BNBETH', 'BNBBUSD', 'ADABNB', 'DOTBNB', 'LINKBNB', 'LTCBNB']
+          type: 'auth',
+          token: session.access_token
         }));
-
-        toast({
-          title: "Connected",
-          description: "Real-time price stream connected",
-        });
+      });
+      
+      newWs.onopen = () => {
+        console.log('WebSocket connection opened, sending authentication');
       };
 
       newWs.onmessage = (event) => {
@@ -67,6 +63,35 @@ export const RealTimePrices = ({ onPriceUpdate }: RealTimePricesProps) => {
           const message = JSON.parse(event.data);
           
           switch (message.type) {
+            case 'auth_required':
+              console.log('Authentication required, sending token');
+              break;
+            case 'authenticated':
+              console.log('Authentication successful');
+              setIsConnected(true);
+              setConnectionStatus('connected');
+              
+              // Subscribe to BNB pairs after authentication
+              newWs.send(JSON.stringify({
+                type: 'subscribe',
+                symbols: ['BNBUSDT', 'BNBBTC', 'BNBETH', 'BNBBUSD', 'ADABNB', 'DOTBNB', 'LINKBNB', 'LTCBNB']
+              }));
+
+              toast({
+                title: "Connected",
+                description: "Real-time price stream connected",
+              });
+              break;
+            case 'auth_error':
+              console.error('Authentication failed:', message.message);
+              setIsConnected(false);
+              setConnectionStatus('disconnected');
+              toast({
+                title: "Authentication Error",
+                description: "Failed to authenticate with price service",
+                variant: "destructive",
+              });
+              break;
             case 'initial_prices':
             case 'price_update':
               handlePriceUpdate(message.data);
