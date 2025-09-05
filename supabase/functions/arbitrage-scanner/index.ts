@@ -193,8 +193,9 @@ serve(async (req) => {
 
       // Clear expired opportunities in background
       EdgeRuntime.waitUntil(
-        supabase.rpc('cleanup_expired_opportunities').catch(error => 
-          console.error('Background cleanup failed:', error)
+        supabase.rpc('cleanup_expired_opportunities').then(
+          () => console.log('Background cleanup completed'),
+          (error: any) => console.error('Background cleanup failed:', error)
         )
       );
 

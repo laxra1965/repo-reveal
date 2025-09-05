@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Wifi, WifiOff, TrendingUp, TrendingDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface PriceData {
   symbol: string;
@@ -27,14 +28,20 @@ export const RealTimePrices = ({ onPriceUpdate }: RealTimePricesProps) => {
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('disconnected');
   const [ws, setWs] = useState<WebSocket | null>(null);
 
-  const connectWebSocket = useCallback(() => {
+  const connectWebSocket = useCallback(async () => {
     if (!user || ws?.readyState === WebSocket.OPEN) return;
 
     setConnectionStatus('connecting');
     
     try {
+      // Get the current session to get the access token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('No valid session found');
+      }
+
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//zupbliefzhnohsoguwuk.supabase.co/functions/v1/price-websocket`;
+      const wsUrl = `${protocol}//zupbliefzhnohsoguwuk.supabase.co/functions/v1/price-websocket?token=${session.access_token}`;
       
       const newWs = new WebSocket(wsUrl);
       
