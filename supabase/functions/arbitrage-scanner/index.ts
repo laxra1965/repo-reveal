@@ -190,6 +190,7 @@ serve(async (req) => {
       const enabledExchanges = settings?.enabled_exchanges || ['binance', 'bybit', 'okx'];
       const tradeAmount = settings?.trade_amount || 10;
       const minProfitPercent = (settings?.min_profit_percent || 0.0005) * 100; // Convert to percentage
+      const filterProfitable = settings?.filter_profitable !== undefined ? settings.filter_profitable : true;
 
       // Clear expired opportunities in background
       EdgeRuntime.waitUntil(
@@ -271,7 +272,7 @@ serve(async (req) => {
       }
 
       // Find arbitrage opportunities with enhanced algorithm
-      const opportunities = findTriangularArbitrage(allPriceData, 'USDT', tradeAmount, minProfitPercent);
+      const opportunities = findTriangularArbitrage(allPriceData, 'USDT', tradeAmount, minProfitPercent, filterProfitable);
 
       console.log(`Found ${opportunities.length} opportunities for user ${user.id}`);
 
@@ -496,7 +497,7 @@ function normalizeExchangeData(exchange: string, data: any): Record<string, any>
 }
 
 // Enhanced triangular arbitrage finder with volume analysis
-function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: string, tradeAmount: number, minProfitPercent: number = 0.001): any[] {
+function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: string, tradeAmount: number, minProfitPercent: number = 0.001, filterProfitable: boolean = true): any[] {
   const opportunities: any[] = [];
   const symbols = Object.keys(priceMap);
   
@@ -527,8 +528,8 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
           const profit = step3Amount - tradeAmount;
           const profitPercent = (profit / tradeAmount) * 100;
           
-          // Enhanced filtering with minimum profit threshold
-          if (profit > 0 && profitPercent >= minProfitPercent) {
+          // Enhanced filtering based on user preference
+          if (filterProfitable ? (profit > 0 && profitPercent >= minProfitPercent) : profitPercent >= minProfitPercent) {
             // Calculate liquidity score and estimated slippage
             const avgSpread1 = ((priceMap[pair1].askPrice - priceMap[pair1].bidPrice) / priceMap[pair1].askPrice) * 100;
             const avgSpread2 = ((priceMap[pair2].askPrice - priceMap[pair2].bidPrice) / priceMap[pair2].askPrice) * 100;
@@ -579,8 +580,8 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
           const profit = step3Amount - tradeAmount;
           const profitPercent = (profit / tradeAmount) * 100;
           
-          // Enhanced filtering with minimum profit threshold
-          if (profit > 0 && profitPercent >= minProfitPercent) {
+          // Enhanced filtering based on user preference
+          if (filterProfitable ? (profit > 0 && profitPercent >= minProfitPercent) : profitPercent >= minProfitPercent) {
             // Calculate liquidity score and estimated slippage
             const avgSpread1 = ((priceMap[pair2].askPrice - priceMap[pair2].bidPrice) / priceMap[pair2].askPrice) * 100;
             const avgSpread2 = ((priceMap[pair3].askPrice - priceMap[pair3].bidPrice) / priceMap[pair3].askPrice) * 100;
