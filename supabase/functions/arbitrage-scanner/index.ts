@@ -525,6 +525,12 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
           const step2Amount = step1Amount * priceMap[pair3].bidPrice; // Sell BTC for ETH
           const step3Amount = step2Amount * priceMap[pair2].bidPrice; // Sell ETH for USDT
           
+          // Validate all calculated amounts are valid numbers
+          if (!isFinite(step1Amount) || !isFinite(step2Amount) || !isFinite(step3Amount) || 
+              step1Amount <= 0 || step2Amount <= 0 || step3Amount <= 0) {
+            continue;
+          }
+          
           const profit = step3Amount - tradeAmount;
           const profitPercent = (profit / tradeAmount) * 100;
           
@@ -576,6 +582,12 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
           const step1Amount = tradeAmount / priceMap[pair2].askPrice; // Buy ETH with USDT
           const step2Amount = step1Amount / priceMap[pair3].askPrice; // Buy BTC with ETH
           const step3Amount = step2Amount * priceMap[pair1].bidPrice; // Sell BTC for USDT
+          
+          // Validate all calculated amounts are valid numbers
+          if (!isFinite(step1Amount) || !isFinite(step2Amount) || !isFinite(step3Amount) || 
+              step1Amount <= 0 || step2Amount <= 0 || step3Amount <= 0) {
+            continue;
+          }
           
           const profit = step3Amount - tradeAmount;
           const profitPercent = (profit / tradeAmount) * 100;
