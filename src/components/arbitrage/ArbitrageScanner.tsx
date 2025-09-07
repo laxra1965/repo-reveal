@@ -303,7 +303,7 @@ export const ArbitrageScanner = () => {
                 onClick={() => setShowPriceStream(!showPriceStream)}
               >
                 <Activity className="h-4 w-4 mr-2" />
-                {showPriceStream ? 'Hide' : 'Show'} BNB Stream
+                {showPriceStream ? 'Hide' : 'Show'} Price Stream
               </Button>
               
               {isScanning ? (
@@ -328,7 +328,7 @@ export const ArbitrageScanner = () => {
               </Badge></span>
               <span>Scans: {scanCount}</span>
               <span>Opportunities: {opportunities.length}</span>
-              <span>Mode: <Badge variant="outline">BNB Pairs + WebSocket</Badge></span>
+              <span>Mode: <Badge variant="outline">Multi-Exchange Triangular</Badge></span>
             </div>
             {lastScanTime && (
               <span>Last update: {lastScanTime.toLocaleTimeString()}</span>
@@ -371,7 +371,7 @@ export const ArbitrageScanner = () => {
       {/* Log Panel */}
       <ArbitrageLogPanel />
       
-      {/* Real-time BNB Price Stream */}
+      {/* Real-time Price Stream */}
       <BinancePriceStream isVisible={showPriceStream} />
 
       {/* Settings Modal */}
