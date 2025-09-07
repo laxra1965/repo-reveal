@@ -550,7 +550,7 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
               step1_amount: step1Amount,
               step2_action: 'SELL',
               step2_price: priceMap[pair3].bidPrice,
-              step2_amount: step1Amount,
+              step2_amount: step2Amount,
               step3_action: 'SELL',
               step3_price: priceMap[pair2].bidPrice,
               step3_amount: step2Amount,
