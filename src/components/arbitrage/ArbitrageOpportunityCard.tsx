@@ -102,10 +102,27 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
             </div>
             
             <CardTitle className="text-lg flex items-center gap-2">
-              <span className="font-mono">
+              <span className="font-mono text-base">
                 {opportunity.base_symbol} → {opportunity.intermediate_symbol} → {opportunity.quote_symbol}
               </span>
+              <Badge variant="outline" className="text-xs font-normal">
+                Triangular Arbitrage
+              </Badge>
             </CardTitle>
+            
+            {/* Clear Trading Path */}
+            <div className="mt-2 p-2 bg-muted/30 rounded text-sm">
+              <div className="font-medium text-muted-foreground mb-1">Trading Path:</div>
+              <div className="font-mono text-sm">
+                1. Buy {opportunity.base_symbol} with {opportunity.quote_symbol}
+              </div>
+              <div className="font-mono text-sm">
+                2. Convert {opportunity.base_symbol} to {opportunity.intermediate_symbol}
+              </div>
+              <div className="font-mono text-sm">
+                3. Sell {opportunity.intermediate_symbol} for {opportunity.quote_symbol}
+              </div>
+            </div>
             
             {/* Exchange Path */}
             <div className="flex items-center gap-2 mt-2 flex-wrap">
@@ -130,15 +147,22 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
           
           {/* Profit Display */}
           <div className="text-right">
-            <div className={`text-2xl font-bold ${getProfitColorClass()}`}>
-              +{opportunity.profit_percent.toFixed(4)}%
+            <div className={`text-2xl font-bold ${
+              opportunity.profit_percent > 0 ? 'text-green-500' : 'text-red-500'
+            }`}>
+              {opportunity.profit_percent > 0 ? '+' : ''}{opportunity.profit_percent.toFixed(4)}%
             </div>
             <div className="text-sm text-muted-foreground">
-              +{formatCurrency(opportunity.profit_amount, 4)} {opportunity.base_symbol}
+              {opportunity.profit_percent > 0 ? '+' : ''}{formatCurrency(opportunity.profit_amount, 4)} {opportunity.quote_symbol}
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              ${(opportunity.profit_amount * opportunity.start_amount).toFixed(2)} est.
+              ${Math.abs(opportunity.profit_amount * opportunity.start_amount).toFixed(2)} est.
             </div>
+            {opportunity.profit_percent < 0 && (
+              <Badge variant="destructive" className="mt-1 text-xs">
+                NEGATIVE SPREAD
+              </Badge>
+            )}
           </div>
         </div>
       </CardHeader>
@@ -149,13 +173,13 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
           <div className="text-center">
             <div className="text-sm text-muted-foreground">Start Amount</div>
             <div className="font-semibold">
-              {formatCurrency(opportunity.start_amount, 4)} {opportunity.base_symbol}
+              {formatCurrency(opportunity.start_amount, 2)} {opportunity.quote_symbol}
             </div>
           </div>
           <div className="text-center">
             <div className="text-sm text-muted-foreground">End Amount</div>
             <div className="font-semibold">
-              {formatCurrency(opportunity.end_amount, 4)} {opportunity.base_symbol}
+              {formatCurrency(opportunity.end_amount, 2)} {opportunity.quote_symbol}
             </div>
           </div>
           <div className="text-center">

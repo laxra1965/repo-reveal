@@ -501,14 +501,23 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
   const opportunities: any[] = [];
   const symbols = Object.keys(priceMap);
   
-  // Expanded base currencies for more arbitrage opportunities
+  // Expanded base currencies for more arbitrage opportunities - focus on high-liquidity pairs
   const commonBases = [
-    'BTC', 'ETH', 'BNB', 'ADA', 'SOL', 'MATIC', 'DOT', 'LINK', 'AVAX', 'UNI',
-    'LTC', 'BCH', 'XRP', 'DOGE', 'SHIB', 'ATOM', 'NEAR', 'FTM', 'ALGO', 'XLM',
-    'VET', 'ICP', 'THETA', 'TRX', 'EOS', 'AAVE', 'MKR', 'SNX', 'COMP', 'YFI',
-    'SUSHI', 'CRV', '1INCH', 'RUNE', 'CAKE', 'ALPHA', 'BAND', 'KNC', 'ZRX', 'BAL',
-    'REN', 'LRC', 'STORJ', 'ANT', 'BNT', 'MLN', 'REP', 'NMR', 'GRT', 'SKL'
+    // Major cryptocurrencies with highest trading volumes
+    'BTC', 'ETH', 'BNB', 'XRP', 'ADA', 'SOL', 'DOGE', 'MATIC', 'DOT', 'SHIB',
+    'LTC', 'AVAX', 'UNI', 'LINK', 'ATOM', 'XLM', 'BCH', 'NEAR', 'VET', 
+    'FTM', 'ALGO', 'ICP', 'THETA', 'TRX', 'EOS', 'AAVE', 'GRT', 'SAND',
+    'MANA', 'CRV', 'RUNE', 'CAKE', 'SUSHI', 'COMP', 'YFI', 'MKR', 'SNX',
+    // Additional pairs that often have arbitrage opportunities
+    'KAVA', 'ZIL', 'ENJ', 'BAT', 'ZRX', 'REN', 'KNC', 'LEND', 'BAND',
+    'SXP', 'RSR', 'OGN', 'DENT', 'WIN', 'HOT', 'ANKR', 'COTI', 'CHR',
+    'MDT', 'STMX', 'DF', 'EASY', 'TKO', 'FORTH', 'BURGER', 'SLP'
   ];
+  
+  // Get list of available exchanges from price data
+  const availableExchanges = ['binance', 'bybit', 'okx'];
+  
+  console.log(`Scanning triangular arbitrage across ${commonBases.length} base currencies`);
   
   for (const base of commonBases) {
     for (const intermediate of commonBases) {
@@ -518,6 +527,7 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
       const pair2 = `${intermediate}${quoteCurrency}`; // ETH/USDT  
       const pair3 = `${base}${intermediate}`; // BTC/ETH
       
+      // Only proceed if all required pairs have price data
       if (priceMap[pair1] && priceMap[pair2] && priceMap[pair3]) {
         // Forward path: USDT -> BTC -> ETH -> USDT
         try {
@@ -525,7 +535,7 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
           const step2Amount = step1Amount * priceMap[pair3].bidPrice; // Sell BTC for ETH
           const step3Amount = step2Amount * priceMap[pair2].bidPrice; // Sell ETH for USDT
           
-          // Validate all calculated amounts are valid numbers
+          // Validate all calculated amounts are valid numbers and positive
           if (!isFinite(step1Amount) || !isFinite(step2Amount) || !isFinite(step3Amount) || 
               step1Amount <= 0 || step2Amount <= 0 || step3Amount <= 0) {
             continue;
@@ -534,8 +544,12 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
           const profit = step3Amount - tradeAmount;
           const profitPercent = (profit / tradeAmount) * 100;
           
-          // Enhanced filtering based on user preference
-          if (filterProfitable ? (profit > 0 && profitPercent >= minProfitPercent) : profitPercent >= minProfitPercent) {
+          // Enhanced filtering based on user preference - show both positive and negative opportunities
+          const shouldInclude = filterProfitable ? 
+            (profitPercent > 0 && Math.abs(profitPercent) >= minProfitPercent) : 
+            Math.abs(profitPercent) >= minProfitPercent;
+            
+          if (shouldInclude) {
             // Calculate liquidity score and estimated slippage
             const avgSpread1 = ((priceMap[pair1].askPrice - priceMap[pair1].bidPrice) / priceMap[pair1].askPrice) * 100;
             const avgSpread2 = ((priceMap[pair2].askPrice - priceMap[pair2].bidPrice) / priceMap[pair2].askPrice) * 100;
@@ -545,6 +559,9 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
             const liquidityScore = Math.max(10, Math.min(100, 100 - (avgSpread * 10)));
             const estimatedSlippage = avgSpread * 0.5; // Conservative estimate
             
+            // Create human-readable trading path
+            const tradingPath = `${quoteCurrency} → ${base} → ${intermediate} → ${quoteCurrency}`;
+            
             opportunities.push({
               base_symbol: base,
               intermediate_symbol: intermediate,
@@ -552,19 +569,20 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
               exchange1: 'binance',
               exchange2: 'binance', 
               exchange3: 'binance',
-              step1_action: 'BUY',
+              step1_action: `BUY ${pair1}`,
               step1_price: priceMap[pair1].askPrice,
               step1_amount: step1Amount,
-              step2_action: 'SELL',
+              step2_action: `SELL ${pair3}`,
               step2_price: priceMap[pair3].bidPrice,
               step2_amount: step2Amount,
-              step3_action: 'SELL',
+              step3_action: `SELL ${pair2}`,
               step3_price: priceMap[pair2].bidPrice,
-              step3_amount: step2Amount,
+              step3_amount: step3Amount, // Fixed: was step2Amount
               start_amount: tradeAmount,
               end_amount: step3Amount,
               profit_amount: profit,
               profit_percent: profitPercent,
+              trading_path: tradingPath,
               // Enhanced fields
               step1_volume: tradeAmount,
               step2_volume: step1Amount * priceMap[pair1].askPrice,
@@ -572,9 +590,11 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
               estimated_slippage: estimatedSlippage,
               liquidity_score: Math.round(liquidityScore)
             });
+            
+            console.log(`Found opportunity: ${tradingPath} | Profit: ${profitPercent.toFixed(4)}%`);
           }
         } catch (error) {
-          console.log(`Error calculating forward path for ${base}-${intermediate}:`, error);
+          // Silently continue on calculation errors
         }
         
         // Reverse path: USDT -> ETH -> BTC -> USDT
@@ -592,8 +612,12 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
           const profit = step3Amount - tradeAmount;
           const profitPercent = (profit / tradeAmount) * 100;
           
-          // Enhanced filtering based on user preference
-          if (filterProfitable ? (profit > 0 && profitPercent >= minProfitPercent) : profitPercent >= minProfitPercent) {
+          // Enhanced filtering based on user preference - show both positive and negative opportunities
+          const shouldInclude = filterProfitable ? 
+            (profitPercent > 0 && Math.abs(profitPercent) >= minProfitPercent) : 
+            Math.abs(profitPercent) >= minProfitPercent;
+            
+          if (shouldInclude) {
             // Calculate liquidity score and estimated slippage
             const avgSpread1 = ((priceMap[pair2].askPrice - priceMap[pair2].bidPrice) / priceMap[pair2].askPrice) * 100;
             const avgSpread2 = ((priceMap[pair3].askPrice - priceMap[pair3].bidPrice) / priceMap[pair3].askPrice) * 100;
@@ -603,6 +627,9 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
             const liquidityScore = Math.max(10, Math.min(100, 100 - (avgSpread * 10)));
             const estimatedSlippage = avgSpread * 0.5; // Conservative estimate
             
+            // Create human-readable trading path
+            const tradingPath = `${quoteCurrency} → ${intermediate} → ${base} → ${quoteCurrency}`;
+            
             opportunities.push({
               base_symbol: base,
               intermediate_symbol: intermediate,
@@ -610,36 +637,39 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
               exchange1: 'binance',
               exchange2: 'binance',
               exchange3: 'binance',
-              step1_action: 'BUY',
+              step1_action: `BUY ${pair2}`,
               step1_price: priceMap[pair2].askPrice,
               step1_amount: step1Amount,
-              step2_action: 'BUY',
+              step2_action: `BUY ${pair3}`,
               step2_price: priceMap[pair3].askPrice,
               step2_amount: step2Amount,
-              step3_action: 'SELL',
+              step3_action: `SELL ${pair1}`,
               step3_price: priceMap[pair1].bidPrice,
               step3_amount: step3Amount,
               start_amount: tradeAmount,
               end_amount: step3Amount,
               profit_amount: profit,
               profit_percent: profitPercent,
+              trading_path: tradingPath,
               // Enhanced fields
               step1_volume: tradeAmount,
               step2_volume: step1Amount * priceMap[pair2].askPrice,
               step3_volume: step2Amount * priceMap[pair1].bidPrice,
               estimated_slippage: estimatedSlippage,
               liquidity_score: Math.round(liquidityScore)
-            });
-          }
-        } catch (error) {
-          console.log(`Error calculating reverse path for ${base}-${intermediate}:`, error);
-        }
+             });
+             
+             console.log(`Found opportunity: ${tradingPath} | Profit: ${profitPercent.toFixed(4)}%`);
+           }
+         } catch (error) {
+           // Silently continue on calculation errors
+         }
       }
     }
   }
   
-  // Sort by profit percentage descending and limit results
+  // Sort by absolute profit percentage descending to show best opportunities first (including profitable negative spreads)
   return opportunities
-    .sort((a, b) => b.profit_percent - a.profit_percent)
-    .slice(0, 20); // Limit to top 20 opportunities
+    .sort((a, b) => Math.abs(b.profit_percent) - Math.abs(a.profit_percent))
+    .slice(0, 50); // Increase limit to capture more opportunities
 }
