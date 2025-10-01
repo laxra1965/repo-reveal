@@ -419,7 +419,10 @@ function normalizeExchangeData(exchange: string, data: any): Record<string, any>
         if (ticker.symbol && ticker.bidPrice && ticker.askPrice) {
           const standardSymbol = standardizeSymbol(ticker.symbol, exchangeName);
           if (standardSymbol) {
-            priceMap[standardSymbol] = {
+            const key = `${standardSymbol}_${exchangeName.toLowerCase()}`;
+            priceMap[key] = {
+              symbol: standardSymbol,
+              exchange: exchangeName.toLowerCase(),
               bidPrice: parseFloat(ticker.bidPrice),
               askPrice: parseFloat(ticker.askPrice)
             };
@@ -431,7 +434,10 @@ function normalizeExchangeData(exchange: string, data: any): Record<string, any>
         if (ticker.symbol && ticker.bid1Price && ticker.ask1Price) {
           const standardSymbol = standardizeSymbol(ticker.symbol, exchangeName);
           if (standardSymbol) {
-            priceMap[standardSymbol] = {
+            const key = `${standardSymbol}_${exchangeName.toLowerCase()}`;
+            priceMap[key] = {
+              symbol: standardSymbol,
+              exchange: exchangeName.toLowerCase(),
               bidPrice: parseFloat(ticker.bid1Price),
               askPrice: parseFloat(ticker.ask1Price)
             };
@@ -443,7 +449,10 @@ function normalizeExchangeData(exchange: string, data: any): Record<string, any>
         if (ticker.instId && ticker.bidPx && ticker.askPx) {
           const standardSymbol = standardizeSymbol(ticker.instId, exchangeName);
           if (standardSymbol) {
-            priceMap[standardSymbol] = {
+            const key = `${standardSymbol}_${exchangeName.toLowerCase()}`;
+            priceMap[key] = {
+              symbol: standardSymbol,
+              exchange: exchangeName.toLowerCase(),
               bidPrice: parseFloat(ticker.bidPx),
               askPrice: parseFloat(ticker.askPx)
             };
@@ -455,7 +464,10 @@ function normalizeExchangeData(exchange: string, data: any): Record<string, any>
         if (ticker.symbol && ticker.buy && ticker.sell) {
           const standardSymbol = standardizeSymbol(ticker.symbol, exchangeName);
           if (standardSymbol) {
-            priceMap[standardSymbol] = {
+            const key = `${standardSymbol}_${exchangeName.toLowerCase()}`;
+            priceMap[key] = {
+              symbol: standardSymbol,
+              exchange: exchangeName.toLowerCase(),
               bidPrice: parseFloat(ticker.buy),
               askPrice: parseFloat(ticker.sell)
             };
@@ -467,7 +479,10 @@ function normalizeExchangeData(exchange: string, data: any): Record<string, any>
         if (ticker.currency_pair && ticker.highest_bid && ticker.lowest_ask) {
           const standardSymbol = standardizeSymbol(ticker.currency_pair, exchangeName);
           if (standardSymbol) {
-            priceMap[standardSymbol] = {
+            const key = `${standardSymbol}_${exchangeName.toLowerCase()}`;
+            priceMap[key] = {
+              symbol: standardSymbol,
+              exchange: exchangeName.toLowerCase(),
               bidPrice: parseFloat(ticker.highest_bid),
               askPrice: parseFloat(ticker.lowest_ask)
             };
@@ -479,7 +494,10 @@ function normalizeExchangeData(exchange: string, data: any): Record<string, any>
         if (ticker.symbol && ticker.bidPrice && ticker.askPrice) {
           const standardSymbol = standardizeSymbol(ticker.symbol, exchangeName);
           if (standardSymbol) {
-            priceMap[standardSymbol] = {
+            const key = `${standardSymbol}_${exchangeName.toLowerCase()}`;
+            priceMap[key] = {
+              symbol: standardSymbol,
+              exchange: exchangeName.toLowerCase(),
               bidPrice: parseFloat(ticker.bidPrice),
               askPrice: parseFloat(ticker.askPrice)
             };
@@ -499,7 +517,6 @@ function normalizeExchangeData(exchange: string, data: any): Record<string, any>
 // Enhanced triangular arbitrage finder with volume analysis
 function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: string, tradeAmount: number, minProfitPercent: number = 0.001, filterProfitable: boolean = true): any[] {
   const opportunities: any[] = [];
-  const symbols = Object.keys(priceMap);
   
   // Expanded base currencies for more arbitrage opportunities - focus on high-liquidity pairs
   const commonBases = [
@@ -517,153 +534,164 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
   // Get list of available exchanges from price data
   const availableExchanges = ['binance', 'bybit', 'okx'];
   
-  console.log(`Scanning triangular arbitrage across ${commonBases.length} base currencies`);
+  console.log(`Scanning triangular arbitrage across ${commonBases.length} base currencies and ${availableExchanges.length} exchanges`);
   
-  for (const base of commonBases) {
-    for (const intermediate of commonBases) {
-      if (base === intermediate) continue;
-      
-      const pair1 = `${base}${quoteCurrency}`; // BTC/USDT
-      const pair2 = `${intermediate}${quoteCurrency}`; // ETH/USDT  
-      const pair3 = `${base}${intermediate}`; // BTC/ETH
-      
-      // Only proceed if all required pairs have price data
-      if (priceMap[pair1] && priceMap[pair2] && priceMap[pair3]) {
-        // Forward path: USDT -> BTC -> ETH -> USDT
-        try {
-          const step1Amount = tradeAmount / priceMap[pair1].askPrice; // Buy BTC with USDT
-          const step2Amount = step1Amount * priceMap[pair3].bidPrice; // Sell BTC for ETH
-          const step3Amount = step2Amount * priceMap[pair2].bidPrice; // Sell ETH for USDT
-          
-          // Validate all calculated amounts are valid numbers and positive
-          if (!isFinite(step1Amount) || !isFinite(step2Amount) || !isFinite(step3Amount) || 
-              step1Amount <= 0 || step2Amount <= 0 || step3Amount <= 0) {
-            continue;
-          }
-          
-          const profit = step3Amount - tradeAmount;
-          const profitPercent = (profit / tradeAmount) * 100;
-          
-          // Enhanced filtering based on user preference - show both positive and negative opportunities
-          const shouldInclude = filterProfitable ? 
-            (profitPercent > 0 && Math.abs(profitPercent) >= minProfitPercent) : 
-            Math.abs(profitPercent) >= minProfitPercent;
-            
-          if (shouldInclude) {
-            // Calculate liquidity score and estimated slippage
-            const avgSpread1 = ((priceMap[pair1].askPrice - priceMap[pair1].bidPrice) / priceMap[pair1].askPrice) * 100;
-            const avgSpread2 = ((priceMap[pair2].askPrice - priceMap[pair2].bidPrice) / priceMap[pair2].askPrice) * 100;
-            const avgSpread3 = ((priceMap[pair3].askPrice - priceMap[pair3].bidPrice) / priceMap[pair3].askPrice) * 100;
-            
-            const avgSpread = (avgSpread1 + avgSpread2 + avgSpread3) / 3;
-            const liquidityScore = Math.max(10, Math.min(100, 100 - (avgSpread * 10)));
-            const estimatedSlippage = avgSpread * 0.5; // Conservative estimate
-            
-            // Create human-readable trading path
-            const tradingPath = `${quoteCurrency} → ${base} → ${intermediate} → ${quoteCurrency}`;
-            
-            opportunities.push({
-              base_symbol: base,
-              intermediate_symbol: intermediate,
-              quote_symbol: quoteCurrency,
-              exchange1: 'binance',
-              exchange2: 'binance', 
-              exchange3: 'binance',
-              step1_action: `BUY ${pair1}`,
-              step1_price: priceMap[pair1].askPrice,
-              step1_amount: step1Amount,
-              step2_action: `SELL ${pair3}`,
-              step2_price: priceMap[pair3].bidPrice,
-              step2_amount: step2Amount,
-              step3_action: `SELL ${pair2}`,
-              step3_price: priceMap[pair2].bidPrice,
-              step3_amount: step3Amount, // Fixed: was step2Amount
-              start_amount: tradeAmount,
-              end_amount: step3Amount,
-              profit_amount: profit,
-              profit_percent: profitPercent,
-              trading_path: tradingPath,
-              // Enhanced fields
-              step1_volume: tradeAmount,
-              step2_volume: step1Amount * priceMap[pair1].askPrice,
-              step3_volume: step2Amount * priceMap[pair2].bidPrice,
-              estimated_slippage: estimatedSlippage,
-              liquidity_score: Math.round(liquidityScore)
-            });
-            
-            console.log(`Found opportunity: ${tradingPath} | Profit: ${profitPercent.toFixed(4)}%`);
-          }
-        } catch (error) {
-          // Silently continue on calculation errors
-        }
+  // Scan for opportunities on each exchange individually (triangular arbitrage within same exchange)
+  for (const exchange of availableExchanges) {
+    for (const base of commonBases) {
+      for (const intermediate of commonBases) {
+        if (base === intermediate) continue;
         
-        // Reverse path: USDT -> ETH -> BTC -> USDT
-        try {
-          const step1Amount = tradeAmount / priceMap[pair2].askPrice; // Buy ETH with USDT
-          const step2Amount = step1Amount / priceMap[pair3].askPrice; // Buy BTC with ETH
-          const step3Amount = step2Amount * priceMap[pair1].bidPrice; // Sell BTC for USDT
-          
-          // Validate all calculated amounts are valid numbers
-          if (!isFinite(step1Amount) || !isFinite(step2Amount) || !isFinite(step3Amount) || 
-              step1Amount <= 0 || step2Amount <= 0 || step3Amount <= 0) {
-            continue;
+        const pair1Key = `${base}${quoteCurrency}_${exchange}`; // BTC/USDT on exchange
+        const pair2Key = `${intermediate}${quoteCurrency}_${exchange}`; // ETH/USDT on exchange  
+        const pair3Key = `${base}${intermediate}_${exchange}`; // BTC/ETH on exchange
+        
+        // Only proceed if all required pairs exist on this exchange
+        if (priceMap[pair1Key] && priceMap[pair2Key] && priceMap[pair3Key]) {
+          // Forward path: USDT -> BTC -> ETH -> USDT
+          try {
+            const pair1 = priceMap[pair1Key];
+            const pair2 = priceMap[pair2Key];
+            const pair3 = priceMap[pair3Key];
+            
+            const step1Amount = tradeAmount / pair1.askPrice; // Buy BTC with USDT
+            const step2Amount = step1Amount * pair3.bidPrice; // Sell BTC for ETH
+            const step3Amount = step2Amount * pair2.bidPrice; // Sell ETH for USDT
+            
+            // Validate all calculated amounts are valid numbers and positive
+            if (!isFinite(step1Amount) || !isFinite(step2Amount) || !isFinite(step3Amount) || 
+                step1Amount <= 0 || step2Amount <= 0 || step3Amount <= 0) {
+              continue;
+            }
+            
+            const profit = step3Amount - tradeAmount;
+            const profitPercent = (profit / tradeAmount) * 100;
+            
+            // Enhanced filtering based on user preference - show both positive and negative opportunities
+            const shouldInclude = filterProfitable ? 
+              (profitPercent > 0 && Math.abs(profitPercent) >= minProfitPercent) : 
+              Math.abs(profitPercent) >= minProfitPercent;
+              
+            if (shouldInclude) {
+              // Calculate liquidity score and estimated slippage
+              const avgSpread1 = ((pair1.askPrice - pair1.bidPrice) / pair1.askPrice) * 100;
+              const avgSpread2 = ((pair2.askPrice - pair2.bidPrice) / pair2.askPrice) * 100;
+              const avgSpread3 = ((pair3.askPrice - pair3.bidPrice) / pair3.askPrice) * 100;
+              
+              const avgSpread = (avgSpread1 + avgSpread2 + avgSpread3) / 3;
+              const liquidityScore = Math.max(10, Math.min(100, 100 - (avgSpread * 10)));
+              const estimatedSlippage = avgSpread * 0.5; // Conservative estimate
+              
+              // Create human-readable trading path
+              const tradingPath = `[${exchange.toUpperCase()}] ${quoteCurrency} → ${base} → ${intermediate} → ${quoteCurrency}`;
+              
+              opportunities.push({
+                base_symbol: base,
+                intermediate_symbol: intermediate,
+                quote_symbol: quoteCurrency,
+                exchange1: exchange,
+                exchange2: exchange, 
+                exchange3: exchange,
+                step1_action: `BUY ${base}${quoteCurrency}`,
+                step1_price: pair1.askPrice,
+                step1_amount: step1Amount,
+                step2_action: `SELL ${base}${intermediate}`,
+                step2_price: pair3.bidPrice,
+                step2_amount: step2Amount,
+                step3_action: `SELL ${intermediate}${quoteCurrency}`,
+                step3_price: pair2.bidPrice,
+                step3_amount: step3Amount,
+                start_amount: tradeAmount,
+                end_amount: step3Amount,
+                profit_amount: profit,
+                profit_percent: profitPercent,
+                trading_path: tradingPath,
+                // Enhanced fields
+                step1_volume: tradeAmount,
+                step2_volume: step1Amount * pair1.askPrice,
+                step3_volume: step2Amount * pair2.bidPrice,
+                estimated_slippage: estimatedSlippage,
+                liquidity_score: Math.round(liquidityScore)
+              });
+              
+              console.log(`Found opportunity: ${tradingPath} | Profit: ${profitPercent.toFixed(4)}%`);
+            }
+          } catch (error) {
+            // Silently continue on calculation errors
           }
-          
-          const profit = step3Amount - tradeAmount;
-          const profitPercent = (profit / tradeAmount) * 100;
-          
-          // Enhanced filtering based on user preference - show both positive and negative opportunities
-          const shouldInclude = filterProfitable ? 
-            (profitPercent > 0 && Math.abs(profitPercent) >= minProfitPercent) : 
-            Math.abs(profitPercent) >= minProfitPercent;
+        
+          // Reverse path: USDT -> ETH -> BTC -> USDT
+          try {
+            const pair1 = priceMap[pair1Key];
+            const pair2 = priceMap[pair2Key];
+            const pair3 = priceMap[pair3Key];
             
-          if (shouldInclude) {
-            // Calculate liquidity score and estimated slippage
-            const avgSpread1 = ((priceMap[pair2].askPrice - priceMap[pair2].bidPrice) / priceMap[pair2].askPrice) * 100;
-            const avgSpread2 = ((priceMap[pair3].askPrice - priceMap[pair3].bidPrice) / priceMap[pair3].askPrice) * 100;
-            const avgSpread3 = ((priceMap[pair1].askPrice - priceMap[pair1].bidPrice) / priceMap[pair1].askPrice) * 100;
+            const step1Amount = tradeAmount / pair2.askPrice; // Buy ETH with USDT
+            const step2Amount = step1Amount / pair3.askPrice; // Buy BTC with ETH
+            const step3Amount = step2Amount * pair1.bidPrice; // Sell BTC for USDT
             
-            const avgSpread = (avgSpread1 + avgSpread2 + avgSpread3) / 3;
-            const liquidityScore = Math.max(10, Math.min(100, 100 - (avgSpread * 10)));
-            const estimatedSlippage = avgSpread * 0.5; // Conservative estimate
+            // Validate all calculated amounts are valid numbers
+            if (!isFinite(step1Amount) || !isFinite(step2Amount) || !isFinite(step3Amount) || 
+                step1Amount <= 0 || step2Amount <= 0 || step3Amount <= 0) {
+              continue;
+            }
             
-            // Create human-readable trading path
-            const tradingPath = `${quoteCurrency} → ${intermediate} → ${base} → ${quoteCurrency}`;
+            const profit = step3Amount - tradeAmount;
+            const profitPercent = (profit / tradeAmount) * 100;
             
-            opportunities.push({
-              base_symbol: base,
-              intermediate_symbol: intermediate,
-              quote_symbol: quoteCurrency,
-              exchange1: 'binance',
-              exchange2: 'binance',
-              exchange3: 'binance',
-              step1_action: `BUY ${pair2}`,
-              step1_price: priceMap[pair2].askPrice,
-              step1_amount: step1Amount,
-              step2_action: `BUY ${pair3}`,
-              step2_price: priceMap[pair3].askPrice,
-              step2_amount: step2Amount,
-              step3_action: `SELL ${pair1}`,
-              step3_price: priceMap[pair1].bidPrice,
-              step3_amount: step3Amount,
-              start_amount: tradeAmount,
-              end_amount: step3Amount,
-              profit_amount: profit,
-              profit_percent: profitPercent,
-              trading_path: tradingPath,
-              // Enhanced fields
-              step1_volume: tradeAmount,
-              step2_volume: step1Amount * priceMap[pair2].askPrice,
-              step3_volume: step2Amount * priceMap[pair1].bidPrice,
-              estimated_slippage: estimatedSlippage,
-              liquidity_score: Math.round(liquidityScore)
-             });
-             
-             console.log(`Found opportunity: ${tradingPath} | Profit: ${profitPercent.toFixed(4)}%`);
+            // Enhanced filtering based on user preference - show both positive and negative opportunities
+            const shouldInclude = filterProfitable ? 
+              (profitPercent > 0 && Math.abs(profitPercent) >= minProfitPercent) : 
+              Math.abs(profitPercent) >= minProfitPercent;
+              
+            if (shouldInclude) {
+              // Calculate liquidity score and estimated slippage
+              const avgSpread1 = ((pair2.askPrice - pair2.bidPrice) / pair2.askPrice) * 100;
+              const avgSpread2 = ((pair3.askPrice - pair3.bidPrice) / pair3.askPrice) * 100;
+              const avgSpread3 = ((pair1.askPrice - pair1.bidPrice) / pair1.askPrice) * 100;
+              
+              const avgSpread = (avgSpread1 + avgSpread2 + avgSpread3) / 3;
+              const liquidityScore = Math.max(10, Math.min(100, 100 - (avgSpread * 10)));
+              const estimatedSlippage = avgSpread * 0.5; // Conservative estimate
+              
+              // Create human-readable trading path
+              const tradingPath = `[${exchange.toUpperCase()}] ${quoteCurrency} → ${intermediate} → ${base} → ${quoteCurrency}`;
+              
+              opportunities.push({
+                base_symbol: base,
+                intermediate_symbol: intermediate,
+                quote_symbol: quoteCurrency,
+                exchange1: exchange,
+                exchange2: exchange,
+                exchange3: exchange,
+                step1_action: `BUY ${intermediate}${quoteCurrency}`,
+                step1_price: pair2.askPrice,
+                step1_amount: step1Amount,
+                step2_action: `BUY ${base}${intermediate}`,
+                step2_price: pair3.askPrice,
+                step2_amount: step2Amount,
+                step3_action: `SELL ${base}${quoteCurrency}`,
+                step3_price: pair1.bidPrice,
+                step3_amount: step3Amount,
+                start_amount: tradeAmount,
+                end_amount: step3Amount,
+                profit_amount: profit,
+                profit_percent: profitPercent,
+                trading_path: tradingPath,
+                // Enhanced fields
+                step1_volume: tradeAmount,
+                step2_volume: step1Amount * pair2.askPrice,
+                step3_volume: step2Amount * pair1.bidPrice,
+                estimated_slippage: estimatedSlippage,
+                liquidity_score: Math.round(liquidityScore)
+               });
+               
+               console.log(`Found opportunity: ${tradingPath} | Profit: ${profitPercent.toFixed(4)}%`);
+             }
+           } catch (error) {
+             // Silently continue on calculation errors
            }
-         } catch (error) {
-           // Silently continue on calculation errors
-         }
+        }
       }
     }
   }
