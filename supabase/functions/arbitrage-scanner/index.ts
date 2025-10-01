@@ -520,15 +520,21 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
   
   // Expanded base currencies for more arbitrage opportunities - focus on high-liquidity pairs
   const commonBases = [
-    // Major cryptocurrencies with highest trading volumes
-    'BTC', 'ETH', 'BNB', 'XRP', 'ADA', 'SOL', 'DOGE', 'MATIC', 'DOT', 'SHIB',
-    'LTC', 'AVAX', 'UNI', 'LINK', 'ATOM', 'XLM', 'BCH', 'NEAR', 'VET', 
-    'FTM', 'ALGO', 'ICP', 'THETA', 'TRX', 'EOS', 'AAVE', 'GRT', 'SAND',
-    'MANA', 'CRV', 'RUNE', 'CAKE', 'SUSHI', 'COMP', 'YFI', 'MKR', 'SNX',
-    // Additional pairs that often have arbitrage opportunities
-    'KAVA', 'ZIL', 'ENJ', 'BAT', 'ZRX', 'REN', 'KNC', 'LEND', 'BAND',
-    'SXP', 'RSR', 'OGN', 'DENT', 'WIN', 'HOT', 'ANKR', 'COTI', 'CHR',
-    'MDT', 'STMX', 'DF', 'EASY', 'TKO', 'FORTH', 'BURGER', 'SLP'
+    // Major cryptocurrencies (Tier 1 - Highest liquidity)
+    'BTC', 'ETH', 'BNB', 'XRP', 'ADA', 'SOL', 'DOGE', 'MATIC', 'DOT', 'AVAX',
+    'SHIB', 'LTC', 'UNI', 'LINK', 'ATOM', 'TON', 'XLM', 'BCH', 'NEAR', 'TRX',
+    
+    // Tier 2 - Good liquidity
+    'FTM', 'ALGO', 'ICP', 'THETA', 'EOS', 'AAVE', 'GRT', 'SAND', 'MANA', 'AXS',
+    'CRV', 'RUNE', 'CAKE', 'SUSHI', 'COMP', 'YFI', 'MKR', 'SNX', 'FIL', 'VET',
+    
+    // Tier 3 - Medium liquidity with arbitrage potential
+    'KAVA', 'ZIL', 'ENJ', 'BAT', 'ZRX', 'REN', 'KNC', 'BAND', 'SXP', 'RSR',
+    'OGN', 'DENT', 'WIN', 'HOT', 'ANKR', 'COTI', 'CHR', 'MDT', 'STMX', 'DF',
+    
+    // Additional high-volume pairs
+    'ARB', 'OP', 'IMX', 'APE', 'LDO', 'RNDR', 'INJ', 'PEPE', 'WLD', 'SEI',
+    'TIA', 'ORDI', 'STX', 'PYTH', 'JUP', 'BLUR', 'WIF', 'BONK', 'FLOKI', 'GALA'
   ];
   
   // Get list of available exchanges from price data
@@ -696,8 +702,137 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
     }
   }
   
-  // Sort by absolute profit percentage descending to show best opportunities first (including profitable negative spreads)
+  // Also scan for cross-exchange arbitrage (simple 2-leg arbitrage)
+  console.log(`Scanning cross-exchange arbitrage between ${availableExchanges.length} exchanges`);
+  
+  for (const base of commonBases) {
+    const pairSymbol = `${base}${quoteCurrency}`;
+    
+    // Get all exchanges that have this pair
+    const exchangesWithPair: { exchange: string; data: any }[] = [];
+    for (const exchange of availableExchanges) {
+      const pairKey = `${pairSymbol}_${exchange}`;
+      if (priceMap[pairKey]) {
+        exchangesWithPair.push({
+          exchange,
+          data: priceMap[pairKey]
+        });
+      }
+    }
+    
+    // Compare prices across exchanges for cross-exchange arbitrage
+    if (exchangesWithPair.length >= 2) {
+      for (let i = 0; i < exchangesWithPair.length; i++) {
+        for (let j = i + 1; j < exchangesWithPair.length; j++) {
+          const exchange1 = exchangesWithPair[i];
+          const exchange2 = exchangesWithPair[j];
+          
+          try {
+            // Buy on exchange1, sell on exchange2
+            const buyPrice = exchange1.data.askPrice;
+            const sellPrice = exchange2.data.bidPrice;
+            const amount = tradeAmount / buyPrice;
+            const sellAmount = amount * sellPrice;
+            const profit = sellAmount - tradeAmount;
+            const profitPercent = (profit / tradeAmount) * 100;
+            
+            const shouldInclude = filterProfitable ? 
+              (profitPercent > 0 && Math.abs(profitPercent) >= minProfitPercent) : 
+              Math.abs(profitPercent) >= minProfitPercent;
+            
+            if (shouldInclude && isFinite(profitPercent) && isFinite(amount) && amount > 0) {
+              const spread = ((sellPrice - buyPrice) / buyPrice) * 100;
+              const liquidityScore = Math.max(10, Math.min(100, 100 - Math.abs(spread * 5)));
+              
+              opportunities.push({
+                base_symbol: base,
+                intermediate_symbol: base, // Same for simple arbitrage
+                quote_symbol: quoteCurrency,
+                exchange1: exchange1.exchange,
+                exchange2: exchange2.exchange,
+                exchange3: exchange2.exchange,
+                step1_action: `BUY ${pairSymbol}`,
+                step1_price: buyPrice,
+                step1_amount: amount,
+                step2_action: `TRANSFER`,
+                step2_price: 1,
+                step2_amount: amount,
+                step3_action: `SELL ${pairSymbol}`,
+                step3_price: sellPrice,
+                step3_amount: amount,
+                start_amount: tradeAmount,
+                end_amount: sellAmount,
+                profit_amount: profit,
+                profit_percent: profitPercent,
+                trading_path: `[CROSS-EXCHANGE] Buy ${base} on ${exchange1.exchange.toUpperCase()} @ ${buyPrice.toFixed(8)} → Sell on ${exchange2.exchange.toUpperCase()} @ ${sellPrice.toFixed(8)}`,
+                step1_volume: tradeAmount,
+                step2_volume: tradeAmount,
+                step3_volume: sellAmount,
+                estimated_slippage: Math.abs(spread) * 0.3,
+                liquidity_score: Math.round(liquidityScore)
+              });
+              
+              console.log(`Cross-exchange: ${base} | Buy ${exchange1.exchange} → Sell ${exchange2.exchange} | Profit: ${profitPercent.toFixed(4)}%`);
+            }
+            
+            // Try reverse (buy on exchange2, sell on exchange1)
+            const buyPrice2 = exchange2.data.askPrice;
+            const sellPrice2 = exchange1.data.bidPrice;
+            const amount2 = tradeAmount / buyPrice2;
+            const sellAmount2 = amount2 * sellPrice2;
+            const profit2 = sellAmount2 - tradeAmount;
+            const profitPercent2 = (profit2 / tradeAmount) * 100;
+            
+            const shouldInclude2 = filterProfitable ? 
+              (profitPercent2 > 0 && Math.abs(profitPercent2) >= minProfitPercent) : 
+              Math.abs(profitPercent2) >= minProfitPercent;
+            
+            if (shouldInclude2 && isFinite(profitPercent2) && isFinite(amount2) && amount2 > 0) {
+              const spread2 = ((sellPrice2 - buyPrice2) / buyPrice2) * 100;
+              const liquidityScore2 = Math.max(10, Math.min(100, 100 - Math.abs(spread2 * 5)));
+              
+              opportunities.push({
+                base_symbol: base,
+                intermediate_symbol: base,
+                quote_symbol: quoteCurrency,
+                exchange1: exchange2.exchange,
+                exchange2: exchange1.exchange,
+                exchange3: exchange1.exchange,
+                step1_action: `BUY ${pairSymbol}`,
+                step1_price: buyPrice2,
+                step1_amount: amount2,
+                step2_action: `TRANSFER`,
+                step2_price: 1,
+                step2_amount: amount2,
+                step3_action: `SELL ${pairSymbol}`,
+                step3_price: sellPrice2,
+                step3_amount: amount2,
+                start_amount: tradeAmount,
+                end_amount: sellAmount2,
+                profit_amount: profit2,
+                profit_percent: profitPercent2,
+                trading_path: `[CROSS-EXCHANGE] Buy ${base} on ${exchange2.exchange.toUpperCase()} @ ${buyPrice2.toFixed(8)} → Sell on ${exchange1.exchange.toUpperCase()} @ ${sellPrice2.toFixed(8)}`,
+                step1_volume: tradeAmount,
+                step2_volume: tradeAmount,
+                step3_volume: sellAmount2,
+                estimated_slippage: Math.abs(spread2) * 0.3,
+                liquidity_score: Math.round(liquidityScore2)
+              });
+              
+              console.log(`Cross-exchange: ${base} | Buy ${exchange2.exchange} → Sell ${exchange1.exchange} | Profit: ${profitPercent2.toFixed(4)}%`);
+            }
+          } catch (error) {
+            // Continue on errors
+          }
+        }
+      }
+    }
+  }
+  
+  console.log(`Total opportunities found: ${opportunities.length} (Triangular + Cross-exchange)`);
+  
+  // Sort by absolute profit percentage descending to show best opportunities first
   return opportunities
     .sort((a, b) => Math.abs(b.profit_percent) - Math.abs(a.profit_percent))
-    .slice(0, 50); // Increase limit to capture more opportunities
+    .slice(0, 100); // Increased limit to capture more opportunities
 }
