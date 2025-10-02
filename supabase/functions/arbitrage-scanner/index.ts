@@ -281,12 +281,16 @@ serve(async (req) => {
       for (const quoteCurrency of quoteCurrencies) {
         if (arbitrageTypes.includes('triangular')) {
           const triangularOpps = findTriangularArbitrage(allPriceData, quoteCurrency, tradeAmount, minProfitPercent, filterProfitable, customPairs);
+          // Add type label to each opportunity
+          triangularOpps.forEach(opp => opp.type = 'triangular');
           opportunities.push(...triangularOpps);
           console.log(`Found ${triangularOpps.length} triangular opportunities with ${quoteCurrency}`);
         }
         
         if (arbitrageTypes.includes('cross_exchange')) {
           const crossExchangeOpps = findCrossExchangeArbitrage(allPriceData, quoteCurrency, tradeAmount, minProfitPercent, filterProfitable, customPairs);
+          // Add type label to each opportunity
+          crossExchangeOpps.forEach(opp => opp.type = 'cross_exchange');
           opportunities.push(...crossExchangeOpps);
           console.log(`Found ${crossExchangeOpps.length} cross-exchange opportunities with ${quoteCurrency}`);
         }

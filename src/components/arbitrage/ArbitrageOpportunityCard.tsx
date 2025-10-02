@@ -28,6 +28,7 @@ interface Opportunity {
   profit_percent: number;
   detected_at: string;
   expires_at: string;
+  type?: string;
 }
 
 interface ArbitrageOpportunityCardProps {
@@ -106,7 +107,7 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
                 {opportunity.base_symbol} → {opportunity.intermediate_symbol} → {opportunity.quote_symbol}
               </span>
               <Badge variant="outline" className="text-xs font-normal">
-                Triangular Arbitrage
+                {opportunity.type === 'cross_exchange' ? 'Cross-Exchange Arbitrage' : 'Triangular Arbitrage'}
               </Badge>
             </CardTitle>
             

@@ -36,6 +36,7 @@ interface Opportunity {
   profit_percent: number;
   detected_at: string;
   expires_at: string;
+  type?: string;
 }
 
 export const ArbitrageScanner = () => {
@@ -49,6 +50,26 @@ export const ArbitrageScanner = () => {
   const [scanInterval, setScanInterval] = useState<NodeJS.Timeout | null>(null);
   const [lastScanTime, setLastScanTime] = useState<Date | null>(null);
   const [scanCount, setScanCount] = useState(0);
+  const [arbitrageMode, setArbitrageMode] = useState<string[]>([]);
+
+  // Fetch user settings on mount
+  useEffect(() => {
+    const fetchSettings = async () => {
+      if (!user) return;
+      
+      const { data, error } = await supabase
+        .from('user_settings')
+        .select('arbitrage_types')
+        .eq('user_id', user.id)
+        .single();
+      
+      if (!error && data) {
+        setArbitrageMode(data.arbitrage_types || ['triangular']);
+      }
+    };
+    
+    fetchSettings();
+  }, [user]);
 
   const startScanning = useCallback(async () => {
     if (!user || !hasActiveSubscription) {
@@ -328,7 +349,12 @@ export const ArbitrageScanner = () => {
               </Badge></span>
               <span>Scans: {scanCount}</span>
               <span>Opportunities: {opportunities.length}</span>
-              <span>Mode: <Badge variant="outline">Multi-Exchange Triangular</Badge></span>
+              <span>Mode: <Badge variant="outline">
+                {arbitrageMode.length === 0 ? 'Loading...' : 
+                 arbitrageMode.includes('triangular') && arbitrageMode.includes('cross_exchange') ? 'Triangular + Cross-Exchange' :
+                 arbitrageMode.includes('triangular') ? 'Triangular' :
+                 arbitrageMode.includes('cross_exchange') ? 'Cross-Exchange' : 'None'}
+              </Badge></span>
             </div>
             {lastScanTime && (
               <span>Last update: {lastScanTime.toLocaleTimeString()}</span>
