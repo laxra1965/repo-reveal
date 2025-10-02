@@ -347,8 +347,10 @@ export type Database = {
       }
       user_settings: {
         Row: {
+          arbitrage_types: string[] | null
           auto_trade: boolean | null
           created_at: string | null
+          custom_pairs: string[] | null
           enabled_exchanges:
             | Database["public"]["Enums"]["exchange_name"][]
             | null
@@ -362,8 +364,10 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          arbitrage_types?: string[] | null
           auto_trade?: boolean | null
           created_at?: string | null
+          custom_pairs?: string[] | null
           enabled_exchanges?:
             | Database["public"]["Enums"]["exchange_name"][]
             | null
@@ -377,8 +381,10 @@ export type Database = {
           user_id: string
         }
         Update: {
+          arbitrage_types?: string[] | null
           auto_trade?: boolean | null
           created_at?: string | null
+          custom_pairs?: string[] | null
           enabled_exchanges?:
             | Database["public"]["Enums"]["exchange_name"][]
             | null

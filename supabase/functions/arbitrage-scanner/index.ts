@@ -191,6 +191,8 @@ serve(async (req) => {
       const tradeAmount = settings?.trade_amount || 10;
       const minProfitPercent = (settings?.min_profit_percent || 0.0005) * 100; // Convert to percentage
       const filterProfitable = settings?.filter_profitable !== undefined ? settings.filter_profitable : true;
+      const arbitrageTypes = settings?.arbitrage_types || ['triangular', 'cross_exchange'];
+      const customPairs = settings?.custom_pairs || [];
 
       // Clear expired opportunities in background
       EdgeRuntime.waitUntil(
@@ -271,8 +273,20 @@ serve(async (req) => {
         throw new Error('No price data available from any exchange');
       }
 
-      // Find arbitrage opportunities with enhanced algorithm
-      const opportunities = findTriangularArbitrage(allPriceData, 'USDT', tradeAmount, minProfitPercent, filterProfitable);
+      // Find arbitrage opportunities based on user settings
+      let opportunities: any[] = [];
+      
+      if (arbitrageTypes.includes('triangular')) {
+        const triangularOpps = findTriangularArbitrage(allPriceData, 'USDT', tradeAmount, minProfitPercent, filterProfitable, customPairs);
+        opportunities.push(...triangularOpps);
+      }
+      
+      if (arbitrageTypes.includes('cross_exchange')) {
+        const crossExchangeOpps = findCrossExchangeArbitrage(allPriceData, 'USDT', tradeAmount, minProfitPercent, filterProfitable, customPairs);
+        opportunities.push(...crossExchangeOpps);
+      }
+      
+      console.log(`Total opportunities found: ${opportunities.length} (Triangular + Cross-exchange)`);
 
       console.log(`Found ${opportunities.length} opportunities for user ${user.id}`);
 
@@ -515,11 +529,11 @@ function normalizeExchangeData(exchange: string, data: any): Record<string, any>
 }
 
 // Enhanced triangular arbitrage finder with volume analysis
-function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: string, tradeAmount: number, minProfitPercent: number = 0.001, filterProfitable: boolean = true): any[] {
+function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: string, tradeAmount: number, minProfitPercent: number = 0.001, filterProfitable: boolean = true, customPairs: string[] = []): any[] {
   const opportunities: any[] = [];
   
   // Expanded base currencies for more arbitrage opportunities - focus on high-liquidity pairs
-  const commonBases = [
+  let commonBases = [
     // Major cryptocurrencies (Tier 1 - Highest liquidity)
     'BTC', 'ETH', 'BNB', 'XRP', 'ADA', 'SOL', 'DOGE', 'MATIC', 'DOT', 'AVAX',
     'SHIB', 'LTC', 'UNI', 'LINK', 'ATOM', 'TON', 'XLM', 'BCH', 'NEAR', 'TRX',
@@ -536,6 +550,15 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
     'ARB', 'OP', 'IMX', 'APE', 'LDO', 'RNDR', 'INJ', 'PEPE', 'WLD', 'SEI',
     'TIA', 'ORDI', 'STX', 'PYTH', 'JUP', 'BLUR', 'WIF', 'BONK', 'FLOKI', 'GALA'
   ];
+  
+  // Add custom pairs from user settings
+  if (customPairs && customPairs.length > 0) {
+    const validCustomPairs = customPairs
+      .map(p => p.toUpperCase().trim())
+      .filter(p => p.length > 0 && !commonBases.includes(p));
+    commonBases = [...commonBases, ...validCustomPairs];
+    console.log(`Added ${validCustomPairs.length} custom pairs to scanning list`);
+  }
   
   // Get list of available exchanges from price data
   const availableExchanges = ['binance', 'bybit', 'okx'];
@@ -702,7 +725,37 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
     }
   }
   
-  // Also scan for cross-exchange arbitrage (simple 2-leg arbitrage)
+  // Sort by absolute profit percentage descending to show best opportunities first
+  return opportunities
+    .sort((a, b) => Math.abs(b.profit_percent) - Math.abs(a.profit_percent))
+    .slice(0, 100); // Increased limit to capture more opportunities
+}
+
+// Cross-exchange arbitrage finder
+function findCrossExchangeArbitrage(priceMap: Record<string, any>, quoteCurrency: string, tradeAmount: number, minProfitPercent: number = 0.001, filterProfitable: boolean = true, customPairs: string[] = []): any[] {
+  const opportunities: any[] = [];
+  
+  // Use same base currencies as triangular arbitrage
+  let commonBases = [
+    'BTC', 'ETH', 'BNB', 'XRP', 'ADA', 'SOL', 'DOGE', 'MATIC', 'DOT', 'AVAX',
+    'SHIB', 'LTC', 'UNI', 'LINK', 'ATOM', 'TON', 'XLM', 'BCH', 'NEAR', 'TRX',
+    'FTM', 'ALGO', 'ICP', 'THETA', 'EOS', 'AAVE', 'GRT', 'SAND', 'MANA', 'AXS',
+    'CRV', 'RUNE', 'CAKE', 'SUSHI', 'COMP', 'YFI', 'MKR', 'SNX', 'FIL', 'VET',
+    'KAVA', 'ZIL', 'ENJ', 'BAT', 'ZRX', 'REN', 'KNC', 'BAND', 'SXP', 'RSR',
+    'OGN', 'DENT', 'WIN', 'HOT', 'ANKR', 'COTI', 'CHR', 'MDT', 'STMX', 'DF',
+    'ARB', 'OP', 'IMX', 'APE', 'LDO', 'RNDR', 'INJ', 'PEPE', 'WLD', 'SEI',
+    'TIA', 'ORDI', 'STX', 'PYTH', 'JUP', 'BLUR', 'WIF', 'BONK', 'FLOKI', 'GALA'
+  ];
+  
+  // Add custom pairs
+  if (customPairs && customPairs.length > 0) {
+    const validCustomPairs = customPairs
+      .map(p => p.toUpperCase().trim())
+      .filter(p => p.length > 0 && !commonBases.includes(p));
+    commonBases = [...commonBases, ...validCustomPairs];
+  }
+  
+  const availableExchanges = ['binance', 'bybit', 'okx'];
   console.log(`Scanning cross-exchange arbitrage between ${availableExchanges.length} exchanges`);
   
   for (const base of commonBases) {
@@ -746,7 +799,7 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
               
               opportunities.push({
                 base_symbol: base,
-                intermediate_symbol: base, // Same for simple arbitrage
+                intermediate_symbol: base,
                 quote_symbol: quoteCurrency,
                 exchange1: exchange1.exchange,
                 exchange2: exchange2.exchange,
@@ -829,10 +882,8 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
     }
   }
   
-  console.log(`Total opportunities found: ${opportunities.length} (Triangular + Cross-exchange)`);
-  
-  // Sort by absolute profit percentage descending to show best opportunities first
+  // Sort by absolute profit percentage descending
   return opportunities
     .sort((a, b) => Math.abs(b.profit_percent) - Math.abs(a.profit_percent))
-    .slice(0, 100); // Increased limit to capture more opportunities
+    .slice(0, 100);
 }

@@ -35,6 +35,8 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
     filter_profitable: true,
     auto_trade: false,
     enabled_exchanges: ['binance', 'bybit', 'okx'] as ExchangeName[],
+    arbitrage_types: ['triangular', 'cross_exchange'] as string[],
+    custom_pairs: '' as string,
     // API Keys storage
     apiKeys: {} as Record<string, { key: string; secret: string; passphrase?: string; testMode: boolean }>
   });
@@ -109,7 +111,9 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
           max_profit_percent: parseFloat(data.max_profit_percent.toString()),
           filter_profitable: data.filter_profitable,
           auto_trade: data.auto_trade,
-          enabled_exchanges: data.enabled_exchanges || (['binance', 'bybit', 'okx'] as ExchangeName[])
+          enabled_exchanges: data.enabled_exchanges || (['binance', 'bybit', 'okx'] as ExchangeName[]),
+          arbitrage_types: data.arbitrage_types || ['triangular', 'cross_exchange'],
+          custom_pairs: (data.custom_pairs || []).join(', ')
         }));
       }
     } catch (error: any) {
@@ -130,7 +134,12 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
         max_profit_percent: settings.max_profit_percent,
         filter_profitable: settings.filter_profitable,
         auto_trade: settings.auto_trade,
-        enabled_exchanges: settings.enabled_exchanges
+        enabled_exchanges: settings.enabled_exchanges,
+        arbitrage_types: settings.arbitrage_types,
+        custom_pairs: settings.custom_pairs
+          .split(',')
+          .map(p => p.trim())
+          .filter(p => p.length > 0)
       };
 
       await supabase
@@ -273,6 +282,66 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
                     </div>
                   ))}
                 </div>
+              </div>
+
+              <div>
+                <Label className="mb-2 block">Arbitrage Types</Label>
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      checked={settings.arbitrage_types.includes('triangular')}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSettings(prev => ({
+                            ...prev,
+                            arbitrage_types: [...prev.arbitrage_types, 'triangular']
+                          }));
+                        } else {
+                          setSettings(prev => ({
+                            ...prev,
+                            arbitrage_types: prev.arbitrage_types.filter(t => t !== 'triangular')
+                          }));
+                        }
+                      }}
+                    />
+                    <Label className="text-sm">Triangular Arbitrage</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      checked={settings.arbitrage_types.includes('cross_exchange')}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSettings(prev => ({
+                            ...prev,
+                            arbitrage_types: [...prev.arbitrage_types, 'cross_exchange']
+                          }));
+                        } else {
+                          setSettings(prev => ({
+                            ...prev,
+                            arbitrage_types: prev.arbitrage_types.filter(t => t !== 'cross_exchange')
+                          }));
+                        }
+                      }}
+                    />
+                    <Label className="text-sm">Cross-Exchange Arbitrage</Label>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <Label className="mb-2 block">Custom Trading Pairs</Label>
+                <Textarea
+                  placeholder="BTC, ETH, SOL, DOGE (comma separated)"
+                  value={settings.custom_pairs}
+                  onChange={(e) => setSettings(prev => ({
+                    ...prev,
+                    custom_pairs: e.target.value
+                  }))}
+                  className="text-sm min-h-[80px]"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Add custom pairs to scan in addition to the default 80+ pairs
+                </p>
               </div>
             </CardContent>
           </Card>
