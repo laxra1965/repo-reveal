@@ -274,19 +274,25 @@ serve(async (req) => {
       }
 
       // Find arbitrage opportunities based on user settings
+      // Scan against multiple quote currencies: USDT and BNB
       let opportunities: any[] = [];
+      const quoteCurrencies = ['USDT', 'BNB'];
       
-      if (arbitrageTypes.includes('triangular')) {
-        const triangularOpps = findTriangularArbitrage(allPriceData, 'USDT', tradeAmount, minProfitPercent, filterProfitable, customPairs);
-        opportunities.push(...triangularOpps);
+      for (const quoteCurrency of quoteCurrencies) {
+        if (arbitrageTypes.includes('triangular')) {
+          const triangularOpps = findTriangularArbitrage(allPriceData, quoteCurrency, tradeAmount, minProfitPercent, filterProfitable, customPairs);
+          opportunities.push(...triangularOpps);
+          console.log(`Found ${triangularOpps.length} triangular opportunities with ${quoteCurrency}`);
+        }
+        
+        if (arbitrageTypes.includes('cross_exchange')) {
+          const crossExchangeOpps = findCrossExchangeArbitrage(allPriceData, quoteCurrency, tradeAmount, minProfitPercent, filterProfitable, customPairs);
+          opportunities.push(...crossExchangeOpps);
+          console.log(`Found ${crossExchangeOpps.length} cross-exchange opportunities with ${quoteCurrency}`);
+        }
       }
       
-      if (arbitrageTypes.includes('cross_exchange')) {
-        const crossExchangeOpps = findCrossExchangeArbitrage(allPriceData, 'USDT', tradeAmount, minProfitPercent, filterProfitable, customPairs);
-        opportunities.push(...crossExchangeOpps);
-      }
-      
-      console.log(`Total opportunities found: ${opportunities.length} (Triangular + Cross-exchange)`);
+      console.log(`Total opportunities found: ${opportunities.length} (USDT + BNB pairs)`);
 
       console.log(`Found ${opportunities.length} opportunities for user ${user.id}`);
 
