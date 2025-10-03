@@ -203,11 +203,24 @@ serve(async (req) => {
       );
 
       // Fetch price data with concurrency and enhanced error handling
+      // Map lowercase exchange names to proper API_CONFIG keys
+      const exchangeNameMap: Record<string, string> = {
+        'binance': 'Binance',
+        'bybit': 'Bybit',
+        'okx': 'OKX',
+        'kucoin': 'KuCoin',
+        'gate': 'Gate',
+        'mexc': 'MEXC'
+      };
+      
       const enabledConfigs = enabledExchanges
-        .map(name => ({ 
-          name: name.charAt(0).toUpperCase() + name.slice(1), 
-          config: API_CONFIG[name.charAt(0).toUpperCase() + name.slice(1)] 
-        }))
+        .map(name => {
+          const normalizedName = exchangeNameMap[name.toLowerCase()] || name.charAt(0).toUpperCase() + name.slice(1);
+          return {
+            name: normalizedName,
+            config: API_CONFIG[normalizedName]
+          };
+        })
         .filter(({ config }) => config);
 
       console.log(`Fetching data from ${enabledConfigs.length} exchanges concurrently`);
