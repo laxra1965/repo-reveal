@@ -296,9 +296,22 @@ serve(async (req) => {
         }
       }
       
-      console.log(`Total opportunities found: ${opportunities.length} (USDT + BNB pairs)`);
-
-      console.log(`Found ${opportunities.length} opportunities for user ${user.id}`);
+      console.log(`Total opportunities found before deduplication: ${opportunities.length} (USDT + BNB pairs)`);
+      
+      // Deduplicate opportunities based on unique trading path signature
+      const uniqueOpportunities = new Map();
+      opportunities.forEach(opp => {
+        // Create a unique key based on the trading path
+        const key = `${opp.exchange1}_${opp.exchange2}_${opp.exchange3}_${opp.base_symbol}_${opp.intermediate_symbol}_${opp.quote_symbol}_${opp.step1_action}_${opp.step2_action}_${opp.step3_action}`;
+        
+        // Keep the opportunity with the best profit if duplicates exist
+        if (!uniqueOpportunities.has(key) || Math.abs(opp.profit_percent) > Math.abs(uniqueOpportunities.get(key).profit_percent)) {
+          uniqueOpportunities.set(key, opp);
+        }
+      });
+      
+      opportunities = Array.from(uniqueOpportunities.values());
+      console.log(`Total opportunities after deduplication: ${opportunities.length}`);
 
       // Save opportunities to database with better error handling
       if (opportunities.length > 0) {

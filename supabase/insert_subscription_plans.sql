@@ -1,14 +1,14 @@
 -- Insert all plans for all tiers and durations into subscription_plans
 INSERT INTO public.subscription_plans (name, duration_type, price, features) VALUES
--- Tier 1: Scanner Only
+-- Tier 1: Scanner Only (Weekly: $9, Monthly: 10% off, Annual: 31% off)
 ('Tier 1: Scanner Only', 'weekly', 9.00, '{"features": ["Real-time triangular arbitrage opportunities on Binance & Bybit", "Historical data: 7 days of opportunity tracking", "Basic filters: Minimum profit threshold settings"]}'),
 ('Tier 1: Scanner Only', 'monthly', 35.00, '{"features": ["Real-time triangular arbitrage opportunities on Binance & Bybit", "Historical data: 7 days of opportunity tracking", "Basic filters: Minimum profit threshold settings"]}'),
-('Tier 1: Scanner Only', 'annual', 360.00, '{"features": ["Real-time triangular arbitrage opportunities on Binance & Bybit", "Historical data: 7 days of opportunity tracking", "Basic filters: Minimum profit threshold settings"]}'),
--- Tier 2: Trader Pro ($500 Max)
+('Tier 1: Scanner Only', 'annual', 323.00, '{"features": ["Real-time triangular arbitrage opportunities on Binance & Bybit", "Historical data: 7 days of opportunity tracking", "Basic filters: Minimum profit threshold settings"]}'),
+-- Tier 2: Trader Pro ($500 Max) (Weekly: $25, Monthly: 5% off, Annual: 23% off)
 ('Tier 2: Trader Pro ($500 Max)', 'weekly', 25.00, '{"features": ["Everything in Tier 1 plus:", "Automated trading via Binance & Bybit APIs", "Position limit: $500 maximum per trade", "Basic analytics: Trade history, P&L tracking"]}'),
 ('Tier 2: Trader Pro ($500 Max)', 'monthly', 95.00, '{"features": ["Everything in Tier 1 plus:", "Automated trading via Binance & Bybit APIs", "Position limit: $500 maximum per trade", "Basic analytics: Trade history, P&L tracking"]}'),
 ('Tier 2: Trader Pro ($500 Max)', 'annual', 1000.00, '{"features": ["Everything in Tier 1 plus:", "Automated trading via Binance & Bybit APIs", "Position limit: $500 maximum per trade", "Basic analytics: Trade history, P&L tracking"]}'),
--- Tier 3: Trader Elite ($1,000 Max)
+-- Tier 3: Trader Elite ($1,000 Max) (Weekly: $50, Monthly: 5% off, Annual: 23% off)
 ('Tier 3: Trader Elite ($1,000 Max)', 'weekly', 50.00, '{"features": ["Everything in Tier 2 plus:", "Position limit: $1,000 maximum per trade", "Priority execution: Faster opportunity detection & execution", "Advanced analytics: Success rate tracking, Average profit per trade, Best performing pairs analysis, Time-of-day performance metrics", "Historical data: 90 days", "Custom settings: Personalized trading parameters", "Priority support: Email support with faster response"]}'),
 ('Tier 3: Trader Elite ($1,000 Max)', 'monthly', 190.00, '{"features": ["Everything in Tier 2 plus:", "Position limit: $1,000 maximum per trade", "Priority execution: Faster opportunity detection & execution", "Advanced analytics: Success rate tracking, Average profit per trade, Best performing pairs analysis, Time-of-day performance metrics", "Historical data: 90 days", "Custom settings: Personalized trading parameters", "Priority support: Email support with faster response"]}'),
 ('Tier 3: Trader Elite ($1,000 Max)', 'annual', 2000.00, '{"features": ["Everything in Tier 2 plus:", "Position limit: $1,000 maximum per trade", "Priority execution: Faster opportunity detection & execution", "Advanced analytics: Success rate tracking, Average profit per trade, Best performing pairs analysis, Time-of-day performance metrics", "Historical data: 90 days", "Custom settings: Personalized trading parameters", "Priority support: Email support with faster response"]}');

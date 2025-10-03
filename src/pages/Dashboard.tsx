@@ -45,12 +45,17 @@ const Dashboard = () => {
   if (!hasActiveSubscription) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
+        <div className="absolute top-4 right-4">
+          <Button variant="outline" onClick={signOut}>
+            Sign Out
+          </Button>
+        </div>
         <div className="text-center max-w-md">
           <h1 className="text-3xl font-bold mb-4 text-primary">Subscription Required</h1>
           <p className="text-lg text-muted-foreground mb-6">
             Your subscription is not active. Please complete payment and wait for admin approval to access the Arbitrage Scanner.
           </p>
-          <Button onClick={() => navigate('/pricing')}>Upgrade Now</Button> {/* Example: navigate to a pricing page */}
+          <Button onClick={() => navigate('/pricing')}>Upgrade Now</Button>
         </div>
       </div>
     );
