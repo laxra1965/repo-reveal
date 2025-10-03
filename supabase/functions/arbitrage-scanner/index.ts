@@ -336,6 +336,7 @@ serve(async (req) => {
           end_amount: opp.end_amount,
           profit_amount: opp.profit_amount,
           profit_percent: opp.profit_percent,
+          type: opp.type || 'triangular',
           // Enhanced fields
           step1_volume: opp.step1_volume || 0,
           step2_volume: opp.step2_volume || 0,
