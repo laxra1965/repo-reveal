@@ -570,10 +570,14 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
     console.log(`Added ${validCustomPairs.length} custom pairs to scanning list`);
   }
   
-  // Get list of available exchanges from price data
-  const availableExchanges = ['binance', 'bybit', 'okx'];
+  // Get list of available exchanges from price data dynamically
+  const availableExchanges = Array.from(new Set(
+    Object.keys(priceMap)
+      .map(key => key.split('_')[1])
+      .filter(exchange => exchange)
+  ));
   
-  console.log(`Scanning triangular arbitrage across ${commonBases.length} base currencies and ${availableExchanges.length} exchanges`);
+  console.log(`Scanning triangular arbitrage across ${commonBases.length} base currencies and ${availableExchanges.length} exchanges: ${availableExchanges.join(', ')}`);
   
   // Scan for opportunities on each exchange individually (triangular arbitrage within same exchange)
   for (const exchange of availableExchanges) {
@@ -765,8 +769,13 @@ function findCrossExchangeArbitrage(priceMap: Record<string, any>, quoteCurrency
     commonBases = [...commonBases, ...validCustomPairs];
   }
   
-  const availableExchanges = ['binance', 'bybit', 'okx'];
-  console.log(`Scanning cross-exchange arbitrage between ${availableExchanges.length} exchanges`);
+  // Dynamically get available exchanges from price data
+  const availableExchanges = Array.from(new Set(
+    Object.keys(priceMap)
+      .map(key => key.split('_')[1])
+      .filter(exchange => exchange)
+  ));
+  console.log(`Scanning cross-exchange arbitrage between ${availableExchanges.length} exchanges: ${availableExchanges.join(', ')}`);
   
   for (const base of commonBases) {
     const pairSymbol = `${base}${quoteCurrency}`;
