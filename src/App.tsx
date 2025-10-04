@@ -14,6 +14,7 @@ import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 import Pricing from "./pages/Pricing";
 import AdminApprove from "./pages/AdminApprove";
+import Profile from "./pages/Profile";
 
 const queryClient = new QueryClient();
 
@@ -26,8 +27,9 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <Routes>
-              <Route path="/" element={<Index />} />
+            <Route path="/" element={<Index />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/profile" element={<Profile />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/admin-login" element={<AdminAuth />} />
             <Route path="/payment/:transactionId" element={<Payment />} />

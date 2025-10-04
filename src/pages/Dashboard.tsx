@@ -3,9 +3,9 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { ArbitrageScanner } from '@/components/arbitrage/ArbitrageScanner';
-import { ProfileSection } from '@/components/profile/ProfileSection';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Crown } from 'lucide-react';
 
 const Dashboard = () => {
@@ -62,6 +62,10 @@ const Dashboard = () => {
     );
   }
 
+  const getInitials = (email: string) => {
+    return email.substring(0, 2).toUpperCase();
+  };
+
   // Render the full dashboard if the user is authenticated and has an active subscription
   return (
     <div className="min-h-screen bg-background">
@@ -69,21 +73,24 @@ const Dashboard = () => {
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold">Arbitrage Scanner</h1>
-            {/* Badge can still be shown, but its logic might need refinement if it's always "active" here */}
             <Badge variant="default" className="flex items-center gap-1">
               <Crown className="h-3 w-3" />
-              {subscription?.subscription_plans.name || "Premium"} {/* Assuming subscription is available here */}
+              {subscription?.subscription_plans.name || "Premium"}
             </Badge>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground">
-              Welcome, {user.email}
-            </span>
-            {subscription && ( // Show expiry only if subscription data is available
+            {subscription && (
               <span className="text-xs text-muted-foreground">
                 Expires: {new Date(subscription.end_date).toLocaleDateString()}
               </span>
             )}
+            <Avatar 
+              className="h-10 w-10 cursor-pointer hover:opacity-80 transition-opacity" 
+              onClick={() => navigate('/profile')}
+            >
+              <AvatarImage src="" alt={user.email} />
+              <AvatarFallback>{getInitials(user.email || '')}</AvatarFallback>
+            </Avatar>
             <Button variant="outline" onClick={signOut}>
               Sign Out
             </Button>
@@ -92,7 +99,6 @@ const Dashboard = () => {
       </header>
       
       <main className="container mx-auto px-4 py-8 space-y-6">
-        <ProfileSection subscription={subscription} />
         <ArbitrageScanner />
       </main>
     </div>
