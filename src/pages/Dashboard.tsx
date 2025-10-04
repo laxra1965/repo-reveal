@@ -3,6 +3,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { ArbitrageScanner } from '@/components/arbitrage/ArbitrageScanner';
+import { ProfileSection } from '@/components/profile/ProfileSection';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Crown } from 'lucide-react';
@@ -90,7 +91,8 @@ const Dashboard = () => {
         </div>
       </header>
       
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-8 space-y-6">
+        <ProfileSection subscription={subscription} />
         <ArbitrageScanner />
       </main>
     </div>

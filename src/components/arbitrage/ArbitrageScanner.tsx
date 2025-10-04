@@ -9,9 +9,8 @@ import { useToast } from '@/hooks/use-toast';
 import { ArbitrageSettings } from './ArbitrageSettings';
 import { ArbitrageOpportunityCard } from './ArbitrageOpportunityCard';
 import { ArbitrageLogPanel } from './ArbitrageLogPanel';
-import { BinancePriceStream } from './BinancePriceStream';
 import { PlansSection } from '@/components/plans/PlansSection';
-import { Play, Pause, Settings, TrendingUp, Lock, Crown, Activity } from 'lucide-react';
+import { Play, Pause, Settings, TrendingUp, Lock, Crown } from 'lucide-react';
 
 interface Opportunity {
   id: string;
@@ -46,7 +45,6 @@ export const ArbitrageScanner = () => {
   const [isScanning, setIsScanning] = useState(false);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [showSettings, setShowSettings] = useState(false);
-  const [showPriceStream, setShowPriceStream] = useState(false);
   const [scanInterval, setScanInterval] = useState<NodeJS.Timeout | null>(null);
   const [lastScanTime, setLastScanTime] = useState<Date | null>(null);
   const [scanCount, setScanCount] = useState(0);
@@ -318,15 +316,6 @@ export const ArbitrageScanner = () => {
                 Settings
               </Button>
               
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowPriceStream(!showPriceStream)}
-              >
-                <Activity className="h-4 w-4 mr-2" />
-                {showPriceStream ? 'Hide' : 'Show'} Price Stream
-              </Button>
-              
               {isScanning ? (
                 <Button onClick={stopScanning} variant="destructive" size="sm">
                   <Pause className="h-4 w-4 mr-2" />
@@ -396,9 +385,6 @@ export const ArbitrageScanner = () => {
 
       {/* Log Panel */}
       <ArbitrageLogPanel />
-      
-      {/* Real-time Price Stream */}
-      <BinancePriceStream isVisible={showPriceStream} />
 
       {/* Settings Modal */}
       {showSettings && (
