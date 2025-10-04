@@ -115,13 +115,13 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
             <div className="mt-2 p-2 bg-muted/30 rounded text-sm">
               <div className="font-medium text-muted-foreground mb-1">Trading Path:</div>
               <div className="font-mono text-sm">
-                1. Buy {opportunity.base_symbol} with {opportunity.quote_symbol}
+                1. {opportunity.step1_action} {opportunity.base_symbol}/{opportunity.intermediate_symbol}
               </div>
               <div className="font-mono text-sm">
-                2. Convert {opportunity.base_symbol} to {opportunity.intermediate_symbol}
+                2. {opportunity.step2_action} {opportunity.intermediate_symbol}/{opportunity.quote_symbol}
               </div>
               <div className="font-mono text-sm">
-                3. Sell {opportunity.intermediate_symbol} for {opportunity.quote_symbol}
+                3. {opportunity.step3_action} {opportunity.base_symbol}/{opportunity.quote_symbol}
               </div>
             </div>
             
