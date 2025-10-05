@@ -340,9 +340,13 @@ export const ArbitrageScanner = () => {
               <span>Opportunities: {opportunities.length}</span>
               <span>Mode: <Badge variant="outline">
                 {arbitrageMode.length === 0 ? 'Loading...' : 
-                 arbitrageMode.includes('triangular') && arbitrageMode.includes('cross_exchange') ? 'Triangular + Cross-Exchange' :
-                 arbitrageMode.includes('triangular') ? 'Triangular' :
-                 arbitrageMode.includes('cross_exchange') ? 'Cross-Exchange' : 'None'}
+                 (() => {
+                   const modes = [];
+                   if (arbitrageMode.includes('triangular')) modes.push('Triangular');
+                   if (arbitrageMode.includes('cross_exchange')) modes.push('Cross-Exchange');
+                   if (arbitrageMode.includes('short_signal')) modes.push('Short Signal');
+                   return modes.length > 0 ? modes.join(' + ') : 'None';
+                 })()}
               </Badge></span>
             </div>
             {lastScanTime && (

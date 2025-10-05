@@ -685,7 +685,7 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
             
             // Enhanced filtering based on user preference and signal type
             const shouldInclude = filterProfitable ? 
-              (profitPercent > 0 && Math.abs(profitPercent) >= minProfitPercent) : 
+              ((profitPercent > 0 && Math.abs(profitPercent) >= minProfitPercent) || (detectShortSignals && signalType === 'short' && Math.abs(profitPercent) >= minProfitPercent)) : 
               (detectShortSignals ? (signalType !== 'none' && Math.abs(profitPercent) >= minProfitPercent) : Math.abs(profitPercent) >= minProfitPercent);
               
             if (shouldInclude) {
@@ -950,7 +950,7 @@ function findCrossExchangeArbitrage(priceMap: Record<string, any>, quoteCurrency
             }
             
             const shouldInclude = filterProfitable ? 
-              (profitPercent > 0 && Math.abs(profitPercent) >= minProfitPercent) : 
+              ((profitPercent > 0 && Math.abs(profitPercent) >= minProfitPercent) || (detectShortSignals && signalType === 'short' && Math.abs(profitPercent) >= minProfitPercent)) : 
               (detectShortSignals ? (signalType !== 'none' && Math.abs(profitPercent) >= minProfitPercent) : Math.abs(profitPercent) >= minProfitPercent);
             
             if (shouldInclude && isFinite(profitPercent) && isFinite(amount) && amount > 0) {
@@ -1019,7 +1019,7 @@ function findCrossExchangeArbitrage(priceMap: Record<string, any>, quoteCurrency
             }
             
             const shouldInclude2 = filterProfitable ? 
-              (profitPercent2 > 0 && Math.abs(profitPercent2) >= minProfitPercent) : 
+              ((profitPercent2 > 0 && Math.abs(profitPercent2) >= minProfitPercent) || (detectShortSignals && signalType2 === 'short' && Math.abs(profitPercent2) >= minProfitPercent)) : 
               (detectShortSignals ? (signalType2 !== 'none' && Math.abs(profitPercent2) >= minProfitPercent) : Math.abs(profitPercent2) >= minProfitPercent);
             
             if (shouldInclude2 && isFinite(profitPercent2) && isFinite(amount2) && amount2 > 0) {
