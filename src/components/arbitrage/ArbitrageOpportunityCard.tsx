@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowRight, TrendingUp, Clock, Eye, EyeOff, Zap, AlertTriangle, Target } from 'lucide-react';
+import { ArrowRight, TrendingUp, TrendingDown, Clock, Eye, EyeOff, Zap, AlertTriangle, Target, AlertCircle } from 'lucide-react';
 
 interface Opportunity {
   id: string;
@@ -29,6 +29,10 @@ interface Opportunity {
   detected_at: string;
   expires_at: string;
   type?: string;
+  signal_type?: 'arbitrage' | 'short' | 'none';
+  arb_factor?: number;
+  overpriced_leg?: string | null;
+  price_deviation?: number | null;
 }
 
 interface ArbitrageOpportunityCardProps {
@@ -87,6 +91,34 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
     if (timeLeft < 30) return <Clock className="h-4 w-4 text-yellow-500" />;
     return <Clock className="h-4 w-4 text-muted-foreground" />;
   };
+  
+  const signalType = opportunity.signal_type || 'arbitrage';
+  const arbFactor = opportunity.arb_factor || (opportunity.end_amount / opportunity.start_amount);
+  
+  const getSignalBadge = () => {
+    if (signalType === 'arbitrage') {
+      return (
+        <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
+          <TrendingUp className="h-3 w-3 mr-1" />
+          Arb Opportunity
+        </Badge>
+      );
+    } else if (signalType === 'short') {
+      return (
+        <Badge className="bg-red-500/20 text-red-400 border-red-500/30">
+          <TrendingDown className="h-3 w-3 mr-1" />
+          Short Signal
+        </Badge>
+      );
+    } else {
+      return (
+        <Badge variant="secondary">
+          <AlertCircle className="h-3 w-3 mr-1" />
+          No Opportunity
+        </Badge>
+      );
+    }
+  };
 
   return (
     <Card className={`border-l-4 ${rank === 1 ? 'border-l-yellow-500 bg-gradient-to-r from-yellow-50/30 to-transparent dark:from-yellow-900/10' : rank <= 3 ? 'border-l-green-500' : 'border-l-primary'} transition-all duration-300 hover:shadow-lg`}>
@@ -100,6 +132,7 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
                 #{rank}
               </Badge>
               {rank === 1 && <Badge variant="default" className="bg-yellow-500 text-black">TOP</Badge>}
+              {getSignalBadge()}
             </div>
             
             <CardTitle className="text-lg flex items-center gap-2">
@@ -172,15 +205,15 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
         {/* Quick Summary */}
         <div className="grid grid-cols-3 gap-4 p-3 bg-muted/50 rounded-lg">
           <div className="text-center">
-            <div className="text-sm text-muted-foreground">Start Amount</div>
-            <div className="font-semibold">
-              {formatCurrency(opportunity.start_amount, 2)} {opportunity.quote_symbol}
+            <div className="text-sm text-muted-foreground">Arb Factor</div>
+            <div className="font-semibold font-mono">
+              {arbFactor.toFixed(6)}
             </div>
           </div>
           <div className="text-center">
-            <div className="text-sm text-muted-foreground">End Amount</div>
+            <div className="text-sm text-muted-foreground">Start → End</div>
             <div className="font-semibold">
-              {formatCurrency(opportunity.end_amount, 2)} {opportunity.quote_symbol}
+              {formatCurrency(opportunity.start_amount, 2)} → {formatCurrency(opportunity.end_amount, 2)}
             </div>
           </div>
           <div className="text-center">
@@ -193,6 +226,29 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
             </div>
           </div>
         </div>
+        
+        {/* Short Signal Details */}
+        {signalType === 'short' && opportunity.overpriced_leg && (
+          <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="h-5 w-5 text-red-400 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <div className="text-sm font-semibold text-red-400 mb-1">Overpriced Asset Detected</div>
+                <div className="text-xs text-muted-foreground">
+                  <span className="font-mono font-medium text-foreground">{opportunity.overpriced_leg}</span>
+                  {opportunity.price_deviation && (
+                    <span className="ml-2 text-red-400 font-semibold">
+                      +{opportunity.price_deviation.toFixed(2)}% deviation from fair value
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Consider shorting this asset as it's trading above its implied fair value in this cycle.
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Expanded Details */}
         {isExpanded && (

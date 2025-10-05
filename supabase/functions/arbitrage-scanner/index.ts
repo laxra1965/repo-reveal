@@ -290,10 +290,11 @@ serve(async (req) => {
       // Scan against multiple quote currencies: USDT and BNB
       let opportunities: any[] = [];
       const quoteCurrencies = ['USDT', 'BNB'];
+      const detectShortSignals = arbitrageTypes.includes('short_signal');
       
       for (const quoteCurrency of quoteCurrencies) {
         if (arbitrageTypes.includes('triangular')) {
-          const triangularOpps = findTriangularArbitrage(allPriceData, quoteCurrency, tradeAmount, minProfitPercent, filterProfitable, customPairs);
+          const triangularOpps = findTriangularArbitrage(allPriceData, quoteCurrency, tradeAmount, minProfitPercent, filterProfitable, customPairs, detectShortSignals);
           // Add type label to each opportunity
           triangularOpps.forEach(opp => opp.type = 'triangular');
           opportunities.push(...triangularOpps);
@@ -301,7 +302,7 @@ serve(async (req) => {
         }
         
         if (arbitrageTypes.includes('cross_exchange')) {
-          const crossExchangeOpps = findCrossExchangeArbitrage(allPriceData, quoteCurrency, tradeAmount, minProfitPercent, filterProfitable, customPairs);
+          const crossExchangeOpps = findCrossExchangeArbitrage(allPriceData, quoteCurrency, tradeAmount, minProfitPercent, filterProfitable, customPairs, detectShortSignals);
           // Add type label to each opportunity
           crossExchangeOpps.forEach(opp => opp.type = 'cross_exchange');
           opportunities.push(...crossExchangeOpps);
@@ -355,7 +356,12 @@ serve(async (req) => {
           step2_volume: opp.step2_volume || 0,
           step3_volume: opp.step3_volume || 0,
           estimated_slippage: opp.estimated_slippage || 0,
-          liquidity_score: opp.liquidity_score || 50
+          liquidity_score: opp.liquidity_score || 50,
+          // New short signal fields
+          signal_type: opp.signal_type || 'arbitrage',
+          arb_factor: opp.arb_factor,
+          overpriced_leg: opp.overpriced_leg,
+          price_deviation: opp.price_deviation
         }));
 
         try {
@@ -565,8 +571,8 @@ function normalizeExchangeData(exchange: string, data: any): Record<string, any>
   }
 }
 
-// Enhanced triangular arbitrage finder with volume analysis
-function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: string, tradeAmount: number, minProfitPercent: number = 0.001, filterProfitable: boolean = true, customPairs: string[] = []): any[] {
+// Enhanced triangular arbitrage finder with volume analysis and short signal detection
+function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: string, tradeAmount: number, minProfitPercent: number = 0.001, filterProfitable: boolean = true, customPairs: string[] = [], detectShortSignals: boolean = false): any[] {
   const opportunities: any[] = [];
   
   // Expanded base currencies for more arbitrage opportunities - focus on high-liquidity pairs
@@ -637,10 +643,50 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
             const profit = step3Amount - tradeAmount;
             const profitPercent = (profit / tradeAmount) * 100;
             
-            // Enhanced filtering based on user preference - show both positive and negative opportunities
+            // Calculate arbitrage factor (end_amount / start_amount)
+            const arbFactor = step3Amount / tradeAmount;
+            
+            // Determine signal type based on arb factor
+            let signalType = 'arbitrage';
+            let overpricedLeg = null;
+            let priceDeviation = null;
+            
+            if (detectShortSignals) {
+              if (arbFactor > 1.001) {
+                signalType = 'arbitrage';
+              } else if (arbFactor < 0.999) {
+                signalType = 'short';
+                // Calculate implied fair values and deviations for each leg
+                const impliedPrice1 = tradeAmount / step1Amount; // Implied price for step 1
+                const impliedPrice2 = step1Amount / step2Amount; // Implied price for step 2
+                const impliedPrice3 = step2Amount / step3Amount; // Implied price for step 3
+                
+                const deviation1 = ((pair1.askPrice - impliedPrice1) / impliedPrice1) * 100;
+                const deviation2 = ((pair3.bidPrice - impliedPrice2) / impliedPrice2) * 100;
+                const deviation3 = ((pair2.bidPrice - impliedPrice3) / impliedPrice3) * 100;
+                
+                // Find the most overpriced leg (highest positive deviation)
+                const deviations = [
+                  { leg: `${base}${quoteCurrency}`, deviation: deviation1, price: pair1.askPrice },
+                  { leg: `${base}${intermediate}`, deviation: deviation2, price: pair3.bidPrice },
+                  { leg: `${intermediate}${quoteCurrency}`, deviation: deviation3, price: pair2.bidPrice }
+                ];
+                
+                const maxDeviation = deviations.reduce((max, curr) => 
+                  curr.deviation > max.deviation ? curr : max
+                );
+                
+                overpricedLeg = maxDeviation.leg;
+                priceDeviation = maxDeviation.deviation;
+              } else {
+                signalType = 'none';
+              }
+            }
+            
+            // Enhanced filtering based on user preference and signal type
             const shouldInclude = filterProfitable ? 
               (profitPercent > 0 && Math.abs(profitPercent) >= minProfitPercent) : 
-              Math.abs(profitPercent) >= minProfitPercent;
+              (detectShortSignals ? (signalType !== 'none' && Math.abs(profitPercent) >= minProfitPercent) : Math.abs(profitPercent) >= minProfitPercent);
               
             if (shouldInclude) {
               // Calculate liquidity score and estimated slippage
@@ -681,7 +727,12 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
                 step2_volume: step1Amount * pair1.askPrice,
                 step3_volume: step2Amount * pair2.bidPrice,
                 estimated_slippage: estimatedSlippage,
-                liquidity_score: Math.round(liquidityScore)
+                liquidity_score: Math.round(liquidityScore),
+                // Short signal fields
+                signal_type: signalType,
+                arb_factor: arbFactor,
+                overpriced_leg: overpricedLeg,
+                price_deviation: priceDeviation
               });
               
               console.log(`Found opportunity: ${tradingPath} | Profit: ${profitPercent.toFixed(4)}%`);
@@ -709,10 +760,48 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
             const profit = step3Amount - tradeAmount;
             const profitPercent = (profit / tradeAmount) * 100;
             
-            // Enhanced filtering based on user preference - show both positive and negative opportunities
+            // Calculate arbitrage factor
+            const arbFactor = step3Amount / tradeAmount;
+            
+            // Determine signal type for reverse path
+            let signalType = 'arbitrage';
+            let overpricedLeg = null;
+            let priceDeviation = null;
+            
+            if (detectShortSignals) {
+              if (arbFactor > 1.001) {
+                signalType = 'arbitrage';
+              } else if (arbFactor < 0.999) {
+                signalType = 'short';
+                const impliedPrice1 = tradeAmount / step1Amount;
+                const impliedPrice2 = step1Amount / step2Amount;
+                const impliedPrice3 = step2Amount / step3Amount;
+                
+                const deviation1 = ((pair2.askPrice - impliedPrice1) / impliedPrice1) * 100;
+                const deviation2 = ((pair3.askPrice - impliedPrice2) / impliedPrice2) * 100;
+                const deviation3 = ((pair1.bidPrice - impliedPrice3) / impliedPrice3) * 100;
+                
+                const deviations = [
+                  { leg: `${intermediate}${quoteCurrency}`, deviation: deviation1, price: pair2.askPrice },
+                  { leg: `${base}${intermediate}`, deviation: deviation2, price: pair3.askPrice },
+                  { leg: `${base}${quoteCurrency}`, deviation: deviation3, price: pair1.bidPrice }
+                ];
+                
+                const maxDeviation = deviations.reduce((max, curr) => 
+                  curr.deviation > max.deviation ? curr : max
+                );
+                
+                overpricedLeg = maxDeviation.leg;
+                priceDeviation = maxDeviation.deviation;
+              } else {
+                signalType = 'none';
+              }
+            }
+            
+            // Enhanced filtering
             const shouldInclude = filterProfitable ? 
               (profitPercent > 0 && Math.abs(profitPercent) >= minProfitPercent) : 
-              Math.abs(profitPercent) >= minProfitPercent;
+              (detectShortSignals ? (signalType !== 'none' && Math.abs(profitPercent) >= minProfitPercent) : Math.abs(profitPercent) >= minProfitPercent);
               
             if (shouldInclude) {
               // Calculate liquidity score and estimated slippage
@@ -753,7 +842,12 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
                 step2_volume: step1Amount * pair2.askPrice,
                 step3_volume: step2Amount * pair1.bidPrice,
                 estimated_slippage: estimatedSlippage,
-                liquidity_score: Math.round(liquidityScore)
+                liquidity_score: Math.round(liquidityScore),
+                // Short signal fields
+                signal_type: signalType,
+                arb_factor: arbFactor,
+                overpriced_leg: overpricedLeg,
+                price_deviation: priceDeviation
                });
                
                console.log(`Found opportunity: ${tradingPath} | Profit: ${profitPercent.toFixed(4)}%`);
@@ -772,8 +866,8 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
     .slice(0, 100); // Increased limit to capture more opportunities
 }
 
-// Cross-exchange arbitrage finder
-function findCrossExchangeArbitrage(priceMap: Record<string, any>, quoteCurrency: string, tradeAmount: number, minProfitPercent: number = 0.001, filterProfitable: boolean = true, customPairs: string[] = []): any[] {
+// Cross-exchange arbitrage finder with short signal detection
+function findCrossExchangeArbitrage(priceMap: Record<string, any>, quoteCurrency: string, tradeAmount: number, minProfitPercent: number = 0.001, filterProfitable: boolean = true, customPairs: string[] = [], detectShortSignals: boolean = false): any[] {
   const opportunities: any[] = [];
   
   // Use same base currencies as triangular arbitrage
@@ -835,9 +929,29 @@ function findCrossExchangeArbitrage(priceMap: Record<string, any>, quoteCurrency
             const profit = sellAmount - tradeAmount;
             const profitPercent = (profit / tradeAmount) * 100;
             
+            // Calculate arb factor for cross-exchange
+            const arbFactor = sellAmount / tradeAmount;
+            
+            let signalType = 'arbitrage';
+            let overpricedLeg = null;
+            let priceDeviation = null;
+            
+            if (detectShortSignals) {
+              if (arbFactor > 1.001) {
+                signalType = 'arbitrage';
+              } else if (arbFactor < 0.999) {
+                signalType = 'short';
+                // For cross-exchange, the overpriced exchange is where we sell (if arb < 1, buy price > sell price)
+                overpricedLeg = `${pairSymbol} on ${exchange1.exchange}`;
+                priceDeviation = ((buyPrice - sellPrice) / sellPrice) * 100;
+              } else {
+                signalType = 'none';
+              }
+            }
+            
             const shouldInclude = filterProfitable ? 
               (profitPercent > 0 && Math.abs(profitPercent) >= minProfitPercent) : 
-              Math.abs(profitPercent) >= minProfitPercent;
+              (detectShortSignals ? (signalType !== 'none' && Math.abs(profitPercent) >= minProfitPercent) : Math.abs(profitPercent) >= minProfitPercent);
             
             if (shouldInclude && isFinite(profitPercent) && isFinite(amount) && amount > 0) {
               const spread = ((sellPrice - buyPrice) / buyPrice) * 100;
@@ -868,7 +982,11 @@ function findCrossExchangeArbitrage(priceMap: Record<string, any>, quoteCurrency
                 step2_volume: tradeAmount,
                 step3_volume: sellAmount,
                 estimated_slippage: Math.abs(spread) * 0.3,
-                liquidity_score: Math.round(liquidityScore)
+                liquidity_score: Math.round(liquidityScore),
+                signal_type: signalType,
+                arb_factor: arbFactor,
+                overpriced_leg: overpricedLeg,
+                price_deviation: priceDeviation
               });
               
               console.log(`Cross-exchange: ${base} | Buy ${exchange1.exchange} → Sell ${exchange2.exchange} | Profit: ${profitPercent.toFixed(4)}%`);
@@ -882,9 +1000,27 @@ function findCrossExchangeArbitrage(priceMap: Record<string, any>, quoteCurrency
             const profit2 = sellAmount2 - tradeAmount;
             const profitPercent2 = (profit2 / tradeAmount) * 100;
             
+            const arbFactor2 = sellAmount2 / tradeAmount;
+            
+            let signalType2 = 'arbitrage';
+            let overpricedLeg2 = null;
+            let priceDeviation2 = null;
+            
+            if (detectShortSignals) {
+              if (arbFactor2 > 1.001) {
+                signalType2 = 'arbitrage';
+              } else if (arbFactor2 < 0.999) {
+                signalType2 = 'short';
+                overpricedLeg2 = `${pairSymbol} on ${exchange2.exchange}`;
+                priceDeviation2 = ((buyPrice2 - sellPrice2) / sellPrice2) * 100;
+              } else {
+                signalType2 = 'none';
+              }
+            }
+            
             const shouldInclude2 = filterProfitable ? 
               (profitPercent2 > 0 && Math.abs(profitPercent2) >= minProfitPercent) : 
-              Math.abs(profitPercent2) >= minProfitPercent;
+              (detectShortSignals ? (signalType2 !== 'none' && Math.abs(profitPercent2) >= minProfitPercent) : Math.abs(profitPercent2) >= minProfitPercent);
             
             if (shouldInclude2 && isFinite(profitPercent2) && isFinite(amount2) && amount2 > 0) {
               const spread2 = ((sellPrice2 - buyPrice2) / buyPrice2) * 100;
@@ -915,7 +1051,11 @@ function findCrossExchangeArbitrage(priceMap: Record<string, any>, quoteCurrency
                 step2_volume: tradeAmount,
                 step3_volume: sellAmount2,
                 estimated_slippage: Math.abs(spread2) * 0.3,
-                liquidity_score: Math.round(liquidityScore2)
+                liquidity_score: Math.round(liquidityScore2),
+                signal_type: signalType2,
+                arb_factor: arbFactor2,
+                overpriced_leg: overpricedLeg2,
+                price_deviation: priceDeviation2
               });
               
               console.log(`Cross-exchange: ${base} | Buy ${exchange2.exchange} → Sell ${exchange1.exchange} | Profit: ${profitPercent2.toFixed(4)}%`);

@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       arbitrage_opportunities: {
         Row: {
+          arb_factor: number | null
           base_symbol: string
           detected_at: string | null
           end_amount: number
@@ -27,9 +28,12 @@ export type Database = {
           id: string
           intermediate_symbol: string
           liquidity_score: number | null
+          overpriced_leg: string | null
+          price_deviation: number | null
           profit_amount: number
           profit_percent: number
           quote_symbol: string
+          signal_type: string | null
           start_amount: number
           step1_action: string
           step1_amount: number
@@ -47,6 +51,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          arb_factor?: number | null
           base_symbol: string
           detected_at?: string | null
           end_amount: number
@@ -58,9 +63,12 @@ export type Database = {
           id?: string
           intermediate_symbol: string
           liquidity_score?: number | null
+          overpriced_leg?: string | null
+          price_deviation?: number | null
           profit_amount: number
           profit_percent: number
           quote_symbol: string
+          signal_type?: string | null
           start_amount: number
           step1_action: string
           step1_amount: number
@@ -78,6 +86,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          arb_factor?: number | null
           base_symbol?: string
           detected_at?: string | null
           end_amount?: number
@@ -89,9 +98,12 @@ export type Database = {
           id?: string
           intermediate_symbol?: string
           liquidity_score?: number | null
+          overpriced_leg?: string | null
+          price_deviation?: number | null
           profit_amount?: number
           profit_percent?: number
           quote_symbol?: string
+          signal_type?: string | null
           start_amount?: number
           step1_action?: string
           step1_amount?: number

@@ -325,6 +325,25 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
                     />
                     <Label className="text-sm">Cross-Exchange Arbitrage</Label>
                   </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      checked={settings.arbitrage_types.includes('short_signal')}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSettings(prev => ({
+                            ...prev,
+                            arbitrage_types: [...prev.arbitrage_types, 'short_signal']
+                          }));
+                        } else {
+                          setSettings(prev => ({
+                            ...prev,
+                            arbitrage_types: prev.arbitrage_types.filter(t => t !== 'short_signal')
+                          }));
+                        }
+                      }}
+                    />
+                    <Label className="text-sm">Short Trade Signal</Label>
+                  </div>
                 </div>
               </div>
 
