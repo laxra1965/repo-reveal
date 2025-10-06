@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Crown, History } from 'lucide-react';
+import { ExchangeBalanceCard } from '@/components/dashboard/ExchangeBalanceCard';
 
 const Dashboard = () => {
   const { user, loading: authLoading, signOut } = useAuth();
@@ -108,6 +109,7 @@ const Dashboard = () => {
       </header>
       
       <main className="container mx-auto px-4 py-8 space-y-6">
+        <ExchangeBalanceCard />
         <ArbitrageScanner />
       </main>
     </div>

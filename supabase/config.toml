@@ -5,3 +5,6 @@ verify_jwt = true
 
 [functions.binance-websocket]
 verify_jwt = false
+
+[functions.fetch-exchange-balances]
+verify_jwt = true

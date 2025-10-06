@@ -1134,7 +1134,15 @@ serve(async (req) => {
           // Check if user has active subscription
           const { data: subscription } = await supabase
             .from('user_subscriptions')
-            .select('*')
+            .select(`
+              *,
+              subscription_plans (
+                name,
+                price,
+                duration_type,
+                features
+              )
+            `)
             .eq('user_id', userSettings.user_id)
             .eq('status', 'active')
             .gte('end_date', new Date().toISOString())
@@ -1145,7 +1153,28 @@ serve(async (req) => {
             continue;
           }
 
-          console.log(`Processing user ${userSettings.user_id}`);
+          // Determine max trade amount based on subscription tier
+          const tierName = subscription.subscription_plans?.name || '';
+          let maxTradeAmount = 0;
+          
+          if (tierName.includes('Tier 1') || tierName.includes('Scanner Only')) {
+            console.log(`User ${userSettings.user_id} has Tier 1 (Scanner Only) - skipping auto-trade`);
+            continue; // Scanner only tier, no auto-trading
+          } else if (tierName.includes('Tier 2') || tierName.includes('$500')) {
+            maxTradeAmount = 500;
+          } else if (tierName.includes('Tier 3') || tierName.includes('$1,000')) {
+            maxTradeAmount = 1000;
+          } else {
+            maxTradeAmount = 100; // Default fallback
+          }
+
+          // Calculate actual trade amount based on user's balance and tier limit
+          let actualTradeAmount = Math.min(
+            userSettings.trade_amount || 10,
+            maxTradeAmount
+          );
+
+          console.log(`Processing user ${userSettings.user_id} with ${tierName} (max: $${maxTradeAmount}, actual: $${actualTradeAmount})`);
           
           // Fetch exchange data
           const exchangeData = await fetchAllExchangeData(
@@ -1163,7 +1192,7 @@ serve(async (req) => {
             const triangularOpps = findTriangularArbitrage(
               exchangeData,
               userSettings.enabled_exchanges || ['binance'],
-              userSettings.trade_amount || 10,
+              actualTradeAmount,
               userSettings.min_profit_percent || 0.0005,
               userSettings.custom_pairs || [],
               userSettings.filter_profitable !== false,
@@ -1176,7 +1205,7 @@ serve(async (req) => {
             const crossExchangeOpps = findCrossExchangeArbitrage(
               exchangeData,
               userSettings.enabled_exchanges || ['binance', 'bybit'],
-              userSettings.trade_amount || 10,
+              actualTradeAmount,
               userSettings.min_profit_percent || 0.0005,
               userSettings.custom_pairs || [],
               userSettings.filter_profitable !== false,
