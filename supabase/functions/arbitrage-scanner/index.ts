@@ -1073,3 +1073,285 @@ function findCrossExchangeArbitrage(priceMap: Record<string, any>, quoteCurrency
     .sort((a, b) => Math.abs(b.profit_percent) - Math.abs(a.profit_percent))
     .slice(0, 100);
 }
+
+// Main serve handler
+serve(async (req) => {
+  // Handle CORS
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    const { mode, userId } = await req.json();
+
+    // Auto mode: scan for all users with auto_trade enabled
+    if (mode === 'auto') {
+      console.log('Running in auto mode - scanning for all users with auto_trade enabled');
+      
+      // Fetch all users with auto_trade enabled and active subscriptions
+      const { data: users, error: usersError } = await supabase
+        .from('user_settings')
+        .select(`
+          user_id,
+          refresh_rate,
+          trade_amount,
+          min_profit_percent,
+          max_profit_percent,
+          enabled_exchanges,
+          custom_pairs,
+          arbitrage_types,
+          auto_trade,
+          filter_profitable
+        `)
+        .eq('auto_trade', true);
+
+      if (usersError) {
+        console.error('Error fetching users with auto_trade:', usersError);
+        return new Response(JSON.stringify({ error: 'Failed to fetch users' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (!users || users.length === 0) {
+        console.log('No users with auto_trade enabled found');
+        return new Response(JSON.stringify({ message: 'No users to scan' }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      console.log(`Found ${users.length} users with auto_trade enabled`);
+
+      // Process each user
+      const results = [];
+      for (const userSettings of users) {
+        try {
+          // Check if user has active subscription
+          const { data: subscription } = await supabase
+            .from('user_subscriptions')
+            .select('*')
+            .eq('user_id', userSettings.user_id)
+            .eq('status', 'active')
+            .gte('end_date', new Date().toISOString())
+            .single();
+
+          if (!subscription) {
+            console.log(`User ${userSettings.user_id} has no active subscription, skipping`);
+            continue;
+          }
+
+          console.log(`Processing user ${userSettings.user_id}`);
+          
+          // Fetch exchange data
+          const exchangeData = await fetchAllExchangeData(
+            userSettings.enabled_exchanges || ['binance', 'bybit', 'okx', 'gate', 'kucoin']
+          );
+
+          // Find opportunities
+          const detectTriangular = (userSettings.arbitrage_types || []).includes('triangular');
+          const detectCrossExchange = (userSettings.arbitrage_types || []).includes('cross_exchange');
+          const detectShortSignals = (userSettings.arbitrage_types || []).includes('short_signal');
+
+          let opportunities = [];
+
+          if (detectTriangular) {
+            const triangularOpps = findTriangularArbitrage(
+              exchangeData,
+              userSettings.enabled_exchanges || ['binance'],
+              userSettings.trade_amount || 10,
+              userSettings.min_profit_percent || 0.0005,
+              userSettings.custom_pairs || [],
+              userSettings.filter_profitable !== false,
+              detectShortSignals
+            );
+            opportunities.push(...triangularOpps);
+          }
+
+          if (detectCrossExchange) {
+            const crossExchangeOpps = findCrossExchangeArbitrage(
+              exchangeData,
+              userSettings.enabled_exchanges || ['binance', 'bybit'],
+              userSettings.trade_amount || 10,
+              userSettings.min_profit_percent || 0.0005,
+              userSettings.custom_pairs || [],
+              userSettings.filter_profitable !== false,
+              detectShortSignals
+            );
+            opportunities.push(...crossExchangeOpps);
+          }
+
+          // Save opportunities to database
+          if (opportunities.length > 0) {
+            const oppsWithUserId = opportunities.map(opp => ({
+              ...opp,
+              user_id: userSettings.user_id
+            }));
+
+            const { error: insertError } = await supabase
+              .from('arbitrage_opportunities')
+              .insert(oppsWithUserId);
+
+            if (insertError) {
+              console.error(`Error saving opportunities for user ${userSettings.user_id}:`, insertError);
+            } else {
+              console.log(`Saved ${opportunities.length} opportunities for user ${userSettings.user_id}`);
+            }
+          }
+
+          results.push({
+            user_id: userSettings.user_id,
+            opportunities_found: opportunities.length
+          });
+        } catch (error) {
+          console.error(`Error processing user ${userSettings.user_id}:`, error);
+        }
+      }
+
+      // Cleanup expired opportunities in background
+      EdgeRuntime.waitUntil((async () => {
+        try {
+          await supabase.rpc('cleanup_expired_opportunities');
+          console.log('Background cleanup completed');
+        } catch (error) {
+          console.error('Background cleanup failed:', error);
+        }
+      })());
+
+      return new Response(JSON.stringify({ 
+        success: true, 
+        users_processed: results.length,
+        results 
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Manual mode: scan for specific user
+    if (!userId) {
+      return new Response(JSON.stringify({ error: 'userId is required' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    console.log(`Starting arbitrage scan for user ${userId}`);
+
+    // Check rate limit
+    if (!checkRateLimit(userId)) {
+      console.log(`Rate limit exceeded for user ${userId}`);
+      return new Response(JSON.stringify({ error: 'Rate limit exceeded. Please try again later.' }), {
+        status: 429,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Cleanup expired opportunities in background
+    EdgeRuntime.waitUntil((async () => {
+      try {
+        await supabase.rpc('cleanup_expired_opportunities');
+        console.log('Background cleanup completed');
+      } catch (error) {
+        console.error('Background cleanup failed:', error);
+      }
+    })());
+
+    // Fetch user settings
+    const { data: userSettings, error: settingsError } = await supabase
+      .from('user_settings')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+
+    if (settingsError || !userSettings) {
+      console.error('Error fetching user settings:', settingsError);
+      return new Response(JSON.stringify({ error: 'User settings not found' }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    const enabledExchanges = userSettings.enabled_exchanges || ['binance', 'bybit', 'okx', 'gate', 'kucoin'];
+    const tradeAmount = userSettings.trade_amount || 10;
+    const minProfitPercent = userSettings.min_profit_percent || 0.0005;
+    const customPairs = userSettings.custom_pairs || [];
+    const filterProfitable = userSettings.filter_profitable !== false;
+    const arbitrageTypes = userSettings.arbitrage_types || ['triangular', 'cross_exchange'];
+
+    console.log(`Fetching data from ${enabledExchanges.length} exchanges concurrently`);
+    
+    // Fetch exchange data
+    const exchangeData = await fetchAllExchangeData(enabledExchanges);
+
+    let opportunities = [];
+
+    // Detect triangular arbitrage
+    if (arbitrageTypes.includes('triangular')) {
+      const detectShortSignals = arbitrageTypes.includes('short_signal');
+      const triangularOpps = findTriangularArbitrage(
+        exchangeData,
+        enabledExchanges,
+        tradeAmount,
+        minProfitPercent,
+        customPairs,
+        filterProfitable,
+        detectShortSignals
+      );
+      opportunities.push(...triangularOpps);
+    }
+
+    // Detect cross-exchange arbitrage
+    if (arbitrageTypes.includes('cross_exchange')) {
+      const detectShortSignals = arbitrageTypes.includes('short_signal');
+      const crossExchangeOpps = findCrossExchangeArbitrage(
+        exchangeData,
+        enabledExchanges,
+        tradeAmount,
+        minProfitPercent,
+        customPairs,
+        filterProfitable,
+        detectShortSignals
+      );
+      opportunities.push(...crossExchangeOpps);
+    }
+
+    console.log(`Total opportunities after deduplication: ${opportunities.length}`);
+
+    // Save to database
+    if (opportunities.length > 0) {
+      const oppsWithUserId = opportunities.map(opp => ({
+        ...opp,
+        user_id: userId
+      }));
+
+      const { error: insertError } = await supabase
+        .from('arbitrage_opportunities')
+        .insert(oppsWithUserId);
+
+      if (insertError) {
+        console.error('Error saving opportunities to database:', insertError);
+      } else {
+        console.log(`Successfully saved ${opportunities.length} opportunities to database`);
+      }
+    }
+
+    return new Response(JSON.stringify({ 
+      success: true, 
+      opportunities_count: opportunities.length 
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  } catch (error) {
+    console.error('Error in arbitrage scanner:', error);
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+});

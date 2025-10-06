@@ -6,7 +6,7 @@ import { ArbitrageScanner } from '@/components/arbitrage/ArbitrageScanner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Crown } from 'lucide-react';
+import { Crown, History } from 'lucide-react';
 
 const Dashboard = () => {
   const { user, loading: authLoading, signOut } = useAuth();
@@ -84,6 +84,15 @@ const Dashboard = () => {
                 Expires: {new Date(subscription.end_date).toLocaleDateString()}
               </span>
             )}
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => navigate('/trade-history')}
+              className="flex items-center gap-2"
+            >
+              <History className="h-4 w-4" />
+              Trade History
+            </Button>
             <Avatar 
               className="h-10 w-10 cursor-pointer hover:opacity-80 transition-opacity" 
               onClick={() => navigate('/profile')}
