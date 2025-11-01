@@ -12,38 +12,38 @@ function generateTransactionId() {
 const tiers = [
   {
     name: "Tier 1: Scanner Only",
-    price: "$9/week",
+    price: "$19/week",
     features: [
       "Real-time triangular arbitrage opportunities on Binance & Bybit",
       "Historical data: 7 days of opportunity tracking",
-      "Basic filters: Minimum profit threshold settings"
+      "Basic filters: Minimum profit threshold settings",
+      "Assumed Monthly Profit: $150"
     ],
     plans: [
-      { label: "Weekly", price: "$9" },
-      { label: "Monthly", price: "$35 (3% discount)" },
-      { label: "6 Months", price: "$195 (28% discount)" },
-      { label: "Annual", price: "$360 (31% discount)" }
+      { label: "Weekly", price: "$19" },
+      { label: "Monthly", price: "$60" },
+      { label: "Quarterly", price: "$150" }
     ]
   },
   {
     name: "Tier 2: Trader Pro ($500 Max)",
-    price: "$25/week",
+    price: "$195/week",
     features: [
       "Everything in Tier 1 plus:",
       "Automated trading via Binance & Bybit APIs",
       "Position limit: $500 maximum per trade",
-      "Basic analytics: Trade history, P&L tracking"
+      "Basic analytics: Trade history, P&L tracking",
+      "Assumed Monthly Profit: $1,500"
     ],
     plans: [
-      { label: "Weekly", price: "$25" },
-      { label: "Monthly", price: "$95 (5% discount)" },
-      { label: "6 Months", price: "$540 (17% discount)" },
-      { label: "Annual", price: "$1,000 (23% discount)" }
+      { label: "Weekly", price: "$195" },
+      { label: "Monthly", price: "$600" },
+      { label: "Quarterly", price: "$1,500" }
     ]
   },
   {
     name: "Tier 3: Trader Elite ($1,000 Max)",
-    price: "$50/week",
+    price: "$395/week",
     features: [
       "Everything in Tier 2 plus:",
       "Position limit: $1,000 maximum per trade",
@@ -51,25 +51,25 @@ const tiers = [
       "Advanced analytics: Success rate tracking, Average profit per trade, Best performing pairs analysis, Time-of-day performance metrics",
       "Historical data: 90 days",
       "Custom settings: Personalized trading parameters",
-      "Priority support: Email support with faster response"
+      "Priority support: Email support with faster response",
+      "Assumed Monthly Profit: $3,000"
     ],
     plans: [
-      { label: "Weekly", price: "$50" },
-      { label: "Monthly", price: "$190 (5% discount)" },
-      { label: "6 Months", price: "$1,080 (17% discount)" },
-      { label: "Annual", price: "$2,000 (23% discount)" }
+      { label: "Weekly", price: "$395" },
+      { label: "Monthly", price: "$1,200" },
+      { label: "Quarterly", price: "$3,000" }
     ]
   }
 ];
 
 
 
-const USDT_ADDRESS = "TLDsH3QUGsQJBhTsNjdT2g4Lk4U9Uw7hTH"; // Your USDT-TRC20 address
+const USDT_ADDRESS = "TQzjbHBa9ckat52PtVn7m2SSEM7dJXQ2uP"; // Your USDT-TRC20 address
 
 const planValueToLabel = {
   weekly: "Weekly",
   monthly: "Monthly",
-  annual: "Annual"
+  quarterly: "Quarterly"
 };
 
 const Pricing = () => {
@@ -174,7 +174,7 @@ const Pricing = () => {
               <div style={{ margin: "12px 0" }}>
                 <strong>Pricing:</strong>
                 <ul style={{ paddingLeft: 20, margin: 0 }}>
-                  {tier.plans.filter(plan => ["weekly","monthly","annual"].includes(plan.label.toLowerCase().replace(/\s/g, ""))).map((plan, i) => (
+                  {tier.plans.filter(plan => ["weekly","monthly","quarterly"].includes(plan.label.toLowerCase().replace(/\s/g, ""))).map((plan, i) => (
                     <li
                       key={i}
                       style={{

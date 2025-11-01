@@ -116,6 +116,26 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
           custom_pairs: (data.custom_pairs || []).join(', ')
         }));
       }
+
+      // Load existing API credentials
+      const { data: credentials, error: credError } = await supabase
+        .from('exchange_credentials')
+        .select('exchange, api_key, test_mode')
+        .eq('user_id', user.id);
+
+      if (credError) {
+        console.error('Error loading credentials:', credError);
+      } else if (credentials) {
+        const apiKeys: Record<string, { key: string; secret: string; passphrase?: string; testMode: boolean }> = {};
+        credentials.forEach((cred) => {
+          apiKeys[cred.exchange] = {
+            key: cred.api_key ? '***' + cred.api_key.slice(-4) : '',
+            secret: '********',
+            testMode: cred.test_mode || false
+          };
+        });
+        setSettings(prev => ({ ...prev, apiKeys }));
+      }
     } catch (error: any) {
       console.error('Error loading settings:', error);
     }
@@ -146,9 +166,35 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
         .from('user_settings')
         .upsert(settingsData, { onConflict: 'user_id' });
 
+      // Save API keys to exchange_credentials table
+      for (const exchange of settings.enabled_exchanges) {
+        const apiKey = settings.apiKeys[exchange];
+        if (apiKey?.key && apiKey?.secret) {
+          const credentialData = {
+            user_id: user.id,
+            exchange: exchange,
+            api_key: apiKey.key,
+            api_secret: apiKey.secret,
+            api_passphrase: apiKey.passphrase || null,
+            test_mode: apiKey.testMode || false
+          };
+
+          const { error: credError } = await supabase
+            .from('exchange_credentials')
+            .upsert(credentialData, { 
+              onConflict: 'user_id,exchange',
+              ignoreDuplicates: false 
+            });
+
+          if (credError) {
+            console.error(`Error saving ${exchange} credentials:`, credError);
+          }
+        }
+      }
+
       toast({
         title: "Settings Saved",
-        description: "Scanner settings updated successfully",
+        description: "Scanner settings and API keys updated successfully",
       });
 
       onClose();

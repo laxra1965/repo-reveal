@@ -9,7 +9,7 @@ interface PlanToggleProps {
 const options = [
   { label: "Weekly", value: "weekly", id: "economical" },
   { label: "Monthly", value: "monthly", id: "balanced" },
-  { label: "Annual", value: "annual", id: "performance" },
+  { label: "Quarterly", value: "quarterly", id: "performance" },
 ];
 
 export const PlanToggle: React.FC<PlanToggleProps> = ({ value, onChange }) => (

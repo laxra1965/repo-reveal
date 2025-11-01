@@ -32,7 +32,7 @@ const Payment = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const USDT_ADDRESS = "TLDsH3QUGsQJBhTsNjdT2g4Lk4U9Uw7hTH"; // Replace with your actual USDT TRC20 address
+  const USDT_ADDRESS = "TQzjbHBa9ckat52PtVn7m2SSEM7dJXQ2uP"; // Your USDT-TRC20 address
 
   useEffect(() => {
     if (!user) {
