@@ -22,7 +22,7 @@ interface Transaction {
   subscription_plans: {
     name: string;
     duration_type: string;
-  };
+  } | null;
 }
 
 export const AdminTransactionList = () => {
@@ -104,7 +104,7 @@ export const AdminTransactionList = () => {
       const startDate = new Date();
       const endDate = new Date(startDate);
       
-      if (transaction.subscription_plans.duration_type === 'weekly') {
+      if (transaction.subscription_plans?.duration_type === 'weekly') {
         endDate.setDate(endDate.getDate() + 7);
       } else {
         endDate.setMonth(endDate.getMonth() + 1);
@@ -234,7 +234,7 @@ export const AdminTransactionList = () => {
                 <div className="flex justify-between items-start">
                   <div>
                     <CardTitle className="text-lg">
-                      {transaction.subscription_plans.name}
+                      {transaction.subscription_plans?.name || 'Unknown Plan'}
                     </CardTitle>
                     <CardDescription>
                       {transaction.user_email} • ${transaction.amount} USDT
@@ -265,7 +265,7 @@ export const AdminTransactionList = () => {
                   </div>
                   <div>
                     <strong>Plan Duration:</strong>
-                    <div>{transaction.subscription_plans.duration_type}</div>
+                    <div>{transaction.subscription_plans?.duration_type || 'N/A'}</div>
                   </div>
                   <div>
                     <strong>USDT Address:</strong>
