@@ -20,12 +20,12 @@ interface Subscription {
     name: string;
     price: number;
     duration_type: string;
-  };
+  } | null;
   transactions: {
     transaction_id: string;
     amount: number;
     status: string;
-  };
+  } | null;
 }
 
 export const AdminSubscriptionList = () => {
@@ -318,7 +318,7 @@ export const AdminSubscriptionList = () => {
                 <div className="flex justify-between items-start">
                   <div>
                     <CardTitle className="text-lg">
-                      {subscription.subscription_plans.name}
+                      {subscription.subscription_plans?.name || 'Unknown Plan'}
                     </CardTitle>
                     <CardDescription className="flex items-center gap-2">
                       <User className="h-4 w-4" />
@@ -336,14 +336,14 @@ export const AdminSubscriptionList = () => {
                       <DollarSign className="h-4 w-4" />
                       <strong>Amount Paid:</strong>
                     </div>
-                    <div>${subscription.transactions?.amount || subscription.subscription_plans.price}</div>
+                    <div>${subscription.transactions?.amount || subscription.subscription_plans?.price || 0}</div>
                   </div>
                   <div>
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Calendar className="h-4 w-4" />
                       <strong>Duration:</strong>
                     </div>
-                    <div className="capitalize">{subscription.subscription_plans.duration_type}</div>
+                    <div className="capitalize">{subscription.subscription_plans?.duration_type || 'N/A'}</div>
                   </div>
                   <div>
                     <strong>Start Date:</strong>
