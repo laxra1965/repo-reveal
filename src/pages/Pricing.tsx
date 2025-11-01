@@ -172,20 +172,9 @@ const Pricing = () => {
                 ))}
               </ul>
               <div style={{ margin: "12px 0" }}>
-                <strong>Pricing:</strong>
-                <ul style={{ paddingLeft: 20, margin: 0 }}>
-                  {tier.plans.filter(plan => ["weekly","monthly","quarterly"].includes(plan.label.toLowerCase().replace(/\s/g, ""))).map((plan, i) => (
-                    <li
-                      key={i}
-                      style={{
-                        fontWeight: plan.label.toLowerCase().replace(/\s/g,"") === selectedPlan ? 700 : 400,
-                        color: plan.label.toLowerCase().replace(/\s/g,"") === selectedPlan ? '#0070f3' : '#222'
-                      }}
-                    >
-                      {plan.label}: {plan.price}
-                    </li>
-                  ))}
-                </ul>
+                <div style={{ fontSize: 28, fontWeight: 700, color: '#0070f3', marginBottom: 8 }}>
+                  {tier.plans.find(p => p.label.toLowerCase().replace(/\s/g,"") === selectedPlan)?.price || tier.plans[0].price}
+                </div>
               </div>
               <button
                 style={{
