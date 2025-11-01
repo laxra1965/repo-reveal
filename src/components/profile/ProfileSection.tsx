@@ -9,7 +9,7 @@ interface ProfileSectionProps {
   subscription: {
     subscription_plans: {
       name: string;
-    };
+    } | null;
     end_date: string;
   } | null;
 }
@@ -88,7 +88,7 @@ export const ProfileSection = ({ subscription }: ProfileSectionProps) => {
             </div>
             <div className="flex items-center gap-2">
               <Badge variant="default" className="text-base">
-                {subscription?.subscription_plans.name || 'No Plan'}
+                {subscription?.subscription_plans?.name || 'No Plan'}
               </Badge>
             </div>
           </div>
