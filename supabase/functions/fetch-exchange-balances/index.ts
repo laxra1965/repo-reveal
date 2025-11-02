@@ -34,10 +34,15 @@ async function fetchBinanceBalance(apiKey: string, apiSecret: string): Promise<E
     );
 
     if (!response.ok) {
-      throw new Error(`Binance API error: ${response.status}`);
+      throw new Error(`Binance API error: ${response.status} ${response.statusText}`);
     }
 
-    const data = await response.json();
+    const text = await response.text();
+    if (!text || text.trim() === '') {
+      throw new Error('Binance API returned empty response');
+    }
+
+    const data = JSON.parse(text);
     const assets: Record<string, number> = {};
     let totalUSDT = 0;
 
@@ -113,7 +118,16 @@ async function fetchBybitBalance(apiKey: string, apiSecret: string): Promise<Exc
       }
     );
 
-    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(`Bybit API error: ${response.status} ${response.statusText}`);
+    }
+
+    const text = await response.text();
+    if (!text || text.trim() === '') {
+      throw new Error('Bybit API returned empty response');
+    }
+
+    const data = JSON.parse(text);
     if (data.retCode !== 0) {
       throw new Error(`Bybit API error: ${data.retMsg}`);
     }
@@ -200,10 +214,15 @@ async function fetchGateBalance(apiKey: string, apiSecret: string): Promise<Exch
     );
 
     if (!response.ok) {
-      throw new Error(`Gate.io API error: ${response.status}`);
+      throw new Error(`Gate.io API error: ${response.status} ${response.statusText}`);
     }
 
-    const data = await response.json();
+    const text = await response.text();
+    if (!text || text.trim() === '') {
+      throw new Error('Gate.io API returned empty response');
+    }
+
+    const data = JSON.parse(text);
     const assets: Record<string, number> = {};
     let totalUSDT = 0;
 
