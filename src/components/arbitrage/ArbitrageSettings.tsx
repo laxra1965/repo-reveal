@@ -176,7 +176,8 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
             api_key: apiKey.key,
             api_secret: apiKey.secret,
             api_passphrase: apiKey.passphrase || null,
-            test_mode: apiKey.testMode || false
+            test_mode: apiKey.testMode || false,
+            is_connected: true
           };
 
           const { error: credError } = await supabase
