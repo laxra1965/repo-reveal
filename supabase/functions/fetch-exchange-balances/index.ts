@@ -172,6 +172,91 @@ async function fetchBybitBalance(apiKey: string, apiSecret: string): Promise<Exc
   }
 }
 
+// Gate.io balance fetcher
+async function fetchGateBalance(apiKey: string, apiSecret: string): Promise<ExchangeBalance> {
+  try {
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const method = 'GET';
+    const path = '/api/v4/spot/accounts';
+    const queryString = '';
+    const bodyHash = createHmac('sha512', '')
+      .update('')
+      .digest('hex');
+    
+    const signString = `${method}\n${path}\n${queryString}\n${bodyHash}\n${timestamp}`;
+    const signature = createHmac('sha512', apiSecret)
+      .update(signString)
+      .digest('hex');
+
+    const response = await fetch(
+      `https://api.gateio.ws${path}`,
+      {
+        headers: {
+          'KEY': apiKey,
+          'SIGN': signature,
+          'Timestamp': timestamp,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Gate.io API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const assets: Record<string, number> = {};
+    let totalUSDT = 0;
+
+    for (const balance of data) {
+      const available = parseFloat(balance.available || '0');
+      const locked = parseFloat(balance.locked || '0');
+      const total = available + locked;
+
+      if (total > 0) {
+        assets[balance.currency] = total;
+        if (balance.currency === 'USDT') {
+          totalUSDT += total;
+        }
+      }
+    }
+
+    // Fetch current prices
+    const priceResponse = await fetch('https://api.gateio.ws/api/v4/spot/tickers');
+    const prices = await priceResponse.json();
+    const priceMap: Record<string, number> = {};
+    
+    for (const ticker of prices) {
+      if (ticker.currency_pair.endsWith('_USDT')) {
+        const asset = ticker.currency_pair.replace('_USDT', '');
+        priceMap[asset] = parseFloat(ticker.last);
+      }
+    }
+
+    // Calculate total in USDT
+    for (const [asset, amount] of Object.entries(assets)) {
+      if (asset !== 'USDT' && priceMap[asset]) {
+        totalUSDT += amount * priceMap[asset];
+      }
+    }
+
+    return {
+      exchange: 'gate',
+      totalUSDT,
+      assets,
+      timestamp: new Date().toISOString(),
+    };
+  } catch (error) {
+    console.error('Gate.io balance fetch error:', error);
+    return {
+      exchange: 'gate',
+      totalUSDT: 0,
+      assets: {},
+      timestamp: new Date().toISOString(),
+      error: error.message,
+    };
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -236,6 +321,10 @@ serve(async (req) => {
           break;
         case 'bybit':
           balance = await fetchBybitBalance(cred.api_key, cred.api_secret);
+          break;
+        case 'gate':
+        case 'gateio':
+          balance = await fetchGateBalance(cred.api_key, cred.api_secret);
           break;
         default:
           console.log(`Unsupported exchange: ${cred.exchange}`);
