@@ -54,18 +54,18 @@ export const ArbitrageScanner = () => {
   useEffect(() => {
     const fetchSettings = async () => {
       if (!user) return;
-      
+
       const { data, error } = await supabase
         .from('user_settings')
         .select('arbitrage_types')
         .eq('user_id', user.id)
         .single();
-      
+
       if (!error && data) {
         setArbitrageMode(data.arbitrage_types || ['triangular']);
       }
     };
-    
+
     fetchSettings();
   }, [user]);
 
@@ -78,19 +78,19 @@ export const ArbitrageScanner = () => {
       });
       return;
     }
-    
+
     setIsScanning(true);
-    
+
     // Perform initial scan
     await performScan();
-    
-    // Set up recurring scans every 5 seconds
+
+    // Set up recurring scans every 60 seconds (60000 ms)
     const interval = setInterval(async () => {
       await performScan();
-    }, 5000);
-    
+    }, 60000);
+
     setScanInterval(interval);
-    
+
     toast({
       title: "Scanner Started",
       description: "Arbitrage scanner is now monitoring opportunities",
@@ -103,24 +103,60 @@ export const ArbitrageScanner = () => {
       clearInterval(scanInterval);
       setScanInterval(null);
     }
-    
+
     toast({
       title: "Scanner Stopped",
       description: "Arbitrage scanner has been stopped",
     });
   }, [scanInterval]);
 
+  // performScan: calls the edge function, filters by threshold, saves qualifying opportunities to Supabase
   const performScan = async () => {
     if (!user) return;
-    
+
     try {
       const { data, error } = await supabase.functions.invoke('arbitrage-scanner', {
         body: { action: 'scan' }
       });
-      
+
       if (error) throw error;
-      
-      // Fetch updated opportunities from database
+
+      // scanner results (expected to be an array of opportunity objects)
+      const scannerResults: any[] = (data && data.data) || [];
+
+      // Apply threshold: only store opportunities with profit_percent >= 1%
+      const threshold = 1; // percent
+      const now = new Date();
+
+      const toInsert = scannerResults
+        .filter(r => typeof r.profit_percent === 'number' && r.profit_percent >= threshold)
+        .map(r => ({
+          // Do not assign client-side UUIDs; prefer server-provided ids.
+          // Include user ownership and timestamps.
+          ...r,
+          user_id: user.id,
+          detected_at: r.detected_at || now.toISOString(),
+          expires_at: r.expires_at || new Date(now.getTime() + 60_000).toISOString(),
+        }));
+
+      if (toInsert.length > 0) {
+        const { data: insertData, error: insertError } = await supabase
+          .from('arbitrage_opportunities')
+          .insert(toInsert);
+
+        if (insertError) {
+          console.error('Insert error:', insertError);
+          toast({
+            title: 'DB Insert Error',
+            description: insertError.message || 'Failed to save opportunities',
+            variant: 'destructive',
+          });
+        } else {
+          console.log(`Inserted ${insertData?.length || 0} opportunities to DB`);
+        }
+      }
+
+      // Fetch updated opportunities from database (top 10)
       const { data: freshOpportunities, error: fetchError } = await supabase
         .from('arbitrage_opportunities')
         .select('*')
@@ -128,13 +164,13 @@ export const ArbitrageScanner = () => {
         .gt('expires_at', new Date().toISOString())
         .order('profit_percent', { ascending: false })
         .limit(10);
-      
+
       if (fetchError) throw fetchError;
-      
+
       setOpportunities(freshOpportunities || []);
       setLastScanTime(new Date());
       setScanCount(prev => prev + 1);
-      
+
     } catch (error: any) {
       console.error('Scan error:', error);
       toast({
@@ -145,7 +181,7 @@ export const ArbitrageScanner = () => {
     }
   };
 
-  // Set up real-time updates
+  // Set up real-time updates from Postgres for the user's opportunities
   useEffect(() => {
     if (!user) return;
 
@@ -174,36 +210,37 @@ export const ArbitrageScanner = () => {
   }, [user]);
 
   // WebSocket connection for real-time Binance data
+  // We keep this for immediate UI updates but we no longer generate client-side UUIDs or persist directly from the socket.
   useEffect(() => {
     if (!user || !hasActiveSubscription) return;
 
     let ws: WebSocket | null = null;
-    
+
     const connectWebSocket = () => {
       console.log('Connecting to Binance WebSocket stream...');
       ws = new WebSocket('wss://zupbliefzhnohsoguwuk.functions.supabase.co/binance-websocket');
-      
+
       ws.onopen = () => {
         console.log('Connected to Binance WebSocket');
         setLastScanTime(new Date());
       };
-      
+
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          
+
           if (data.type === 'arbitrage_opportunities') {
             console.log(`Received ${data.data.length} real-time arbitrage opportunities`);
-            
-            // Filter opportunities for current user and update state
+
+            // Map through incoming opportunities and show them temporarily in UI
             const userOpportunities = data.data.map((opp: any) => ({
               ...opp,
-              id: `rt_${Date.now()}_${Math.random()}`,
               user_id: user.id,
-              detected_at: new Date().toISOString(),
-              expires_at: new Date(Date.now() + 30000).toISOString()
+              detected_at: opp.detected_at || new Date().toISOString(),
+              expires_at: opp.expires_at || new Date(Date.now() + 30000).toISOString()
             }));
-            
+
+            // Merge into state (UI only). DB persistence is handled by performScan (every 60s).
             setOpportunities(prev => {
               const combined = [...userOpportunities, ...prev];
               return combined.slice(0, 20); // Keep last 20
@@ -216,19 +253,19 @@ export const ArbitrageScanner = () => {
           console.error('Error processing WebSocket message:', error);
         }
       };
-      
+
       ws.onclose = () => {
         console.log('WebSocket connection closed, reconnecting...');
         setTimeout(connectWebSocket, 5000);
       };
-      
+
       ws.onerror = (error) => {
         console.error('WebSocket error:', error);
       };
     };
-    
+
     connectWebSocket();
-    
+
     return () => {
       if (ws) {
         ws.close();
@@ -285,7 +322,7 @@ export const ArbitrageScanner = () => {
             </div>
           </CardContent>
         </Card>
-        
+
         <PlansSection />
       </div>
     );
@@ -315,7 +352,7 @@ export const ArbitrageScanner = () => {
                 <Settings className="h-4 w-4 mr-2" />
                 Settings
               </Button>
-              
+
               {isScanning ? (
                 <Button onClick={stopScanning} variant="destructive" size="sm">
                   <Pause className="h-4 w-4 mr-2" />
@@ -367,7 +404,7 @@ export const ArbitrageScanner = () => {
             </CardContent>
           </Card>
         )}
-        
+
         {opportunities.length === 0 && !isScanning && (
           <Card>
             <CardContent className="pt-6 text-center">
@@ -377,7 +414,7 @@ export const ArbitrageScanner = () => {
             </CardContent>
           </Card>
         )}
-        
+
         {opportunities.map((opportunity, index) => (
           <ArbitrageOpportunityCard 
             key={opportunity.id} 
