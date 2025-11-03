@@ -468,6 +468,7 @@ export type Database = {
     }
     Functions: {
       cleanup_expired_opportunities: { Args: never; Returns: number }
+      cleanup_old_opportunities: { Args: never; Returns: number }
     }
     Enums: {
       exchange_name:

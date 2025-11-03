@@ -152,7 +152,7 @@ export const ArbitrageScanner = () => {
             variant: 'destructive',
           });
         } else {
-          console.log(`Inserted ${insertData?.length || 0} opportunities to DB`);
+          console.log(`Inserted ${toInsert.length} opportunities to DB`);
         }
       }
 

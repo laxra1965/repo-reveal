@@ -120,7 +120,7 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
       // Load existing API credentials
       const { data: credentials, error: credError } = await supabase
         .from('exchange_credentials')
-        .select('exchange, api_key, test_mode')
+        .select('exchange, api_key, api_secret, test_mode, is_connected')
         .eq('user_id', user.id);
 
       if (credError) {
@@ -128,11 +128,14 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
       } else if (credentials) {
         const apiKeys: Record<string, { key: string; secret: string; passphrase?: string; testMode: boolean }> = {};
         credentials.forEach((cred) => {
-          apiKeys[cred.exchange] = {
-            key: cred.api_key ? '***' + cred.api_key.slice(-4) : '',
-            secret: '********',
-            testMode: cred.test_mode || false
-          };
+          // Only show credentials that have keys
+          if (cred.api_key && cred.api_secret && cred.is_connected) {
+            apiKeys[cred.exchange] = {
+              key: cred.api_key ? '***' + cred.api_key.slice(-4) : '',
+              secret: '********',
+              testMode: cred.test_mode || false
+            };
+          }
         });
         setSettings(prev => ({ ...prev, apiKeys }));
       }

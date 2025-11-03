@@ -1,50 +1,52 @@
-// functions/scheduled-arb-scan/index.ts
-import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const client = createClient(supabaseUrl, supabaseServiceKey);
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
-const PROFIT_THRESHOLD = 1; // 1%
-
-serve(async () => {
-  console.log("Scheduled scan started...");
-
-  // Call existing function
-  const { data, error } = await client.functions.invoke("arbitrage-scanner", {
-    body: { action: "scan" }
-  });
-
-  if (error) {
-    console.error("scanner error", error);
-    return new Response("Error", { status: 500 });
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
   }
 
-  const results = data?.data || [];
-  const profitable = results.filter((r: any) => r.profit_percent >= PROFIT_THRESHOLD);
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-  if (profitable.length === 0) {
-    console.log("No profitable opportunities");
-    return new Response("No opportunities");
+    console.log('Running scheduled arbitrage scan cleanup...');
+
+    // Cleanup old opportunities (older than 24 hours)
+    const { data: cleanupResult, error: cleanupError } = await supabase
+      .rpc('cleanup_old_opportunities');
+
+    if (cleanupError) {
+      console.error('Cleanup error:', cleanupError);
+    } else {
+      console.log(`Cleaned up ${cleanupResult} old opportunities`);
+    }
+
+    return new Response(
+      JSON.stringify({ 
+        success: true,
+        deleted: cleanupResult || 0,
+        timestamp: new Date().toISOString()
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
+  } catch (error) {
+    console.error('Error in scheduled scan:', error);
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
   }
-
-  // Insert into DB
-  const formatted = profitable.map((r: any) => ({
-    ...r,
-    detected_at: new Date().toISOString(),
-    expires_at: new Date(Date.now() + 30000).toISOString(),
-  }));
-
-  const { error: insertError } = await client
-    .from("arbitrage_opportunities")
-    .insert(formatted);
-
-  if (insertError) {
-    console.error("DB insert error", insertError);
-    return new Response("Insert failed");
-  }
-
-  console.log(`Inserted ${formatted.length} opportunities`);
-  return new Response("Success");
 });
