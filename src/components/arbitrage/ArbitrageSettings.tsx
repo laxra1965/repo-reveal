@@ -175,8 +175,16 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
       for (const exchange of settings.enabled_exchanges) {
         const apiKey = settings.apiKeys[exchange];
         
-        // Only save if user entered new credentials (not empty and not existing without changes)
-        if (apiKey?.key && apiKey?.secret && !(apiKey.isExisting && !apiKey.key)) {
+        // Skip if no keys entered OR if existing credential with no changes
+        if (!apiKey || (apiKey.isExisting && !apiKey.key && !apiKey.secret)) {
+          console.log(`Skipping ${exchange} - no changes`);
+          continue;
+        }
+
+        // Only save if user actually entered new credentials
+        if (apiKey.key && apiKey.secret) {
+          console.log(`Saving credentials for ${exchange}...`);
+          
           const credentialData = {
             user_id: user.id,
             exchange: exchange,
@@ -190,8 +198,7 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
           const { error: credError } = await supabase
             .from('exchange_credentials')
             .upsert(credentialData, { 
-              onConflict: 'user_id,exchange',
-              ignoreDuplicates: false 
+              onConflict: 'user_id,exchange'
             });
 
           if (credError) {
@@ -201,6 +208,8 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
               description: `Failed to save ${exchange} credentials: ${credError.message}`,
               variant: "destructive",
             });
+          } else {
+            console.log(`Successfully saved ${exchange} credentials`);
           }
         }
       }
