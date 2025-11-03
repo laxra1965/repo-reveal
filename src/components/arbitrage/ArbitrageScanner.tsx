@@ -142,7 +142,10 @@ export const ArbitrageScanner = () => {
       if (toInsert.length > 0) {
         const { data: insertData, error: insertError } = await supabase
           .from('arbitrage_opportunities')
-          .insert(toInsert);
+          .upsert(toInsert, {
+            onConflict: 'user_id,exchange1,exchange2,exchange3,base_symbol,quote_symbol,intermediate_symbol,type',
+            ignoreDuplicates: false
+          });
 
         if (insertError) {
           console.error('Insert error:', insertError);
@@ -152,7 +155,7 @@ export const ArbitrageScanner = () => {
             variant: 'destructive',
           });
         } else {
-          console.log(`Inserted ${toInsert.length} opportunities to DB`);
+          console.log(`Saved ${toInsert.length} opportunities to DB`);
         }
       }
 

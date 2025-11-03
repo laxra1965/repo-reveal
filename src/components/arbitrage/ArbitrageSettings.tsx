@@ -38,7 +38,7 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
     arbitrage_types: ['triangular', 'cross_exchange'] as string[],
     custom_pairs: '' as string,
     // API Keys storage
-    apiKeys: {} as Record<string, { key: string; secret: string; passphrase?: string; testMode: boolean }>
+    apiKeys: {} as Record<string, { key: string; secret: string; passphrase?: string; testMode: boolean; isExisting?: boolean }>
   });
   const [loading, setLoading] = useState(false);
 
@@ -63,7 +63,8 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
         ...prev.apiKeys,
         [exchange]: {
           ...prev.apiKeys[exchange],
-          [field]: value
+          [field]: value,
+          isExisting: false // Mark as modified
         }
       }
     }));
@@ -126,14 +127,15 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
       if (credError) {
         console.error('Error loading credentials:', credError);
       } else if (credentials) {
-        const apiKeys: Record<string, { key: string; secret: string; passphrase?: string; testMode: boolean }> = {};
+        const apiKeys: Record<string, { key: string; secret: string; passphrase?: string; testMode: boolean; isExisting?: boolean }> = {};
         credentials.forEach((cred) => {
           // Only show credentials that have keys
           if (cred.api_key && cred.api_secret && cred.is_connected) {
             apiKeys[cred.exchange] = {
-              key: cred.api_key ? '***' + cred.api_key.slice(-4) : '',
-              secret: '********',
-              testMode: cred.test_mode || false
+              key: '', // Don't show existing keys for security
+              secret: '',
+              testMode: cred.test_mode || false,
+              isExisting: true // Mark as existing so we know not to update if empty
             };
           }
         });
@@ -172,14 +174,16 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
       // Save API keys to exchange_credentials table
       for (const exchange of settings.enabled_exchanges) {
         const apiKey = settings.apiKeys[exchange];
-        if (apiKey?.key && apiKey?.secret) {
+        
+        // Only save if user entered new credentials (not empty and not existing without changes)
+        if (apiKey?.key && apiKey?.secret && !(apiKey.isExisting && !apiKey.key)) {
           const credentialData = {
             user_id: user.id,
             exchange: exchange,
             api_key: apiKey.key,
             api_secret: apiKey.secret,
             api_passphrase: apiKey.passphrase || null,
-            test_mode: apiKey.testMode || false,
+            test_mode: apiKey.testMode !== undefined ? apiKey.testMode : false,
             is_connected: true
           };
 
@@ -192,6 +196,11 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
 
           if (credError) {
             console.error(`Error saving ${exchange} credentials:`, credError);
+            toast({
+              title: "Error",
+              description: `Failed to save ${exchange} credentials: ${credError.message}`,
+              variant: "destructive",
+            });
           }
         }
       }
@@ -428,27 +437,27 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
               {AVAILABLE_EXCHANGES.filter(exchange => 
                 settings.enabled_exchanges.includes(exchange)
               ).map((exchange) => (
-                <div key={exchange} className="border rounded p-3 space-y-2">
+                  <div key={exchange} className="border rounded p-3 space-y-2">
                   <div className="flex items-center justify-between">
                     <h4 className="font-medium text-sm capitalize">{exchange}</h4>
                     <Badge 
-                      variant={getApiKeyStatus(exchange) ? "default" : "secondary"} 
+                      variant={settings.apiKeys[exchange]?.isExisting ? "default" : "secondary"} 
                       className="text-xs"
                     >
-                      {getApiKeyStatus(exchange) ? "Connected" : "Not Set"}
+                      {settings.apiKeys[exchange]?.isExisting ? "Connected" : "Not Set"}
                     </Badge>
                   </div>
                   <div className="space-y-2">
                     <Input
                       type="password"
-                      placeholder="API Key"
+                      placeholder={settings.apiKeys[exchange]?.isExisting ? "Enter new API Key (leave empty to keep)" : "API Key"}
                       value={getApiKeyValue(exchange, 'key')}
                       onChange={(e) => handleApiKeyChange(exchange, 'key', e.target.value)}
                       className="text-xs"
                     />
                     <Input
                       type="password"
-                      placeholder="API Secret"
+                      placeholder={settings.apiKeys[exchange]?.isExisting ? "Enter new API Secret (leave empty to keep)" : "API Secret"}
                       value={getApiKeyValue(exchange, 'secret')}
                       onChange={(e) => handleApiKeyChange(exchange, 'secret', e.target.value)}
                       className="text-xs"
@@ -456,7 +465,7 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
                     {exchange === 'okx' && (
                       <Input
                         type="password"
-                        placeholder="Passphrase"
+                        placeholder="Passphrase (optional)"
                         value={getApiKeyValue(exchange, 'passphrase')}
                         onChange={(e) => handleApiKeyChange(exchange, 'passphrase', e.target.value)}
                         className="text-xs"
