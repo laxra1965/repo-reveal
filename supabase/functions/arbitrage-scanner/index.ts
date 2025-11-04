@@ -136,305 +136,9 @@ async function fetchWithRetry(url: string, headers: Record<string, string>, maxR
   throw lastError!;
 }
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+// This handler has been removed - only one serve() handler is allowed per edge function
 
-  try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    const authHeader = req.headers.get('Authorization')!;
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user } } = await supabase.auth.getUser(token);
-
-    if (!user) {
-      throw new Error('Unauthorized');
-    }
-
-    // Check rate limiting
-    if (!checkRateLimit(user.id)) {
-      return new Response(JSON.stringify({ 
-        error: 'Rate limit exceeded',
-        message: 'Too many requests. Please wait before trying again.'
-      }), {
-        status: 429,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
-
-    const { action } = await req.json();
-
-    if (action === 'scan') {
-      console.log(`Starting arbitrage scan for user ${user.id}`);
-      
-      // Get user settings with error handling
-      let settings;
-      try {
-        const { data, error } = await supabase
-          .from('user_settings')
-          .select('*')
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        if (error) throw error;
-        settings = data;
-      } catch (error) {
-        console.error('Error fetching user settings:', error);
-        // Use defaults if settings fetch fails
-        settings = null;
-      }
-
-      const enabledExchanges = settings?.enabled_exchanges || ['binance', 'bybit', 'okx'];
-      const tradeAmount = settings?.trade_amount || 10;
-      const minProfitPercent = (settings?.min_profit_percent || 0.0005) * 100; // Convert to percentage
-      const filterProfitable = settings?.filter_profitable !== undefined ? settings.filter_profitable : true;
-      const arbitrageTypes = settings?.arbitrage_types || ['triangular', 'cross_exchange'];
-      const customPairs = settings?.custom_pairs || [];
-
-      // Clear expired opportunities in background
-      EdgeRuntime.waitUntil(
-        supabase.rpc('cleanup_expired_opportunities').then(
-          () => console.log('Background cleanup completed'),
-          (error: any) => console.error('Background cleanup failed:', error)
-        )
-      );
-
-      // Fetch price data with concurrency and enhanced error handling
-      // Map lowercase exchange names to proper API_CONFIG keys
-      const exchangeNameMap: Record<string, string> = {
-        'binance': 'Binance',
-        'bybit': 'Bybit',
-        'okx': 'OKX',
-        'kucoin': 'KuCoin',
-        'gate': 'Gate',
-        'mexc': 'MEXC'
-      };
-      
-      const enabledConfigs = enabledExchanges
-        .map(name => {
-          const normalizedName = exchangeNameMap[name.toLowerCase()] || name.charAt(0).toUpperCase() + name.slice(1);
-          return {
-            name: normalizedName,
-            config: API_CONFIG[normalizedName]
-          };
-        })
-        .filter(({ config }) => config);
-
-      console.log(`Fetching data from ${enabledConfigs.length} exchanges concurrently`);
-
-      // Enhanced concurrent fetching with better performance
-      const fetchPromises = enabledConfigs.map(async ({ name, config }) => {
-        const startTime = Date.now();
-        try {
-          const result = await fetchExchangeData(name, config);
-          const fetchTime = Date.now() - startTime;
-          console.log(`${name} fetch completed in ${fetchTime}ms`);
-          
-          if (result.error) throw new Error(result.error);
-          return { name, data: result.data, fetchTime };
-        } catch (error) {
-          console.error(`Failed to fetch ${name}:`, error);
-          throw error;
-        }
-      });
-
-      // Use Promise.allSettled for better error handling with timeout
-      const fetchResults = await Promise.allSettled(fetchPromises);
-
-      let allPriceData: Record<string, any> = {};
-      let successfulFetches = 0;
-      let failedFetches = 0;
-
-      fetchResults.forEach((result, index) => {
-        const exchangeName = enabledConfigs[index].name;
-        
-        if (result.status === 'fulfilled') {
-          const normalizedData = normalizeExchangeData(exchangeName, result.value.data);
-          Object.assign(allPriceData, normalizedData);
-          successfulFetches++;
-          console.log(`${exchangeName}: Normalized ${Object.keys(normalizedData).length} symbols`);
-        } else {
-          failedFetches++;
-          console.error(`${exchangeName} failed:`, result.reason);
-          
-          // Log error to database for monitoring
-          EdgeRuntime.waitUntil(
-            (async () => {
-              try {
-                const { error } = await supabase.from('scanner_logs').insert({
-                  user_id: user.id,
-                  log_type: 'error',
-                  message: `Failed to fetch data from ${exchangeName}`,
-                  details: { error: result.reason?.message || 'Unknown error' }
-                });
-                if (error) console.error('Failed to log error:', error);
-              } catch (error) {
-                console.error('Failed to log error:', error);
-              }
-            })()
-          );
-        }
-      });
-
-      console.log(`Data fetch completed: ${successfulFetches} successful, ${failedFetches} failed`);
-      console.log(`Combined price data for ${Object.keys(allPriceData).length} symbols`);
-
-      if (Object.keys(allPriceData).length === 0) {
-        throw new Error('No price data available from any exchange');
-      }
-
-      // Find arbitrage opportunities based on user settings
-      // Scan against multiple quote currencies: USDT and BNB
-      let opportunities: any[] = [];
-      const quoteCurrencies = ['USDT', 'BNB'];
-      const detectShortSignals = arbitrageTypes.includes('short_signal');
-      
-      for (const quoteCurrency of quoteCurrencies) {
-        if (arbitrageTypes.includes('triangular')) {
-          const triangularOpps = findTriangularArbitrage(allPriceData, quoteCurrency, tradeAmount, minProfitPercent, filterProfitable, customPairs, detectShortSignals);
-          // Add type label to each opportunity
-          triangularOpps.forEach(opp => opp.type = 'triangular');
-          opportunities.push(...triangularOpps);
-          console.log(`Found ${triangularOpps.length} triangular opportunities with ${quoteCurrency}`);
-        }
-        
-        if (arbitrageTypes.includes('cross_exchange')) {
-          const crossExchangeOpps = findCrossExchangeArbitrage(allPriceData, quoteCurrency, tradeAmount, minProfitPercent, filterProfitable, customPairs, detectShortSignals);
-          // Add type label to each opportunity
-          crossExchangeOpps.forEach(opp => opp.type = 'cross_exchange');
-          opportunities.push(...crossExchangeOpps);
-          console.log(`Found ${crossExchangeOpps.length} cross-exchange opportunities with ${quoteCurrency}`);
-        }
-      }
-      
-      console.log(`Total opportunities found before deduplication: ${opportunities.length} (USDT + BNB pairs)`);
-      
-      // Deduplicate opportunities based on unique trading path signature
-      const uniqueOpportunities = new Map();
-      opportunities.forEach(opp => {
-        // Create a unique key based on the trading path
-        const key = `${opp.exchange1}_${opp.exchange2}_${opp.exchange3}_${opp.base_symbol}_${opp.intermediate_symbol}_${opp.quote_symbol}_${opp.step1_action}_${opp.step2_action}_${opp.step3_action}`;
-        
-        // Keep the opportunity with the best profit if duplicates exist
-        if (!uniqueOpportunities.has(key) || Math.abs(opp.profit_percent) > Math.abs(uniqueOpportunities.get(key).profit_percent)) {
-          uniqueOpportunities.set(key, opp);
-        }
-      });
-      
-      opportunities = Array.from(uniqueOpportunities.values());
-      console.log(`Total opportunities after deduplication: ${opportunities.length}`);
-
-      // Save opportunities to database with better error handling
-      if (opportunities.length > 0) {
-        const opportunityInserts = opportunities.map(opp => ({
-          user_id: user.id,
-          base_symbol: opp.base_symbol,
-          quote_symbol: opp.quote_symbol,
-          intermediate_symbol: opp.intermediate_symbol,
-          exchange1: opp.exchange1,
-          exchange2: opp.exchange2,
-          exchange3: opp.exchange3,
-          step1_action: opp.step1_action,
-          step1_price: opp.step1_price,
-          step1_amount: opp.step1_amount,
-          step2_action: opp.step2_action,
-          step2_price: opp.step2_price,
-          step2_amount: opp.step2_amount,
-          step3_action: opp.step3_action,
-          step3_price: opp.step3_price,
-          step3_amount: opp.step3_amount,
-          start_amount: opp.start_amount,
-          end_amount: opp.end_amount,
-          profit_amount: opp.profit_amount,
-          profit_percent: opp.profit_percent,
-          type: opp.type || 'triangular',
-          // Enhanced fields
-          step1_volume: opp.step1_volume || 0,
-          step2_volume: opp.step2_volume || 0,
-          step3_volume: opp.step3_volume || 0,
-          estimated_slippage: opp.estimated_slippage || 0,
-          liquidity_score: opp.liquidity_score || 50,
-          // New short signal fields
-          signal_type: opp.signal_type || 'arbitrage',
-          arb_factor: opp.arb_factor,
-          overpriced_leg: opp.overpriced_leg,
-          price_deviation: opp.price_deviation
-        }));
-
-        try {
-          const { error: insertError } = await supabase
-            .from('arbitrage_opportunities')
-            .insert(opportunityInserts);
-
-          if (insertError) {
-            console.error('Error saving opportunities:', insertError);
-            console.error('Database insert failed:', insertError);
-            // Don't fail the entire request if database insert fails
-          } else {
-            console.log(`Successfully saved ${opportunities.length} opportunities to database`);
-          }
-        } catch (error) {
-          console.error('Database insert failed:', error);
-          // Don't fail the entire request if database insert fails
-        }
-      }
-
-      // Log scan results
-      EdgeRuntime.waitUntil(
-        (async () => {
-          try {
-            const { error } = await supabase.from('scanner_logs').insert({
-              user_id: user.id,
-              log_type: 'scan',
-              message: `Scan completed: ${opportunities.length} opportunities found`,
-              details: { 
-                opportunitiesFound: opportunities.length,
-                exchangesSuccessful: successfulFetches,
-                exchangesFailed: failedFetches,
-                totalSymbols: Object.keys(allPriceData).length,
-                timestamp: new Date().toISOString()
-              }
-            });
-            if (error) console.error('Failed to log scan result:', error);
-          } catch (error) {
-            console.error('Failed to log scan result:', error);
-          }
-        })()
-      );
-
-      return new Response(JSON.stringify({
-        success: true,
-        opportunities_count: opportunities.length,
-        exchanges_successful: successfulFetches,
-        exchanges_failed: failedFetches,
-        total_symbols: Object.keys(allPriceData).length,
-        message: `Scan completed: ${opportunities.length} opportunities found`
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
-
-    return new Response(JSON.stringify({ error: 'Invalid action' }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
-
-  } catch (error) {
-    console.error('Error in arbitrage scanner:', error);
-    
-    return new Response(JSON.stringify({ 
-      error: 'Internal server error',
-      message: error.message,
-      timestamp: new Date().toISOString()
-    }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
-  }
-});
+// This section has been removed - merged into unified handler below
 
 // Enhanced fetch function with retry logic and rate limiting
 async function fetchExchangeData(exchangeName: string, config: ExchangeConfig): Promise<any> {
@@ -1074,7 +778,7 @@ function findCrossExchangeArbitrage(priceMap: Record<string, any>, quoteCurrency
     .slice(0, 100);
 }
 
-// Main serve handler
+// Main serve handler - unified handler for all request types
 serve(async (req) => {
   // Handle CORS
   if (req.method === 'OPTIONS') {
@@ -1086,7 +790,216 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { mode, userId } = await req.json();
+    const body = await req.json();
+    const { mode, userId, action } = body;
+
+    // Handle authenticated user requests with action='scan'
+    if (action === 'scan') {
+      const authHeader = req.headers.get('Authorization');
+      if (!authHeader) {
+        return new Response(JSON.stringify({ error: 'Authorization header required' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+
+      if (userError || !user) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Check rate limiting
+      if (!checkRateLimit(user.id)) {
+        return new Response(JSON.stringify({ 
+          error: 'Rate limit exceeded',
+          message: 'Too many requests. Please wait before trying again.'
+        }), {
+          status: 429,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      console.log(`Starting arbitrage scan for user ${user.id}`);
+      
+      // Get user settings with error handling
+      let settings;
+      try {
+        const { data, error } = await supabase
+          .from('user_settings')
+          .select('*')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (error) throw error;
+        settings = data;
+      } catch (error) {
+        console.error('Error fetching user settings:', error);
+        settings = null;
+      }
+
+      const enabledExchanges = settings?.enabled_exchanges || ['binance', 'bybit', 'okx'];
+      const tradeAmount = settings?.trade_amount || 10;
+      const minProfitPercent = (settings?.min_profit_percent || 0.0005) * 100;
+      const filterProfitable = settings?.filter_profitable !== undefined ? settings.filter_profitable : true;
+      const arbitrageTypes = settings?.arbitrage_types || ['triangular', 'cross_exchange'];
+      const customPairs = settings?.custom_pairs || [];
+
+      // Clear expired opportunities in background
+      EdgeRuntime.waitUntil(
+        supabase.rpc('cleanup_expired_opportunities').then(
+          () => console.log('Background cleanup completed'),
+          (error: any) => console.error('Background cleanup failed:', error)
+        )
+      );
+
+      // Map lowercase exchange names to proper API_CONFIG keys
+      const exchangeNameMap: Record<string, string> = {
+        'binance': 'Binance',
+        'bybit': 'Bybit',
+        'okx': 'OKX',
+        'kucoin': 'KuCoin',
+        'gate': 'Gate',
+        'mexc': 'MEXC'
+      };
+      
+      const enabledConfigs = enabledExchanges
+        .map(name => {
+          const normalizedName = exchangeNameMap[name.toLowerCase()] || name.charAt(0).toUpperCase() + name.slice(1);
+          return {
+            name: normalizedName,
+            config: API_CONFIG[normalizedName]
+          };
+        })
+        .filter(({ config }) => config);
+
+      console.log(`Fetching data from ${enabledConfigs.length} exchanges concurrently`);
+
+      const fetchPromises = enabledConfigs.map(async ({ name, config }) => {
+        const startTime = Date.now();
+        try {
+          const result = await fetchExchangeData(name, config);
+          const fetchTime = Date.now() - startTime;
+          console.log(`${name} fetch completed in ${fetchTime}ms`);
+          
+          if (result.error) throw new Error(result.error);
+          return { name, data: result.data, fetchTime };
+        } catch (error) {
+          console.error(`Failed to fetch ${name}:`, error);
+          throw error;
+        }
+      });
+
+      const fetchResults = await Promise.allSettled(fetchPromises);
+
+      let allPriceData: Record<string, any> = {};
+      let successfulFetches = 0;
+      let failedFetches = 0;
+
+      fetchResults.forEach((result, index) => {
+        const exchangeName = enabledConfigs[index].name;
+        
+        if (result.status === 'fulfilled') {
+          const normalizedData = normalizeExchangeData(exchangeName, result.value.data);
+          Object.assign(allPriceData, normalizedData);
+          successfulFetches++;
+          console.log(`${exchangeName}: Normalized ${Object.keys(normalizedData).length} symbols`);
+        } else {
+          failedFetches++;
+          console.error(`${exchangeName} failed:`, result.reason);
+        }
+      });
+
+      console.log(`Data fetch completed: ${successfulFetches} successful, ${failedFetches} failed`);
+
+      if (Object.keys(allPriceData).length === 0) {
+        throw new Error('No price data available from any exchange');
+      }
+
+      let opportunities: any[] = [];
+      const quoteCurrencies = ['USDT', 'BNB'];
+      const detectShortSignals = arbitrageTypes.includes('short_signal');
+      
+      for (const quoteCurrency of quoteCurrencies) {
+        if (arbitrageTypes.includes('triangular')) {
+          const triangularOpps = findTriangularArbitrage(allPriceData, quoteCurrency, tradeAmount, minProfitPercent, filterProfitable, customPairs, detectShortSignals);
+          triangularOpps.forEach(opp => opp.type = 'triangular');
+          opportunities.push(...triangularOpps);
+        }
+        
+        if (arbitrageTypes.includes('cross_exchange')) {
+          const crossExchangeOpps = findCrossExchangeArbitrage(allPriceData, quoteCurrency, tradeAmount, minProfitPercent, filterProfitable, customPairs, detectShortSignals);
+          crossExchangeOpps.forEach(opp => opp.type = 'cross_exchange');
+          opportunities.push(...crossExchangeOpps);
+        }
+      }
+
+      // Deduplicate opportunities
+      const uniqueOpportunities = new Map();
+      opportunities.forEach(opp => {
+        const key = `${opp.exchange1}_${opp.exchange2}_${opp.exchange3}_${opp.base_symbol}_${opp.intermediate_symbol}_${opp.quote_symbol}_${opp.step1_action}_${opp.step2_action}_${opp.step3_action}`;
+        if (!uniqueOpportunities.has(key) || Math.abs(opp.profit_percent) > Math.abs(uniqueOpportunities.get(key).profit_percent)) {
+          uniqueOpportunities.set(key, opp);
+        }
+      });
+      
+      opportunities = Array.from(uniqueOpportunities.values());
+
+      // Save opportunities to database
+      if (opportunities.length > 0) {
+        const opportunityInserts = opportunities.map(opp => ({
+          user_id: user.id,
+          base_symbol: opp.base_symbol,
+          quote_symbol: opp.quote_symbol,
+          intermediate_symbol: opp.intermediate_symbol,
+          exchange1: opp.exchange1,
+          exchange2: opp.exchange2,
+          exchange3: opp.exchange3,
+          step1_action: opp.step1_action,
+          step1_price: opp.step1_price,
+          step1_amount: opp.step1_amount,
+          step2_action: opp.step2_action,
+          step2_price: opp.step2_price,
+          step2_amount: opp.step2_amount,
+          step3_action: opp.step3_action,
+          step3_price: opp.step3_price,
+          step3_amount: opp.step3_amount,
+          start_amount: opp.start_amount,
+          end_amount: opp.end_amount,
+          profit_amount: opp.profit_amount,
+          profit_percent: opp.profit_percent,
+          type: opp.type || 'triangular'
+        }));
+
+        try {
+          const { data: insertData, error: insertError } = await supabase
+            .from('arbitrage_opportunities')
+            .insert(opportunityInserts);
+
+          if (insertError) {
+            console.error('Error saving opportunities:', insertError);
+          } else {
+            console.log(`Successfully saved ${opportunities.length} opportunities to database`);
+          }
+        } catch (error) {
+          console.error('Database insert failed:', error);
+        }
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        data: opportunities,
+        opportunities_count: opportunities.length,
+        exchanges_successful: successfulFetches,
+        exchanges_failed: failedFetches
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
 
     // Auto mode: scan for all users with auto_trade enabled
     if (mode === 'auto') {
