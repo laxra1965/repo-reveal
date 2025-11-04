@@ -93,9 +93,17 @@ export const ArbitrageScanner = () => {
 
     toast({
       title: "Scanner Started",
-      description: "Arbitrage scanner is now monitoring opportunities",
+      description: "Arbitrage scanner is now monitoring opportunities continuously",
     });
   }, [user, hasActiveSubscription]);
+
+  // Auto-start scanning when component mounts if user has active subscription
+  useEffect(() => {
+    if (user && hasActiveSubscription && !isScanning && !subscriptionLoading) {
+      console.log('Auto-starting scanner...');
+      startScanning();
+    }
+  }, [user, hasActiveSubscription, subscriptionLoading]);
 
   const stopScanning = useCallback(() => {
     setIsScanning(false);
