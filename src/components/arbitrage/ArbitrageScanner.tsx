@@ -84,10 +84,10 @@ export const ArbitrageScanner = () => {
     // Perform initial scan
     await performScan();
 
-    // Set up recurring scans every 60 seconds (60000 ms)
+    // Set up recurring scans every 20 seconds (20000 ms)
     const interval = setInterval(async () => {
       await performScan();
-    }, 60000);
+    }, 20000);
 
     setScanInterval(interval);
 
