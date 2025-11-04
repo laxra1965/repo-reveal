@@ -99,11 +99,15 @@ export const ArbitrageScanner = () => {
 
   // Auto-start scanning when component mounts if user has active subscription
   useEffect(() => {
-    if (user && hasActiveSubscription && !isScanning && !subscriptionLoading) {
+    if (user && hasActiveSubscription && !isScanning && !subscriptionLoading && !scanInterval) {
       console.log('Auto-starting scanner...');
-      startScanning();
+      // Small delay to ensure everything is initialized
+      const timer = setTimeout(() => {
+        startScanning();
+      }, 1000);
+      return () => clearTimeout(timer);
     }
-  }, [user, hasActiveSubscription, subscriptionLoading]);
+  }, [user, hasActiveSubscription, subscriptionLoading, isScanning, scanInterval, startScanning]);
 
   const stopScanning = useCallback(() => {
     setIsScanning(false);
