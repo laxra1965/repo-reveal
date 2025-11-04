@@ -48,7 +48,7 @@ export type Database = {
           step3_price: number
           step3_volume: number | null
           type: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           arb_factor?: number | null
@@ -83,7 +83,7 @@ export type Database = {
           step3_price: number
           step3_volume?: number | null
           type?: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           arb_factor?: number | null
@@ -118,7 +118,7 @@ export type Database = {
           step3_price?: number
           step3_volume?: number | null
           type?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: []
       }
