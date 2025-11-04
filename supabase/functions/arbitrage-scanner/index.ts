@@ -949,10 +949,9 @@ serve(async (req) => {
       
       opportunities = Array.from(uniqueOpportunities.values());
 
-      // Save opportunities to database
+      // Save opportunities to database (shared across all users)
       if (opportunities.length > 0) {
         const opportunityInserts = opportunities.map(opp => ({
-          user_id: user.id,
           base_symbol: opp.base_symbol,
           quote_symbol: opp.quote_symbol,
           intermediate_symbol: opp.intermediate_symbol,

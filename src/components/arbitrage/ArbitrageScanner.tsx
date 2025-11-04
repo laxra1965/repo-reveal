@@ -110,17 +110,20 @@ export const ArbitrageScanner = () => {
   }, [user, hasActiveSubscription, subscriptionLoading, isScanning, scanInterval, startScanning]);
 
   const stopScanning = useCallback(() => {
+    console.log('Stopping scanner...', { scanInterval });
     setIsScanning(false);
+    
     if (scanInterval) {
       clearInterval(scanInterval);
       setScanInterval(null);
+      console.log('Interval cleared');
     }
 
     toast({
       title: "Scanner Stopped",
       description: "Arbitrage scanner has been stopped",
     });
-  }, [scanInterval]);
+  }, [scanInterval, toast]);
 
   // performScan: calls the edge function, filters by threshold, saves qualifying opportunities to Supabase
   const performScan = async () => {
@@ -143,10 +146,8 @@ export const ArbitrageScanner = () => {
       const toInsert = scannerResults
         .filter(r => typeof r.profit_percent === 'number' && r.profit_percent >= threshold)
         .map(r => ({
-          // Do not assign client-side UUIDs; prefer server-provided ids.
-          // Include user ownership and timestamps.
+          // Exclude user_id - opportunities are shared across all users
           ...r,
-          user_id: user.id,
           detected_at: r.detected_at || now.toISOString(),
           expires_at: r.expires_at || new Date(now.getTime() + 60_000).toISOString(),
         }));
@@ -155,7 +156,7 @@ export const ArbitrageScanner = () => {
         const { data: insertData, error: insertError } = await supabase
           .from('arbitrage_opportunities')
           .upsert(toInsert, {
-            onConflict: 'user_id,exchange1,exchange2,exchange3,base_symbol,quote_symbol,intermediate_symbol,type',
+            onConflict: 'exchange1,exchange2,exchange3,base_symbol,quote_symbol,intermediate_symbol,type',
             ignoreDuplicates: false
           });
 
@@ -171,11 +172,10 @@ export const ArbitrageScanner = () => {
         }
       }
 
-      // Fetch updated opportunities from database (top 10)
+      // Fetch updated opportunities from database (top 10) - shared across all users
       const { data: freshOpportunities, error: fetchError } = await supabase
         .from('arbitrage_opportunities')
         .select('*')
-        .eq('user_id', user.id)
         .gt('expires_at', new Date().toISOString())
         .order('profit_percent', { ascending: false })
         .limit(10);
@@ -209,13 +209,13 @@ export const ArbitrageScanner = () => {
       });
     };
 
+    // Listen to all opportunities (shared across all users)
     const channel = supabase
       .channel('schema-db-changes')
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
-        table: 'arbitrage_opportunities',
-        filter: `user_id=eq.${user.id}`
+        table: 'arbitrage_opportunities'
       }, handleOpportunityUpdate)
       .subscribe();
 
@@ -248,16 +248,15 @@ export const ArbitrageScanner = () => {
             console.log(`Received ${data.data.length} real-time arbitrage opportunities`);
 
             // Map through incoming opportunities and show them temporarily in UI
-            const userOpportunities = data.data.map((opp: any) => ({
+            const formattedOpportunities = data.data.map((opp: any) => ({
               ...opp,
-              user_id: user.id,
               detected_at: opp.detected_at || new Date().toISOString(),
               expires_at: opp.expires_at || new Date(Date.now() + 30000).toISOString()
             }));
 
             // Merge into state (UI only). DB persistence is handled by performScan (every 60s).
             setOpportunities(prev => {
-              const combined = [...userOpportunities, ...prev];
+              const combined = [...formattedOpportunities, ...prev];
               return combined.slice(0, 20); // Keep last 20
             });
           } else if (data.type === 'price_update') {
