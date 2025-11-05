@@ -425,7 +425,6 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
                 end_amount: step3Amount,
                 profit_amount: profit,
                 profit_percent: profitPercent,
-                trading_path: tradingPath,
                 // Enhanced fields
                 step1_volume: tradeAmount,
                 step2_volume: step1Amount * pair1.askPrice,
@@ -540,7 +539,6 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
                 end_amount: step3Amount,
                 profit_amount: profit,
                 profit_percent: profitPercent,
-                trading_path: tradingPath,
                 // Enhanced fields
                 step1_volume: tradeAmount,
                 step2_volume: step1Amount * pair2.askPrice,
@@ -681,7 +679,6 @@ function findCrossExchangeArbitrage(priceMap: Record<string, any>, quoteCurrency
                 end_amount: sellAmount,
                 profit_amount: profit,
                 profit_percent: profitPercent,
-                trading_path: `[CROSS-EXCHANGE] Buy ${base} on ${exchange1.exchange.toUpperCase()} @ ${buyPrice.toFixed(8)} → Sell on ${exchange2.exchange.toUpperCase()} @ ${sellPrice.toFixed(8)}`,
                 step1_volume: tradeAmount,
                 step2_volume: tradeAmount,
                 step3_volume: sellAmount,
@@ -750,7 +747,6 @@ function findCrossExchangeArbitrage(priceMap: Record<string, any>, quoteCurrency
                 end_amount: sellAmount2,
                 profit_amount: profit2,
                 profit_percent: profitPercent2,
-                trading_path: `[CROSS-EXCHANGE] Buy ${base} on ${exchange2.exchange.toUpperCase()} @ ${buyPrice2.toFixed(8)} → Sell on ${exchange1.exchange.toUpperCase()} @ ${sellPrice2.toFixed(8)}`,
                 step1_volume: tradeAmount,
                 step2_volume: tradeAmount,
                 step3_volume: sellAmount2,
