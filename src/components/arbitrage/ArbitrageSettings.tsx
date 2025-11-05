@@ -196,7 +196,9 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
 
           const { error: credError } = await supabase
             .from('exchange_credentials')
-            .upsert(credentialData);
+            .upsert(credentialData, { 
+              onConflict: 'user_id,exchange'
+            });
 
           if (credError) {
             console.error(`Error saving ${exchange} credentials:`, credError);

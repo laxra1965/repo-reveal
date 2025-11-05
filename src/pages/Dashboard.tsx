@@ -3,6 +3,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { ArbitrageScanner } from '@/components/arbitrage/ArbitrageScanner';
+import { StatisticsDashboard } from '@/components/dashboard/StatisticsDashboard';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -109,6 +110,7 @@ const Dashboard = () => {
       </header>
       
       <main className="container mx-auto px-4 py-8 space-y-6">
+        <StatisticsDashboard />
         <ExchangeBalanceCard />
         <ArbitrageScanner />
       </main>
