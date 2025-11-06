@@ -971,6 +971,14 @@ serve(async (req) => {
         }));
 
         try {
+          // Delete existing similar opportunities from the last 5 minutes to prevent duplicates
+          const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+          await supabase
+            .from('arbitrage_opportunities')
+            .delete()
+            .eq('user_id', user.id)
+            .gte('detected_at', fiveMinutesAgo);
+
           const { data: insertData, error: insertError } = await supabase
             .from('arbitrage_opportunities')
             .insert(opportunityInserts);
@@ -1124,6 +1132,14 @@ serve(async (req) => {
 
           // Save opportunities to database
           if (opportunities.length > 0) {
+            // Delete existing similar opportunities from the last 5 minutes to prevent duplicates
+            const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+            await supabase
+              .from('arbitrage_opportunities')
+              .delete()
+              .eq('user_id', userSettings.user_id)
+              .gte('detected_at', fiveMinutesAgo);
+
             const oppsWithUserId = opportunities.map(opp => ({
               ...opp,
               user_id: userSettings.user_id
@@ -1261,6 +1277,14 @@ serve(async (req) => {
 
     // Save to database
     if (opportunities.length > 0) {
+      // Delete existing similar opportunities from the last 5 minutes to prevent duplicates
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      await supabase
+        .from('arbitrage_opportunities')
+        .delete()
+        .eq('user_id', userId)
+        .gte('detected_at', fiveMinutesAgo);
+
       const oppsWithUserId = opportunities.map(opp => ({
         ...opp,
         user_id: userId
