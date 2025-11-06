@@ -6,7 +6,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AdminTransactionList } from '@/components/admin/AdminTransactionList';
 import { AdminSubscriptionList } from '@/components/admin/AdminSubscriptionList';
 import { AdminUsersList } from '@/components/admin/AdminUsersList';
-import { ArrowLeft, Settings, CreditCard, Users, Shield, UserCog } from 'lucide-react';
+import { AdminSystemMaintenance } from '@/components/admin/AdminSystemMaintenance';
+import { ArrowLeft, Settings, CreditCard, Users, Shield, UserCog, Wrench } from 'lucide-react';
 
 const ADMIN_EMAILS = ['laxracorp@gmail.com', 'admin@arbitrage.com'];
 
@@ -82,7 +83,7 @@ const Admin = () => {
       
       <main className="container mx-auto px-4 py-8">
         <Tabs defaultValue="users" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="users" className="flex items-center gap-2">
               <UserCog className="h-4 w-4" />
               All Users
@@ -94,6 +95,10 @@ const Admin = () => {
             <TabsTrigger value="transactions" className="flex items-center gap-2">
               <CreditCard className="h-4 w-4" />
               Transactions
+            </TabsTrigger>
+            <TabsTrigger value="maintenance" className="flex items-center gap-2">
+              <Wrench className="h-4 w-4" />
+              Maintenance
             </TabsTrigger>
           </TabsList>
           
@@ -107,6 +112,10 @@ const Admin = () => {
           
           <TabsContent value="transactions">
             <AdminTransactionList />
+          </TabsContent>
+          
+          <TabsContent value="maintenance">
+            <AdminSystemMaintenance />
           </TabsContent>
         </Tabs>
       </main>
