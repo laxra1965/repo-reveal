@@ -194,11 +194,29 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
             is_connected: true
           };
 
-          const { error: credError } = await supabase
+          // First try to find existing credential
+          const { data: existing } = await supabase
             .from('exchange_credentials')
-            .upsert(credentialData, { 
-              onConflict: 'user_id,exchange'
-            });
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('exchange', exchange)
+            .single();
+
+          let credError;
+          if (existing) {
+            // Update existing
+            const { error } = await supabase
+              .from('exchange_credentials')
+              .update(credentialData)
+              .eq('id', existing.id);
+            credError = error;
+          } else {
+            // Insert new
+            const { error } = await supabase
+              .from('exchange_credentials')
+              .insert(credentialData);
+            credError = error;
+          }
 
           if (credError) {
             console.error(`Error saving ${exchange} credentials:`, credError);

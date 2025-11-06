@@ -10,6 +10,7 @@ import { ThemeToggle } from '@/components/theme/ThemeToggle';
 
 export const AuthForm = () => {
   const [isLogin, setIsLogin] = useState(true);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -19,10 +20,19 @@ export const AuthForm = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!email || !password) {
+    if (!email) {
       toast({
         title: "Error",
-        description: "Please fill in all fields",
+        description: "Please enter your email",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!isForgotPassword && !password) {
+      toast({
+        title: "Error",
+        description: "Please enter your password",
         variant: "destructive",
       });
       return;
@@ -31,7 +41,25 @@ export const AuthForm = () => {
     try {
       setLoading(true);
       
-      if (isLogin) {
+      if (isForgotPassword) {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/auth`,
+        });
+        
+        if (error) {
+          toast({
+            title: "Error",
+            description: error.message,
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Success",
+            description: "Password reset link sent to your email",
+          });
+          setIsForgotPassword(false);
+        }
+      } else if (isLogin) {
         const { error } = await supabase.auth.signInWithPassword({
           email,
           password,
@@ -92,12 +120,15 @@ export const AuthForm = () => {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">
-            {isLogin ? 'Welcome Back' : 'Create Account'}
+            {isForgotPassword ? 'Reset Password' : (isLogin ? 'Welcome Back' : 'Create Account')}
           </CardTitle>
           <CardDescription>
-            {isLogin 
-              ? 'Sign in to your account to continue' 
-              : 'Create a new account to get started'
+            {isForgotPassword 
+              ? 'Enter your email to receive a password reset link'
+              : (isLogin 
+                ? 'Sign in to your account to continue' 
+                : 'Create a new account to get started'
+              )
             }
           </CardDescription>
         </CardHeader>
@@ -114,17 +145,19 @@ export const AuthForm = () => {
                 required
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
+            {!isForgotPassword && (
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </div>
+            )}
             <Button
               type="submit"
               disabled={loading}
@@ -132,23 +165,45 @@ export const AuthForm = () => {
               size="lg"
             >
               {loading 
-                ? (isLogin ? "Signing in..." : "Creating account...") 
-                : (isLogin ? "Sign In" : "Create Account")
+                ? (isForgotPassword ? "Sending..." : (isLogin ? "Signing in..." : "Creating account..."))
+                : (isForgotPassword ? "Send Reset Link" : (isLogin ? "Sign In" : "Create Account"))
               }
             </Button>
           </form>
           
           <div className="mt-4 text-center space-y-2">
-            <button
-              type="button"
-              onClick={() => setIsLogin(!isLogin)}
-              className="text-sm text-primary hover:underline"
-            >
-              {isLogin 
-                ? "Don't have an account? Sign up" 
-                : "Already have an account? Sign in"
-              }
-            </button>
+            {!isForgotPassword && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setIsLogin(!isLogin)}
+                  className="text-sm text-primary hover:underline block"
+                >
+                  {isLogin 
+                    ? "Don't have an account? Sign up" 
+                    : "Already have an account? Sign in"
+                  }
+                </button>
+                {isLogin && (
+                  <button
+                    type="button"
+                    onClick={() => setIsForgotPassword(true)}
+                    className="text-sm text-muted-foreground hover:text-primary hover:underline block"
+                  >
+                    Forgot your password?
+                  </button>
+                )}
+              </>
+            )}
+            {isForgotPassword && (
+              <button
+                type="button"
+                onClick={() => setIsForgotPassword(false)}
+                className="text-sm text-primary hover:underline block"
+              >
+                Back to sign in
+              </button>
+            )}
             <div>
               <Button 
                 variant="ghost" 

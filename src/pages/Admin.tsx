@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AdminTransactionList } from '@/components/admin/AdminTransactionList';
 import { AdminSubscriptionList } from '@/components/admin/AdminSubscriptionList';
-import { ArrowLeft, Settings, CreditCard, Users, Shield } from 'lucide-react';
+import { AdminUsersList } from '@/components/admin/AdminUsersList';
+import { ArrowLeft, Settings, CreditCard, Users, Shield, UserCog } from 'lucide-react';
 
 const ADMIN_EMAILS = ['laxracorp@gmail.com', 'admin@arbitrage.com'];
 
@@ -80,8 +81,12 @@ const Admin = () => {
       </header>
       
       <main className="container mx-auto px-4 py-8">
-        <Tabs defaultValue="subscriptions" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
+        <Tabs defaultValue="users" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="users" className="flex items-center gap-2">
+              <UserCog className="h-4 w-4" />
+              All Users
+            </TabsTrigger>
             <TabsTrigger value="subscriptions" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
               Subscription Requests
@@ -91,6 +96,10 @@ const Admin = () => {
               Transactions
             </TabsTrigger>
           </TabsList>
+          
+          <TabsContent value="users">
+            <AdminUsersList />
+          </TabsContent>
           
           <TabsContent value="subscriptions">
             <AdminSubscriptionList />
