@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
 import { supabase } from '@/integrations/supabase/client';
@@ -36,19 +36,33 @@ interface Opportunity {
   detected_at: string;
   expires_at: string;
   type?: string;
+  signal_type?: 'arbitrage' | 'short' | 'none';
+  arb_factor?: number;
+  overpriced_leg?: string | null;
+  price_deviation?: number | null;
+  liquidity_score?: number;
+  estimated_slippage?: number;
 }
 
 export const ArbitrageScanner = () => {
   const { user } = useAuth();
   const { hasActiveSubscription, subscription, loading: subscriptionLoading } = useSubscription();
   const { toast } = useToast();
+  
   const [isScanning, setIsScanning] = useState(false);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [showSettings, setShowSettings] = useState(false);
-  const [scanInterval, setScanInterval] = useState<NodeJS.Timeout | null>(null);
   const [lastScanTime, setLastScanTime] = useState<Date | null>(null);
   const [scanCount, setScanCount] = useState(0);
   const [arbitrageMode, setArbitrageMode] = useState<string[]>([]);
+  
+  // Use refs to prevent stale closures
+  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isScanningRef = useRef(false);
+  const mountedRef = useRef(true);
+  
+  // Debounce settings for auto-start
+  const autoStartTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Fetch user settings on mount
   useEffect(() => {
@@ -69,6 +83,74 @@ export const ArbitrageScanner = () => {
     fetchSettings();
   }, [user]);
 
+  // Memoized sort for opportunities
+  const sortedOpportunities = useMemo(() => {
+    return [...opportunities].sort((a, b) => 
+      Math.abs(b.profit_percent) - Math.abs(a.profit_percent)
+    );
+  }, [opportunities]);
+
+  // Optimized scan function with error handling
+  const performScan = useCallback(async () => {
+    if (!user || !hasActiveSubscription || !mountedRef.current) return;
+
+    // Prevent concurrent scans
+    if (isScanningRef.current) {
+      console.log('Scan already in progress, skipping...');
+      return;
+    }
+
+    isScanningRef.current = true;
+
+    try {
+      const { data, error } = await supabase.functions.invoke('arbitrage-scanner', {
+        body: { action: 'scan' }
+      });
+
+      if (error) throw error;
+
+      // Only update if component is still mounted
+      if (!mountedRef.current) return;
+
+      const scannerResults: any[] = (data && data.data) || [];
+
+      // Apply client-side filtering for immediate feedback
+      const threshold = 0.1; // 0.1% minimum
+      const filteredResults = scannerResults.filter(r => 
+        typeof r.profit_percent === 'number' && Math.abs(r.profit_percent) >= threshold
+      );
+
+      // Fetch latest from database (includes shared opportunities)
+      const { data: freshOpportunities, error: fetchError } = await supabase
+        .from('arbitrage_opportunities')
+        .select('*')
+        .gt('expires_at', new Date().toISOString())
+        .order('profit_percent', { ascending: false })
+        .limit(20); // Increased to 20 for better coverage
+
+      if (fetchError) throw fetchError;
+
+      if (mountedRef.current) {
+        setOpportunities(freshOpportunities || []);
+        setLastScanTime(new Date());
+        setScanCount(prev => prev + 1);
+      }
+
+    } catch (error: any) {
+      console.error('Scan error:', error);
+      if (mountedRef.current) {
+        toast({
+          title: "Scan Error",
+          description: error.message || "Failed to perform arbitrage scan",
+          variant: "destructive",
+        });
+      }
+    } finally {
+      isScanningRef.current = false;
+    }
+  }, [user, hasActiveSubscription, toast]);
+
+  // Start scanning with proper cleanup
   const startScanning = useCallback(async () => {
     if (!user || !hasActiveSubscription) {
       toast({
@@ -81,142 +163,89 @@ export const ArbitrageScanner = () => {
 
     setIsScanning(true);
 
-    // Perform initial scan
+    // Initial scan
     await performScan();
 
-    // Set up recurring scans every 20 seconds (20000 ms)
-    const interval = setInterval(async () => {
-      await performScan();
-    }, 20000);
+    // Clear any existing interval
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+    }
 
-    setScanInterval(interval);
+    // Set up recurring scans every 20 seconds
+    scanIntervalRef.current = setInterval(async () => {
+      if (mountedRef.current) {
+        await performScan();
+      }
+    }, 20000);
 
     toast({
       title: "Scanner Started",
-      description: "Arbitrage scanner is now monitoring opportunities continuously",
+      description: "Arbitrage scanner is now monitoring opportunities",
     });
-  }, [user, hasActiveSubscription]);
+  }, [user, hasActiveSubscription, performScan, toast]);
 
-  // Auto-start scanning when component mounts if user has active subscription
-  useEffect(() => {
-    if (user && hasActiveSubscription && !isScanning && !subscriptionLoading && !scanInterval) {
-      console.log('Auto-starting scanner...');
-      // Small delay to ensure everything is initialized
-      const timer = setTimeout(() => {
-        startScanning();
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [user, hasActiveSubscription, subscriptionLoading, isScanning, scanInterval, startScanning]);
-
+  // Stop scanning with proper cleanup
   const stopScanning = useCallback(() => {
-    console.log('Stopping scanner...', { scanInterval });
+    console.log('Stopping scanner...');
     setIsScanning(false);
     
-    if (scanInterval) {
-      clearInterval(scanInterval);
-      setScanInterval(null);
-      console.log('Interval cleared');
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
     }
 
     toast({
       title: "Scanner Stopped",
       description: "Arbitrage scanner has been stopped",
     });
-  }, [scanInterval, toast]);
+  }, [toast]);
 
-  // performScan: calls the edge function, filters by threshold, saves qualifying opportunities to Supabase
-  const performScan = async () => {
-    if (!user) return;
-
-    try {
-      const { data, error } = await supabase.functions.invoke('arbitrage-scanner', {
-        body: { action: 'scan' }
-      });
-
-      if (error) throw error;
-
-      // scanner results (expected to be an array of opportunity objects)
-      const scannerResults: any[] = (data && data.data) || [];
-
-      // Apply threshold: only store opportunities with profit_percent >= 1%
-      const threshold = 1; // percent
-      const now = new Date();
-
-      const toInsert = scannerResults
-        .filter(r => typeof r.profit_percent === 'number' && r.profit_percent >= threshold)
-        .map(r => ({
-          // Exclude user_id - opportunities are shared across all users
-          ...r,
-          detected_at: r.detected_at || now.toISOString(),
-          expires_at: r.expires_at || new Date(now.getTime() + 60_000).toISOString(),
-        }));
-
-      if (toInsert.length > 0) {
-        const { data: insertData, error: insertError } = await supabase
-          .from('arbitrage_opportunities')
-          .upsert(toInsert, {
-            onConflict: 'exchange1,exchange2,exchange3,base_symbol,quote_symbol,intermediate_symbol,type',
-            ignoreDuplicates: false
-          });
-
-        if (insertError) {
-          console.error('Insert error:', insertError);
-          toast({
-            title: 'DB Insert Error',
-            description: insertError.message || 'Failed to save opportunities',
-            variant: 'destructive',
-          });
-        } else {
-          console.log(`Saved ${toInsert.length} opportunities to DB`);
-        }
+  // Auto-start with debounce (delayed to prevent overwhelming server)
+  useEffect(() => {
+    if (user && hasActiveSubscription && !subscriptionLoading && !isScanning) {
+      // Clear any pending auto-start
+      if (autoStartTimeoutRef.current) {
+        clearTimeout(autoStartTimeoutRef.current);
       }
 
-      // Fetch updated opportunities from database (top 10) - shared across all users
-      const { data: freshOpportunities, error: fetchError } = await supabase
-        .from('arbitrage_opportunities')
-        .select('*')
-        .gt('expires_at', new Date().toISOString())
-        .order('profit_percent', { ascending: false })
-        .limit(10);
-
-      if (fetchError) throw fetchError;
-
-      setOpportunities(freshOpportunities || []);
-      setLastScanTime(new Date());
-      setScanCount(prev => prev + 1);
-
-    } catch (error: any) {
-      console.error('Scan error:', error);
-      toast({
-        title: "Scan Error",
-        description: error.message || "Failed to perform arbitrage scan",
-        variant: "destructive",
-      });
+      // Debounce auto-start by 2 seconds
+      autoStartTimeoutRef.current = setTimeout(() => {
+        if (mountedRef.current && !isScanning) {
+          console.log('Auto-starting scanner...');
+          startScanning();
+        }
+      }, 2000);
     }
-  };
 
-  // Set up real-time updates from Postgres for the user's opportunities
+    return () => {
+      if (autoStartTimeoutRef.current) {
+        clearTimeout(autoStartTimeoutRef.current);
+      }
+    };
+  }, [user, hasActiveSubscription, subscriptionLoading, isScanning, startScanning]);
+
+  // Real-time subscription for new opportunities
   useEffect(() => {
     if (!user) return;
 
-    const handleOpportunityUpdate = (payload: any) => {
-      const newOpportunity = payload.new as Opportunity;
-      setOpportunities(prev => {
-        // Remove duplicates and add new opportunity
-        const filtered = prev.filter(op => op.id !== newOpportunity.id);
-        return [newOpportunity, ...filtered].slice(0, 20); // Keep last 20
-      });
-    };
-
-    // Listen to all opportunities (shared across all users)
     const channel = supabase
-      .channel('schema-db-changes')
+      .channel('arbitrage-opportunities-realtime')
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
         table: 'arbitrage_opportunities'
-      }, handleOpportunityUpdate)
+      }, (payload) => {
+        if (mountedRef.current) {
+          const newOpportunity = payload.new as Opportunity;
+          setOpportunities(prev => {
+            // Remove duplicates and add new opportunity
+            const filtered = prev.filter(op => op.id !== newOpportunity.id);
+            return [newOpportunity, ...filtered]
+              .sort((a, b) => Math.abs(b.profit_percent) - Math.abs(a.profit_percent))
+              .slice(0, 20);
+          });
+        }
+      })
       .subscribe();
 
     return () => {
@@ -224,78 +253,22 @@ export const ArbitrageScanner = () => {
     };
   }, [user]);
 
-  // WebSocket connection for real-time Binance data
-  // We keep this for immediate UI updates but we no longer generate client-side UUIDs or persist directly from the socket.
-  useEffect(() => {
-    if (!user || !hasActiveSubscription) return;
-
-    let ws: WebSocket | null = null;
-
-    const connectWebSocket = () => {
-      console.log('Connecting to Binance WebSocket stream...');
-      ws = new WebSocket('wss://zupbliefzhnohsoguwuk.functions.supabase.co/binance-websocket');
-
-      ws.onopen = () => {
-        console.log('Connected to Binance WebSocket');
-        setLastScanTime(new Date());
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-
-          if (data.type === 'arbitrage_opportunities') {
-            console.log(`Received ${data.data.length} real-time arbitrage opportunities`);
-
-            // Map through incoming opportunities and show them temporarily in UI
-            const formattedOpportunities = data.data.map((opp: any) => ({
-              ...opp,
-              detected_at: opp.detected_at || new Date().toISOString(),
-              expires_at: opp.expires_at || new Date(Date.now() + 30000).toISOString()
-            }));
-
-            // Merge into state (UI only). DB persistence is handled by performScan (every 60s).
-            setOpportunities(prev => {
-              const combined = [...formattedOpportunities, ...prev];
-              return combined.slice(0, 20); // Keep last 20
-            });
-          } else if (data.type === 'price_update') {
-            console.log(`Received price update for ${data.data.length} BNB pairs`);
-            setLastScanTime(new Date());
-          }
-        } catch (error) {
-          console.error('Error processing WebSocket message:', error);
-        }
-      };
-
-      ws.onclose = () => {
-        console.log('WebSocket connection closed, reconnecting...');
-        setTimeout(connectWebSocket, 5000);
-      };
-
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-      };
-    };
-
-    connectWebSocket();
-
-    return () => {
-      if (ws) {
-        ws.close();
-      }
-    };
-  }, [user, hasActiveSubscription]);
-
   // Cleanup on unmount
   useEffect(() => {
+    mountedRef.current = true;
+
     return () => {
-      if (scanInterval) {
-        clearInterval(scanInterval);
+      mountedRef.current = false;
+      if (scanIntervalRef.current) {
+        clearInterval(scanIntervalRef.current);
+      }
+      if (autoStartTimeoutRef.current) {
+        clearTimeout(autoStartTimeoutRef.current);
       }
     };
-  }, [scanInterval]);
+  }, []);
 
+  // Subscription gate
   if (!user) {
     return (
       <Card className="max-w-md mx-auto">
@@ -306,7 +279,6 @@ export const ArbitrageScanner = () => {
     );
   }
 
-  // Show subscription gate if no active subscription
   if (!subscriptionLoading && !hasActiveSubscription) {
     return (
       <div className="space-y-6">
@@ -336,7 +308,6 @@ export const ArbitrageScanner = () => {
             </div>
           </CardContent>
         </Card>
-
         <PlansSection />
       </div>
     );
@@ -388,7 +359,7 @@ export const ArbitrageScanner = () => {
                 {isScanning ? "Scanning" : "Stopped"}
               </Badge></span>
               <span>Scans: {scanCount}</span>
-              <span>Opportunities: {opportunities.length}</span>
+              <span>Opportunities: {sortedOpportunities.length}</span>
               <span>Mode: <Badge variant="outline">
                 {arbitrageMode.length === 0 ? 'Loading...' : 
                  (() => {
@@ -409,7 +380,7 @@ export const ArbitrageScanner = () => {
 
       {/* Opportunities */}
       <div className="grid gap-4">
-        {opportunities.length === 0 && isScanning && (
+        {sortedOpportunities.length === 0 && isScanning && (
           <Card>
             <CardContent className="pt-6 text-center">
               <div className="animate-pulse">
@@ -419,7 +390,7 @@ export const ArbitrageScanner = () => {
           </Card>
         )}
 
-        {opportunities.length === 0 && !isScanning && (
+        {sortedOpportunities.length === 0 && !isScanning && (
           <Card>
             <CardContent className="pt-6 text-center">
               <p className="text-muted-foreground">
@@ -429,7 +400,7 @@ export const ArbitrageScanner = () => {
           </Card>
         )}
 
-        {opportunities.map((opportunity, index) => (
+        {sortedOpportunities.map((opportunity, index) => (
           <ArbitrageOpportunityCard 
             key={opportunity.id} 
             opportunity={opportunity}
