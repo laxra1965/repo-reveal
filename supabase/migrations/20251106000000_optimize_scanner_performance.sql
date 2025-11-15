@@ -302,8 +302,35 @@ SELECT
   (SELECT pg_size_pretty(pg_total_relation_size('public.arbitrage_opportunities'))) as opportunities_table_size,
   (SELECT pg_size_pretty(pg_database_size(current_database()))) as total_database_size;
 
--- Grant access to monitoring view
-GRANT SELECT ON public.scanner_health_metrics TO authenticated;
+-- Create function wrapper for health metrics (bypasses RLS)
+CREATE OR REPLACE FUNCTION public.get_scanner_health_metrics()
+RETURNS TABLE (
+  active_opportunities BIGINT,
+  expired_opportunities BIGINT,
+  auto_trade_users BIGINT,
+  logs_last_hour BIGINT,
+  trades_in_progress BIGINT,
+  last_opportunity_detected TIMESTAMP WITH TIME ZONE,
+  opportunities_table_size TEXT,
+  total_database_size TEXT
+)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = ''
+AS $
+  SELECT 
+    (SELECT COUNT(*) FROM public.arbitrage_opportunities WHERE expires_at > now()),
+    (SELECT COUNT(*) FROM public.arbitrage_opportunities WHERE expires_at < now()),
+    (SELECT COUNT(*) FROM public.user_settings WHERE auto_trade = true),
+    (SELECT COUNT(*) FROM public.scanner_logs WHERE created_at > now() - interval '1 hour'),
+    (SELECT COUNT(*) FROM public.trade_history WHERE status = 'executing'),
+    (SELECT MAX(detected_at) FROM public.arbitrage_opportunities),
+    (SELECT pg_size_pretty(pg_total_relation_size('public.arbitrage_opportunities'))),
+    (SELECT pg_size_pretty(pg_database_size(current_database())));
+$;
+
+-- Grant execute permission
+GRANT EXECUTE ON FUNCTION public.get_scanner_health_metrics() TO authenticated;
 
 -- ============================================================================
 -- 10. ADD COMMENTS FOR DOCUMENTATION
