@@ -33,6 +33,7 @@ interface Opportunity {
   arb_factor?: number;
   overpriced_leg?: string | null;
   price_deviation?: number | null;
+  quality_score?: number; // Added for the quality score badge
 }
 
 interface ArbitrageOpportunityCardProps {
@@ -91,10 +92,10 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
     if (timeLeft < 30) return <Clock className="h-4 w-4 text-yellow-500" />;
     return <Clock className="h-4 w-4 text-muted-foreground" />;
   };
-  
+
   const signalType = opportunity.signal_type || 'arbitrage';
   const arbFactor = opportunity.arb_factor || (opportunity.end_amount / opportunity.start_amount);
-  
+
   const getSignalBadge = () => {
     if (signalType === 'arbitrage') {
       return (
@@ -126,13 +127,25 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
         <div className="flex justify-between items-start">
           <div className="flex-1">
             {/* Rank and Title */}
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
               <Badge variant={getRankBadgeVariant()} className="flex items-center gap-1">
                 {getRankIcon()}
                 #{rank}
               </Badge>
               {rank === 1 && <Badge variant="default" className="bg-yellow-500 text-black">TOP</Badge>}
               {getSignalBadge()}
+              
+              {/* Quality Score Badge */}
+              {opportunity.quality_score && opportunity.quality_score >= 50 && (
+                <Badge variant="default" className="bg-purple-500 text-white">
+                  ⭐ Premium Quality
+                </Badge>
+              )}
+              {opportunity.quality_score && opportunity.quality_score >= 35 && opportunity.quality_score < 50 && (
+                <Badge variant="outline" className="text-purple-600 border-purple-300">
+                  ✨ High Quality
+                </Badge>
+              )}
             </div>
             
             <CardTitle className="text-lg flex items-center gap-2">
