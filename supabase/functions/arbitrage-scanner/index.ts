@@ -17,33 +17,33 @@ const RETRY_DELAYS = [1000, 2000, 4000]; // Exponential backoff
 
 // Exchange API configurations with rate limiting
 const API_CONFIG: Record<string, ExchangeConfig> = {
-  Binance: { 
-    type: 'single', 
+  Binance: {
+    type: 'single',
     url: 'https://api.binance.com/api/v3/ticker/bookTicker',
     rateLimit: { requests: 10, window: 1000 } // 10 requests per second
   },
-  Bybit: { 
-    type: 'single', 
+  Bybit: {
+    type: 'single',
     url: 'https://api.bybit.com/v5/market/tickers?category=spot',
     rateLimit: { requests: 5, window: 1000 } // 5 requests per second
   },
-  OKX: { 
-    type: 'single', 
+  OKX: {
+    type: 'single',
     url: 'https://www.okx.com/api/v5/market/tickers?instType=SPOT',
     rateLimit: { requests: 20, window: 1000 } // 20 requests per second
   },
-  KuCoin: { 
-    type: 'single', 
+  KuCoin: {
+    type: 'single',
     url: 'https://api.kucoin.com/api/v1/market/allTickers',
     rateLimit: { requests: 3, window: 1000 } // 3 requests per second
   },
-  Gate: { 
-    type: 'single', 
+  Gate: {
+    type: 'single',
     url: 'https://api.gateio.ws/api/v4/spot/tickers',
     rateLimit: { requests: 5, window: 1000 } // 5 requests per second
   },
-  MEXC: { 
-    type: 'single', 
+  MEXC: {
+    type: 'single',
     url: 'https://api.mexc.com/api/v3/ticker/bookTicker',
     rateLimit: { requests: 10, window: 1000 } // 10 requests per second
   }
@@ -58,10 +58,10 @@ interface ExchangeConfig {
 // Symbol standardization function
 const standardizeSymbol = (symbol: string, exchangeName: string): string | null => {
   if (!symbol) return null;
-  
+
   let s = symbol.toUpperCase();
   s = s.replace(/[-_:\/\s]/g, '');
-  
+
   // Exchange-specific symbol standardization
   if (exchangeName === 'Kraken') {
     if (s.startsWith('XBT')) s = s.replace('XBT', 'BTC');
@@ -74,18 +74,18 @@ const standardizeSymbol = (symbol: string, exchangeName: string): string | null 
   } else if (exchangeName === 'Bitfinex') {
     if (s.startsWith('T')) s = s.substring(1);
   }
-  
+
   // Convert USD to USDT for consistency
   if (s.endsWith("USD") && !s.endsWith("USDT") && !s.endsWith("USDC")) {
     s = s.substring(0, s.length - 3) + "USDT";
   }
-  
+
   // Fix double USDT
   if (s.endsWith("USDTUSDT")) s = s.substring(0, s.length - 4);
-  
+
   // Fix EUR pairs
   if (s.endsWith("EURUSDT") && s.length > 7) s = s.replace("EURUSDT", "EUR");
-  
+
   return s;
 };
 
@@ -93,16 +93,16 @@ const standardizeSymbol = (symbol: string, exchangeName: string): string | null 
 function checkRateLimit(userId: string): boolean {
   const now = Date.now();
   const userLimit = userRequestCounts.get(userId);
-  
+
   if (!userLimit || now >= userLimit.resetTime) {
     userRequestCounts.set(userId, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
     return true;
   }
-  
+
   if (userLimit.count >= RATE_LIMIT_MAX_REQUESTS) {
     return false;
   }
-  
+
   userLimit.count++;
   return true;
 }
@@ -110,21 +110,21 @@ function checkRateLimit(userId: string): boolean {
 // Enhanced retry logic with exponential backoff
 async function fetchWithRetry(url: string, headers: Record<string, string>, maxRetries: number = MAX_RETRIES): Promise<Response> {
   let lastError: Error;
-  
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const response = await fetch(url, { headers, signal: AbortSignal.timeout(10000) }); // 10 second timeout
       if (response.ok) return response;
-      
+
       // Don't retry on client errors (4xx)
       if (response.status >= 400 && response.status < 500) {
         throw new Error(`Client error ${response.status}: ${response.statusText}`);
       }
-      
+
       throw new Error(`Server error ${response.status}: ${response.statusText}`);
     } catch (error) {
       lastError = error as Error;
-      
+
       if (attempt < maxRetries) {
         const delay = RETRY_DELAYS[Math.min(attempt, RETRY_DELAYS.length - 1)];
         console.log(`Attempt ${attempt + 1} failed for ${url}, retrying in ${delay}ms...`);
@@ -132,7 +132,7 @@ async function fetchWithRetry(url: string, headers: Record<string, string>, maxR
       }
     }
   }
-  
+
   throw lastError!;
 }
 
@@ -144,7 +144,7 @@ async function fetchWithRetry(url: string, headers: Record<string, string>, maxR
 async function fetchExchangeData(exchangeName: string, config: ExchangeConfig): Promise<any> {
   try {
     console.log(`Fetching data from ${exchangeName}`);
-    
+
     const headers = {
       'User-Agent': 'ArbitrageScanner/2.0',
       'Accept': 'application/json',
@@ -153,15 +153,15 @@ async function fetchExchangeData(exchangeName: string, config: ExchangeConfig): 
 
     if (config.type === 'single') {
       const response = await fetchWithRetry(config.url!, headers);
-      
+
       if (!response.ok) {
         throw new Error(`Fetch failed: ${response.statusText} (${response.status})`);
       }
-      
+
       const data = await response.json();
       return { exchangeName, data };
     }
-    
+
     throw new Error(`Unsupported exchange type: ${config.type} for ${exchangeName}`);
   } catch (error) {
     console.error(`Error fetching ${exchangeName}:`, error);
@@ -171,10 +171,10 @@ async function fetchExchangeData(exchangeName: string, config: ExchangeConfig): 
 
 function normalizeExchangeData(exchange: string, data: any): Record<string, any> {
   const priceMap: Record<string, any> = {};
-  
+
   try {
     const exchangeName = exchange.charAt(0).toUpperCase() + exchange.slice(1);
-    
+
     if (exchangeName === 'Binance' && Array.isArray(data)) {
       data.forEach((ticker: any) => {
         if (ticker.symbol && ticker.bidPrice && ticker.askPrice) {
@@ -278,26 +278,26 @@ function normalizeExchangeData(exchange: string, data: any): Record<string, any>
 // Enhanced triangular arbitrage finder with volume analysis and short signal detection
 function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: string, tradeAmount: number, minProfitPercent: number = 0.001, filterProfitable: boolean = true, customPairs: string[] = [], detectShortSignals: boolean = false): any[] {
   const opportunities: any[] = [];
-  
+
   // Expanded base currencies for more arbitrage opportunities - focus on high-liquidity pairs
   let commonBases = [
     // Major cryptocurrencies (Tier 1 - Highest liquidity)
     'BTC', 'ETH', 'BNB', 'XRP', 'ADA', 'SOL', 'DOGE', 'MATIC', 'DOT', 'AVAX',
     'SHIB', 'LTC', 'UNI', 'LINK', 'ATOM', 'TON', 'XLM', 'BCH', 'NEAR', 'TRX',
-    
+
     // Tier 2 - Good liquidity
     'FTM', 'ALGO', 'ICP', 'THETA', 'EOS', 'AAVE', 'GRT', 'SAND', 'MANA', 'AXS',
     'CRV', 'RUNE', 'CAKE', 'SUSHI', 'COMP', 'YFI', 'MKR', 'SNX', 'FIL', 'VET',
-    
+
     // Tier 3 - Medium liquidity with arbitrage potential
     'KAVA', 'ZIL', 'ENJ', 'BAT', 'ZRX', 'REN', 'KNC', 'BAND', 'SXP', 'RSR',
     'OGN', 'DENT', 'WIN', 'HOT', 'ANKR', 'COTI', 'CHR', 'MDT', 'STMX', 'DF',
-    
+
     // Additional high-volume pairs
     'ARB', 'OP', 'IMX', 'APE', 'LDO', 'RNDR', 'INJ', 'PEPE', 'WLD', 'SEI',
     'TIA', 'ORDI', 'STX', 'PYTH', 'JUP', 'BLUR', 'WIF', 'BONK', 'FLOKI', 'GALA'
   ];
-  
+
   // Add custom pairs from user settings
   if (customPairs && customPairs.length > 0) {
     const validCustomPairs = customPairs
@@ -306,26 +306,26 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
     commonBases = [...commonBases, ...validCustomPairs];
     console.log(`Added ${validCustomPairs.length} custom pairs to scanning list`);
   }
-  
+
   // Get list of available exchanges from price data dynamically
   const availableExchanges = Array.from(new Set(
     Object.keys(priceMap)
       .map(key => key.split('_')[1])
       .filter(exchange => exchange)
   ));
-  
+
   console.log(`Scanning triangular arbitrage across ${commonBases.length} base currencies and ${availableExchanges.length} exchanges: ${availableExchanges.join(', ')}`);
-  
+
   // Scan for opportunities on each exchange individually (triangular arbitrage within same exchange)
   for (const exchange of availableExchanges) {
     for (const base of commonBases) {
       for (const intermediate of commonBases) {
         if (base === intermediate) continue;
-        
+
         const pair1Key = `${base}${quoteCurrency}_${exchange}`; // BTC/USDT on exchange
-        const pair2Key = `${intermediate}${quoteCurrency}_${exchange}`; // ETH/USDT on exchange  
+        const pair2Key = `${intermediate}${quoteCurrency}_${exchange}`; // ETH/USDT on exchange
         const pair3Key = `${base}${intermediate}_${exchange}`; // BTC/ETH on exchange
-        
+
         // Only proceed if all required pairs exist on this exchange
         if (priceMap[pair1Key] && priceMap[pair2Key] && priceMap[pair3Key]) {
           // Forward path: USDT -> BTC -> ETH -> USDT
@@ -333,28 +333,28 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
             const pair1 = priceMap[pair1Key];
             const pair2 = priceMap[pair2Key];
             const pair3 = priceMap[pair3Key];
-            
+
             const step1Amount = tradeAmount / pair1.askPrice; // Buy BTC with USDT
             const step2Amount = step1Amount * pair3.bidPrice; // Sell BTC for ETH
             const step3Amount = step2Amount * pair2.bidPrice; // Sell ETH for USDT
-            
+
             // Validate all calculated amounts are valid numbers and positive
-            if (!isFinite(step1Amount) || !isFinite(step2Amount) || !isFinite(step3Amount) || 
+            if (!isFinite(step1Amount) || !isFinite(step2Amount) || !isFinite(step3Amount) ||
                 step1Amount <= 0 || step2Amount <= 0 || step3Amount <= 0) {
               continue;
             }
-            
+
             const profit = step3Amount - tradeAmount;
             const profitPercent = (profit / tradeAmount) * 100;
-            
+
             // Calculate arbitrage factor (end_amount / start_amount)
             const arbFactor = step3Amount / tradeAmount;
-            
+
             // Determine signal type based on arb factor
             let signalType = 'arbitrage';
             let overpricedLeg = null;
             let priceDeviation = null;
-            
+
             if (detectShortSignals) {
               if (arbFactor > 1.001) {
                 signalType = 'arbitrage';
@@ -364,53 +364,53 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
                 const impliedPrice1 = tradeAmount / step1Amount; // Implied price for step 1
                 const impliedPrice2 = step1Amount / step2Amount; // Implied price for step 2
                 const impliedPrice3 = step2Amount / step3Amount; // Implied price for step 3
-                
+
                 const deviation1 = ((pair1.askPrice - impliedPrice1) / impliedPrice1) * 100;
                 const deviation2 = ((pair3.bidPrice - impliedPrice2) / impliedPrice2) * 100;
                 const deviation3 = ((pair2.bidPrice - impliedPrice3) / impliedPrice3) * 100;
-                
+
                 // Find the most overpriced leg (highest positive deviation)
                 const deviations = [
                   { leg: `${base}${quoteCurrency}`, deviation: deviation1, price: pair1.askPrice },
                   { leg: `${base}${intermediate}`, deviation: deviation2, price: pair3.bidPrice },
                   { leg: `${intermediate}${quoteCurrency}`, deviation: deviation3, price: pair2.bidPrice }
                 ];
-                
-                const maxDeviation = deviations.reduce((max, curr) => 
+
+                const maxDeviation = deviations.reduce((max, curr) =>
                   curr.deviation > max.deviation ? curr : max
                 );
-                
+
                 overpricedLeg = maxDeviation.leg;
                 priceDeviation = maxDeviation.deviation;
               } else {
                 signalType = 'none';
               }
             }
-            
+
             // Enhanced filtering based on user preference and signal type
-            const shouldInclude = filterProfitable ? 
-              ((profitPercent > 0 && Math.abs(profitPercent) >= minProfitPercent) || (detectShortSignals && signalType === 'short' && Math.abs(profitPercent) >= minProfitPercent)) : 
+            const shouldInclude = filterProfitable ?
+              ((profitPercent > 0 && Math.abs(profitPercent) >= minProfitPercent) || (detectShortSignals && signalType === 'short' && Math.abs(profitPercent) >= minProfitPercent)) :
               (detectShortSignals ? (signalType !== 'none' && Math.abs(profitPercent) >= minProfitPercent) : Math.abs(profitPercent) >= minProfitPercent);
-              
+
             if (shouldInclude) {
               // Calculate liquidity score and estimated slippage
               const avgSpread1 = ((pair1.askPrice - pair1.bidPrice) / pair1.askPrice) * 100;
               const avgSpread2 = ((pair2.askPrice - pair2.bidPrice) / pair2.askPrice) * 100;
               const avgSpread3 = ((pair3.askPrice - pair3.bidPrice) / pair3.askPrice) * 100;
-              
+
               const avgSpread = (avgSpread1 + avgSpread2 + avgSpread3) / 3;
               const liquidityScore = Math.max(10, Math.min(100, 100 - (avgSpread * 10)));
               const estimatedSlippage = avgSpread * 0.5; // Conservative estimate
-              
+
               // Create human-readable trading path
               const tradingPath = `[${exchange.toUpperCase()}] ${quoteCurrency} → ${base} → ${intermediate} → ${quoteCurrency}`;
-              
+
               opportunities.push({
                 base_symbol: base,
                 intermediate_symbol: intermediate,
                 quote_symbol: quoteCurrency,
                 exchange1: exchange,
-                exchange2: exchange, 
+                exchange2: exchange,
                 exchange3: exchange,
                 step1_action: `BUY ${base}${quoteCurrency}`,
                 step1_price: pair1.askPrice,
@@ -437,40 +437,40 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
                 overpriced_leg: overpricedLeg,
                 price_deviation: priceDeviation
               });
-              
+
               console.log(`Found opportunity: ${tradingPath} | Profit: ${profitPercent.toFixed(4)}%`);
             }
           } catch (error) {
             // Silently continue on calculation errors
           }
-        
+
           // Reverse path: USDT -> ETH -> BTC -> USDT
           try {
             const pair1 = priceMap[pair1Key];
             const pair2 = priceMap[pair2Key];
             const pair3 = priceMap[pair3Key];
-            
+
             const step1Amount = tradeAmount / pair2.askPrice; // Buy ETH with USDT
             const step2Amount = step1Amount / pair3.askPrice; // Buy BTC with ETH
             const step3Amount = step2Amount * pair1.bidPrice; // Sell BTC for USDT
-            
+
             // Validate all calculated amounts are valid numbers
-            if (!isFinite(step1Amount) || !isFinite(step2Amount) || !isFinite(step3Amount) || 
+            if (!isFinite(step1Amount) || !isFinite(step2Amount) || !isFinite(step3Amount) ||
                 step1Amount <= 0 || step2Amount <= 0 || step3Amount <= 0) {
               continue;
             }
-            
+
             const profit = step3Amount - tradeAmount;
             const profitPercent = (profit / tradeAmount) * 100;
-            
+
             // Calculate arbitrage factor
             const arbFactor = step3Amount / tradeAmount;
-            
+
             // Determine signal type for reverse path
             let signalType = 'arbitrage';
             let overpricedLeg = null;
             let priceDeviation = null;
-            
+
             if (detectShortSignals) {
               if (arbFactor > 1.001) {
                 signalType = 'arbitrage';
@@ -479,46 +479,46 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
                 const impliedPrice1 = tradeAmount / step1Amount;
                 const impliedPrice2 = step1Amount / step2Amount;
                 const impliedPrice3 = step2Amount / step3Amount;
-                
+
                 const deviation1 = ((pair2.askPrice - impliedPrice1) / impliedPrice1) * 100;
                 const deviation2 = ((pair3.askPrice - impliedPrice2) / impliedPrice2) * 100;
                 const deviation3 = ((pair1.bidPrice - impliedPrice3) / impliedPrice3) * 100;
-                
+
                 const deviations = [
                   { leg: `${intermediate}${quoteCurrency}`, deviation: deviation1, price: pair2.askPrice },
                   { leg: `${base}${intermediate}`, deviation: deviation2, price: pair3.askPrice },
                   { leg: `${base}${quoteCurrency}`, deviation: deviation3, price: pair1.bidPrice }
                 ];
-                
-                const maxDeviation = deviations.reduce((max, curr) => 
+
+                const maxDeviation = deviations.reduce((max, curr) =>
                   curr.deviation > max.deviation ? curr : max
                 );
-                
+
                 overpricedLeg = maxDeviation.leg;
                 priceDeviation = maxDeviation.deviation;
               } else {
                 signalType = 'none';
               }
             }
-            
+
             // Enhanced filtering
-            const shouldInclude = filterProfitable ? 
-              (profitPercent > 0 && Math.abs(profitPercent) >= minProfitPercent) : 
+            const shouldInclude = filterProfitable ?
+              (profitPercent > 0 && Math.abs(profitPercent) >= minProfitPercent) :
               (detectShortSignals ? (signalType !== 'none' && Math.abs(profitPercent) >= minProfitPercent) : Math.abs(profitPercent) >= minProfitPercent);
-              
+
             if (shouldInclude) {
               // Calculate liquidity score and estimated slippage
               const avgSpread1 = ((pair2.askPrice - pair2.bidPrice) / pair2.askPrice) * 100;
               const avgSpread2 = ((pair3.askPrice - pair3.bidPrice) / pair3.askPrice) * 100;
               const avgSpread3 = ((pair1.askPrice - pair1.bidPrice) / pair1.askPrice) * 100;
-              
+
               const avgSpread = (avgSpread1 + avgSpread2 + avgSpread3) / 3;
               const liquidityScore = Math.max(10, Math.min(100, 100 - (avgSpread * 10)));
               const estimatedSlippage = avgSpread * 0.5; // Conservative estimate
-              
+
               // Create human-readable trading path
               const tradingPath = `[${exchange.toUpperCase()}] ${quoteCurrency} → ${intermediate} → ${base} → ${quoteCurrency}`;
-              
+
               opportunities.push({
                 base_symbol: base,
                 intermediate_symbol: intermediate,
@@ -551,7 +551,7 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
                 overpriced_leg: overpricedLeg,
                 price_deviation: priceDeviation
                });
-               
+
                console.log(`Found opportunity: ${tradingPath} | Profit: ${profitPercent.toFixed(4)}%`);
              }
            } catch (error) {
@@ -561,7 +561,7 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
       }
     }
   }
-  
+
   // Sort by absolute profit percentage descending to show best opportunities first
   return opportunities
     .sort((a, b) => Math.abs(b.profit_percent) - Math.abs(a.profit_percent))
@@ -571,7 +571,7 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
 // Cross-exchange arbitrage finder with short signal detection
 function findCrossExchangeArbitrage(priceMap: Record<string, any>, quoteCurrency: string, tradeAmount: number, minProfitPercent: number = 0.001, filterProfitable: boolean = true, customPairs: string[] = [], detectShortSignals: boolean = false): any[] {
   const opportunities: any[] = [];
-  
+
   // Use same base currencies as triangular arbitrage
   let commonBases = [
     'BTC', 'ETH', 'BNB', 'XRP', 'ADA', 'SOL', 'DOGE', 'MATIC', 'DOT', 'AVAX',
@@ -583,7 +583,7 @@ function findCrossExchangeArbitrage(priceMap: Record<string, any>, quoteCurrency
     'ARB', 'OP', 'IMX', 'APE', 'LDO', 'RNDR', 'INJ', 'PEPE', 'WLD', 'SEI',
     'TIA', 'ORDI', 'STX', 'PYTH', 'JUP', 'BLUR', 'WIF', 'BONK', 'FLOKI', 'GALA'
   ];
-  
+
   // Add custom pairs
   if (customPairs && customPairs.length > 0) {
     const validCustomPairs = customPairs
@@ -591,7 +591,7 @@ function findCrossExchangeArbitrage(priceMap: Record<string, any>, quoteCurrency
       .filter(p => p.length > 0 && !commonBases.includes(p));
     commonBases = [...commonBases, ...validCustomPairs];
   }
-  
+
   // Dynamically get available exchanges from price data
   const availableExchanges = Array.from(new Set(
     Object.keys(priceMap)
@@ -599,10 +599,10 @@ function findCrossExchangeArbitrage(priceMap: Record<string, any>, quoteCurrency
       .filter(exchange => exchange)
   ));
   console.log(`Scanning cross-exchange arbitrage between ${availableExchanges.length} exchanges: ${availableExchanges.join(', ')}`);
-  
+
   for (const base of commonBases) {
     const pairSymbol = `${base}${quoteCurrency}`;
-    
+
     // Get all exchanges that have this pair
     const exchangesWithPair: { exchange: string; data: any }[] = [];
     for (const exchange of availableExchanges) {
@@ -614,14 +614,14 @@ function findCrossExchangeArbitrage(priceMap: Record<string, any>, quoteCurrency
         });
       }
     }
-    
+
     // Compare prices across exchanges for cross-exchange arbitrage
     if (exchangesWithPair.length >= 2) {
       for (let i = 0; i < exchangesWithPair.length; i++) {
         for (let j = i + 1; j < exchangesWithPair.length; j++) {
           const exchange1 = exchangesWithPair[i];
           const exchange2 = exchangesWithPair[j];
-          
+
           try {
             // Buy on exchange1, sell on exchange2
             const buyPrice = exchange1.data.askPrice;
@@ -630,14 +630,14 @@ function findCrossExchangeArbitrage(priceMap: Record<string, any>, quoteCurrency
             const sellAmount = amount * sellPrice;
             const profit = sellAmount - tradeAmount;
             const profitPercent = (profit / tradeAmount) * 100;
-            
+
             // Calculate arb factor for cross-exchange
             const arbFactor = sellAmount / tradeAmount;
-            
+
             let signalType = 'arbitrage';
             let overpricedLeg = null;
             let priceDeviation = null;
-            
+
             if (detectShortSignals) {
               if (arbFactor > 1.001) {
                 signalType = 'arbitrage';
@@ -650,15 +650,15 @@ function findCrossExchangeArbitrage(priceMap: Record<string, any>, quoteCurrency
                 signalType = 'none';
               }
             }
-            
-            const shouldInclude = filterProfitable ? 
-              ((profitPercent > 0 && Math.abs(profitPercent) >= minProfitPercent) || (detectShortSignals && signalType === 'short' && Math.abs(profitPercent) >= minProfitPercent)) : 
+
+            const shouldInclude = filterProfitable ?
+              ((profitPercent > 0 && Math.abs(profitPercent) >= minProfitPercent) || (detectShortSignals && signalType === 'short' && Math.abs(profitPercent) >= minProfitPercent)) :
               (detectShortSignals ? (signalType !== 'none' && Math.abs(profitPercent) >= minProfitPercent) : Math.abs(profitPercent) >= minProfitPercent);
-            
+
             if (shouldInclude && isFinite(profitPercent) && isFinite(amount) && amount > 0) {
               const spread = ((sellPrice - buyPrice) / buyPrice) * 100;
               const liquidityScore = Math.max(10, Math.min(100, 100 - Math.abs(spread * 5)));
-              
+
               opportunities.push({
                 base_symbol: base,
                 intermediate_symbol: base,
@@ -689,10 +689,10 @@ function findCrossExchangeArbitrage(priceMap: Record<string, any>, quoteCurrency
                 overpriced_leg: overpricedLeg,
                 price_deviation: priceDeviation
               });
-              
+
               console.log(`Cross-exchange: ${base} | Buy ${exchange1.exchange} → Sell ${exchange2.exchange} | Profit: ${profitPercent.toFixed(4)}%`);
             }
-            
+
             // Try reverse (buy on exchange2, sell on exchange1)
             const buyPrice2 = exchange2.data.askPrice;
             const sellPrice2 = exchange1.data.bidPrice;
@@ -700,13 +700,13 @@ function findCrossExchangeArbitrage(priceMap: Record<string, any>, quoteCurrency
             const sellAmount2 = amount2 * sellPrice2;
             const profit2 = sellAmount2 - tradeAmount;
             const profitPercent2 = (profit2 / tradeAmount) * 100;
-            
+
             const arbFactor2 = sellAmount2 / tradeAmount;
-            
+
             let signalType2 = 'arbitrage';
             let overpricedLeg2 = null;
             let priceDeviation2 = null;
-            
+
             if (detectShortSignals) {
               if (arbFactor2 > 1.001) {
                 signalType2 = 'arbitrage';
@@ -718,15 +718,15 @@ function findCrossExchangeArbitrage(priceMap: Record<string, any>, quoteCurrency
                 signalType2 = 'none';
               }
             }
-            
-            const shouldInclude2 = filterProfitable ? 
-              ((profitPercent2 > 0 && Math.abs(profitPercent2) >= minProfitPercent) || (detectShortSignals && signalType2 === 'short' && Math.abs(profitPercent2) >= minProfitPercent)) : 
+
+            const shouldInclude2 = filterProfitable ?
+              ((profitPercent2 > 0 && Math.abs(profitPercent2) >= minProfitPercent) || (detectShortSignals && signalType2 === 'short' && Math.abs(profitPercent2) >= minProfitPercent)) :
               (detectShortSignals ? (signalType2 !== 'none' && Math.abs(profitPercent2) >= minProfitPercent) : Math.abs(profitPercent2) >= minProfitPercent);
-            
+
             if (shouldInclude2 && isFinite(profitPercent2) && isFinite(amount2) && amount2 > 0) {
               const spread2 = ((sellPrice2 - buyPrice2) / buyPrice2) * 100;
               const liquidityScore2 = Math.max(10, Math.min(100, 100 - Math.abs(spread2 * 5)));
-              
+
               opportunities.push({
                 base_symbol: base,
                 intermediate_symbol: base,
@@ -757,7 +757,7 @@ function findCrossExchangeArbitrage(priceMap: Record<string, any>, quoteCurrency
                 overpriced_leg: overpricedLeg2,
                 price_deviation: priceDeviation2
               });
-              
+
               console.log(`Cross-exchange: ${base} | Buy ${exchange2.exchange} → Sell ${exchange1.exchange} | Profit: ${profitPercent2.toFixed(4)}%`);
             }
           } catch (error) {
@@ -767,12 +767,82 @@ function findCrossExchangeArbitrage(priceMap: Record<string, any>, quoteCurrency
       }
     }
   }
-  
+
   // Sort by absolute profit percentage descending
   return opportunities
     .sort((a, b) => Math.abs(b.profit_percent) - Math.abs(a.profit_percent))
     .slice(0, 100);
 }
+
+
+// START: INTELLIGENT OPPORTUNITY FILTERING
+interface QualityFilters {
+  MIN_PROFIT_PERCENT: number;
+  MIN_LIQUIDITY_SCORE: number;
+  MAX_OPPORTUNITIES: number;
+  MIN_VOLUME: number;
+}
+
+const QUALITY_FILTERS: QualityFilters = {
+  MIN_PROFIT_PERCENT: 0.1,        // Only show >0.1% profit
+  MIN_LIQUIDITY_SCORE: 50,        // Require decent liquidity
+  MAX_OPPORTUNITIES: 25,          // Top 25 only
+  MIN_VOLUME: 10                  // Minimum $10 volume
+};
+
+function scoreOpportunity(opp: any): number {
+  let score = 0;
+
+  // Profit scoring (0-50 points)
+  if (Math.abs(opp.profit_percent) >= 1.0) score += 50;      // Excellent
+  else if (Math.abs(opp.profit_percent) >= 0.5) score += 35; // Good
+  else if (Math.abs(opp.profit_percent) >= 0.1) score += 20; // Fair
+
+  // Liquidity scoring (0-30 points)
+  const liquidityScore = opp.liquidity_score || 0;
+  if (liquidityScore >= 80) score += 30;
+  else if (liquidityScore >= 60) score += 20;
+  else if (liquidityScore >= 50) score += 10;
+
+  // Volume scoring (0-20 points)
+  const avgVolume = (opp.step1_volume + opp.step2_volume + opp.step3_volume) / 3;
+  if (avgVolume >= 1000) score += 20;
+  else if (avgVolume >= 500) score += 15;
+  else if (avgVolume >= 100) score += 10;
+  else if (avgVolume >= 50) score += 5;
+
+  return score;
+}
+
+function filterAndRankOpportunities(opportunities: any[]): any[] {
+  // Step 1: Apply minimum quality filters
+  let filtered = opportunities.filter(opp => {
+    const meetsProfit = Math.abs(opp.profit_percent) >= QUALITY_FILTERS.MIN_PROFIT_PERCENT;
+    const meetsLiquidity = (opp.liquidity_score || 0) >= QUALITY_FILTERS.MIN_LIQUIDITY_SCORE;
+    const avgVolume = (opp.step1_volume + opp.step2_volume + opp.step3_volume) / 3;
+    const meetsVolume = avgVolume >= QUALITY_FILTERS.MIN_VOLUME;
+
+    return meetsProfit && meetsLiquidity && meetsVolume;
+  });
+
+  // Step 2: Score each opportunity
+  filtered.forEach(opp => {
+    opp.quality_score = scoreOpportunity(opp);
+  });
+
+  // Step 3: Sort by score (highest first), then by profit
+  filtered.sort((a, b) => {
+    if (b.quality_score !== a.quality_score) {
+      return b.quality_score - a.quality_score;
+    }
+    return Math.abs(b.profit_percent) - Math.abs(a.profit_percent);
+  });
+
+  // Step 4: Take only top opportunities
+  return filtered.slice(0, QUALITY_FILTERS.MAX_OPPORTUNITIES);
+}
+// END: INTELLIGENT OPPORTUNITY FILTERING
+
 
 // Main serve handler - unified handler for all request types
 serve(async (req) => {
@@ -811,7 +881,7 @@ serve(async (req) => {
 
       // Check rate limiting
       if (!checkRateLimit(user.id)) {
-        return new Response(JSON.stringify({ 
+        return new Response(JSON.stringify({
           error: 'Rate limit exceeded',
           message: 'Too many requests. Please wait before trying again.'
         }), {
@@ -821,7 +891,7 @@ serve(async (req) => {
       }
 
       console.log(`Starting arbitrage scan for user ${user.id}`);
-      
+
       // Get user settings with error handling
       let settings;
       try {
@@ -862,7 +932,7 @@ serve(async (req) => {
         'gate': 'Gate',
         'mexc': 'MEXC'
       };
-      
+
       const enabledConfigs = enabledExchanges
         .map(name => {
           const normalizedName = exchangeNameMap[name.toLowerCase()] || name.charAt(0).toUpperCase() + name.slice(1);
@@ -881,7 +951,7 @@ serve(async (req) => {
           const result = await fetchExchangeData(name, config);
           const fetchTime = Date.now() - startTime;
           console.log(`${name} fetch completed in ${fetchTime}ms`);
-          
+
           if (result.error) throw new Error(result.error);
           return { name, data: result.data, fetchTime };
         } catch (error) {
@@ -898,7 +968,7 @@ serve(async (req) => {
 
       fetchResults.forEach((result, index) => {
         const exchangeName = enabledConfigs[index].name;
-        
+
         if (result.status === 'fulfilled') {
           const normalizedData = normalizeExchangeData(exchangeName, result.value.data);
           Object.assign(allPriceData, normalizedData);
@@ -919,14 +989,14 @@ serve(async (req) => {
       let opportunities: any[] = [];
       const quoteCurrencies = ['USDT', 'BNB'];
       const detectShortSignals = arbitrageTypes.includes('short_signal');
-      
+
       for (const quoteCurrency of quoteCurrencies) {
         if (arbitrageTypes.includes('triangular')) {
           const triangularOpps = findTriangularArbitrage(allPriceData, quoteCurrency, tradeAmount, minProfitPercent, filterProfitable, customPairs, detectShortSignals);
           triangularOpps.forEach(opp => opp.type = 'triangular');
           opportunities.push(...triangularOpps);
         }
-        
+
         if (arbitrageTypes.includes('cross_exchange')) {
           const crossExchangeOpps = findCrossExchangeArbitrage(allPriceData, quoteCurrency, tradeAmount, minProfitPercent, filterProfitable, customPairs, detectShortSignals);
           crossExchangeOpps.forEach(opp => opp.type = 'cross_exchange');
@@ -942,8 +1012,13 @@ serve(async (req) => {
           uniqueOpportunities.set(key, opp);
         }
       });
-      
+
       opportunities = Array.from(uniqueOpportunities.values());
+      console.log(`Before filtering: ${opportunities.length} opportunities`);
+
+      // Apply intelligent filtering
+      opportunities = filterAndRankOpportunities(opportunities);
+      console.log(`After filtering: ${opportunities.length} high-quality opportunities`);
 
       // Save opportunities to database (shared across all users)
       if (opportunities.length > 0) {
@@ -1007,7 +1082,7 @@ serve(async (req) => {
     // Auto mode: scan for all users with auto_trade enabled
     if (mode === 'auto') {
       console.log('Running in auto mode - scanning for all users with auto_trade enabled');
-      
+
       // Fetch all users with auto_trade enabled and active subscriptions
       const { data: users, error: usersError } = await supabase
         .from('user_settings')
@@ -1072,7 +1147,7 @@ serve(async (req) => {
           // Determine max trade amount based on subscription tier
           const tierName = subscription.subscription_plans?.name || '';
           let maxTradeAmount = 0;
-          
+
           if (tierName.includes('Tier 1') || tierName.includes('Scanner Only')) {
             console.log(`User ${userSettings.user_id} has Tier 1 (Scanner Only) - skipping auto-trade`);
             continue; // Scanner only tier, no auto-trading
@@ -1091,7 +1166,7 @@ serve(async (req) => {
           );
 
           console.log(`Processing user ${userSettings.user_id} with ${tierName} (max: $${maxTradeAmount}, actual: $${actualTradeAmount})`);
-          
+
           // Fetch exchange data
           const exchangeData = await fetchAllExchangeData(
             userSettings.enabled_exchanges || ['binance', 'bybit', 'okx', 'gate', 'kucoin']
@@ -1175,10 +1250,10 @@ serve(async (req) => {
         }
       })());
 
-      return new Response(JSON.stringify({ 
-        success: true, 
+      return new Response(JSON.stringify({
+        success: true,
         users_processed: results.length,
-        results 
+        results
       }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -1237,7 +1312,7 @@ serve(async (req) => {
     const arbitrageTypes = userSettings.arbitrage_types || ['triangular', 'cross_exchange'];
 
     console.log(`Fetching data from ${enabledExchanges.length} exchanges concurrently`);
-    
+
     // Fetch exchange data
     const exchangeData = await fetchAllExchangeData(enabledExchanges);
 
@@ -1301,9 +1376,9 @@ serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify({ 
-      success: true, 
-      opportunities_count: opportunities.length 
+    return new Response(JSON.stringify({
+      success: true,
+      opportunities_count: opportunities.length
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
