@@ -10,6 +10,7 @@ interface ExchangeStats {
   avgProfit: number;
   totalVolume: number;
   successRate: number;
+  avgQualityScore: number;
 }
 
 export const StatisticsDashboard = () => {
@@ -49,6 +50,7 @@ export const StatisticsDashboard = () => {
           totalProfit: number;
           totalVolume: number;
           profitableCount: number;
+          totalQualityScore: number;
         }>();
 
         let totalOpps = 0;
@@ -63,6 +65,8 @@ export const StatisticsDashboard = () => {
           const profit = Number(opp.profit_percent) || 0;
           const volume = Number(opp.start_amount) || 0;
           const isProfitable = profit > 0;
+          const qualityScore = Number(opp.quality_score) || 0;
+
 
           totalOpps++;
           totalProfitSum += profit;
@@ -77,7 +81,8 @@ export const StatisticsDashboard = () => {
                 count: 0,
                 totalProfit: 0,
                 totalVolume: 0,
-                profitableCount: 0
+                profitableCount: 0,
+                totalQualityScore: 0,
               });
             }
 
@@ -86,6 +91,7 @@ export const StatisticsDashboard = () => {
             stat.totalProfit += profit;
             stat.totalVolume += volume;
             if (isProfitable) stat.profitableCount++;
+            stat.totalQualityScore += qualityScore;
           });
         });
 
@@ -95,7 +101,8 @@ export const StatisticsDashboard = () => {
           totalOpportunities: data.count,
           avgProfit: data.count > 0 ? data.totalProfit / data.count : 0,
           totalVolume: data.totalVolume,
-          successRate: data.count > 0 ? (data.profitableCount / data.count) * 100 : 0
+          successRate: data.count > 0 ? (data.profitableCount / data.count) * 100 : 0,
+          avgQualityScore: data.count > 0 ? data.totalQualityScore / data.count : 0,
         })).sort((a, b) => b.totalOpportunities - a.totalOpportunities);
 
         setStats(exchangeStats);
@@ -210,6 +217,37 @@ export const StatisticsDashboard = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Quality Metrics */}
+      {stats.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Quality Metrics</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Premium Opportunities</p>
+                <p className="text-2xl font-bold text-purple-500">
+                  {stats.filter(s => s.avgQualityScore >= 50).length}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">High Quality</p>
+                <p className="text-2xl font-bold text-blue-500">
+                  {stats.filter(s => s.avgQualityScore >= 35 && s.avgQualityScore < 50).length}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Average Quality Score</p>
+                <p className="text-2xl font-bold">
+                  {(stats.reduce((sum, s) => sum + (s.avgQualityScore || 0), 0) / stats.length).toFixed(0)}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Exchange Statistics */}
       {stats.length > 0 && (
