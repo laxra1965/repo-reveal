@@ -31,11 +31,12 @@ export const StatisticsDashboard = () => {
       try {
         setLoading(true);
         
-        // Fetch all opportunities for the user
+        // FIXED: Fetch ALL active opportunities (not just user's)
+        // Opportunities are now shared across all users
         const { data: opportunities, error } = await supabase
           .from('arbitrage_opportunities')
           .select('*')
-          .eq('user_id', user.id);
+          .gt('expires_at', new Date().toISOString()); // Only active opportunities
 
         if (error) throw error;
 
@@ -66,7 +67,6 @@ export const StatisticsDashboard = () => {
           const volume = Number(opp.start_amount) || 0;
           const isProfitable = profit > 0;
           const qualityScore = Number(opp.quality_score) || 0;
-
 
           totalOpps++;
           totalProfitSum += profit;
@@ -121,15 +121,15 @@ export const StatisticsDashboard = () => {
 
     fetchStats();
     
-    // Set up real-time subscription
+    // Set up real-time subscription for ALL opportunities
     const channel = supabase
       .channel('stats-updates')
       .on('postgres_changes', 
         { 
           event: '*', 
           schema: 'public', 
-          table: 'arbitrage_opportunities',
-          filter: `user_id=eq.${user.id}`
+          table: 'arbitrage_opportunities'
+          // REMOVED user_id filter - we want all opportunities
         }, 
         () => {
           fetchStats();
@@ -173,7 +173,7 @@ export const StatisticsDashboard = () => {
           <CardContent>
             <div className="text-2xl font-bold">{totalStats.totalOpportunities}</div>
             <p className="text-xs text-muted-foreground">
-              Detected arbitrage opportunities
+              Active arbitrage opportunities
             </p>
           </CardContent>
         </Card>
