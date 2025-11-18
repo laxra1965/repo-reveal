@@ -275,6 +275,79 @@ function normalizeExchangeData(exchange: string, data: any): Record<string, any>
   }
 }
 
+/**
+ * Fetch data from all enabled exchanges concurrently
+ */
+async function fetchAllExchangeData(enabledExchanges: string[]): Promise<Record<string, any>> {
+  const exchangeNameMap: Record<string, string> = {
+    'binance': 'Binance',
+    'bybit': 'Bybit',
+    'okx': 'OKX',
+    'kucoin': 'KuCoin',
+    'gate': 'Gate',
+    'mexc': 'MEXC'
+  };
+
+  const enabledConfigs = enabledExchanges
+    .map(name => {
+      const normalizedName = exchangeNameMap[name.toLowerCase()] || name.charAt(0).toUpperCase() + name.slice(1);
+      return {
+        name: normalizedName,
+        config: API_CONFIG[normalizedName]
+      };
+    })
+    .filter(({ config }) => config);
+
+  console.log(`Fetching data from ${enabledConfigs.length} exchanges concurrently`);
+
+  // Fetch all exchanges in parallel
+  const fetchPromises = enabledConfigs.map(async ({ name, config }) => {
+    const startTime = Date.now();
+    try {
+      const result = await fetchExchangeData(name, config);
+      const fetchTime = Date.now() - startTime;
+      console.log(`${name} fetch completed in ${fetchTime}ms`);
+
+      if (result.error) throw new Error(result.error);
+      return { name, data: result.data, fetchTime };
+    } catch (error) {
+      console.error(`Failed to fetch ${name}:`, error);
+      return { name, error: error.message };
+    }
+  });
+
+  const fetchResults = await Promise.allSettled(fetchPromises);
+
+  let allPriceData: Record<string, any> = {};
+  let successfulFetches = 0;
+  let failedFetches = 0;
+
+  fetchResults.forEach((result, index) => {
+    const exchangeName = enabledConfigs[index].name;
+
+    if (result.status === 'fulfilled' && !result.value.error) {
+      const normalizedData = normalizeExchangeData(exchangeName, result.value.data);
+      Object.assign(allPriceData, normalizedData);
+      successfulFetches++;
+      console.log(`${exchangeName}: Normalized ${Object.keys(normalizedData).length} symbols`);
+    } else {
+      failedFetches++;
+      console.error(`${exchangeName} failed:`, result.status === 'rejected' ? result.reason : result.value.error);
+    }
+  });
+
+  console.log(`Data fetch completed: ${successfulFetches} successful, ${failedFetches} failed`);
+
+  if (Object.keys(allPriceData).length === 0) {
+    throw new Error('No price data available from any exchange');
+  }
+
+  return allPriceData;
+}
+
+// Usage example in your handler:
+// const exchangeData = await fetchAllExchangeData(['binance', 'bybit', 'okx']);" 
+
 // Enhanced triangular arbitrage finder with volume analysis and short signal detection
 function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: string, tradeAmount: number, minProfitPercent: number = 0.001, filterProfitable: boolean = true, customPairs: string[] = [], detectShortSignals: boolean = false): any[] {
   const opportunities: any[] = [];
