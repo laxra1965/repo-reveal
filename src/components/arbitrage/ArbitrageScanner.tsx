@@ -36,23 +36,7 @@ interface Opportunity {
   detected_at: string;
   expires_at: string;
   type?: string;
-}
-
-// Debounce utility
-function useDebounce<T extends (...args: any[]) => any>(
-  callback: T,
-  delay: number
-): (...args: Parameters<T>) => void {
-  const timeoutRef = useRef<NodeJS.Timeout>();
-
-  return useCallback((...args: Parameters<T>) => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-    timeoutRef.current = setTimeout(() => {
-      callback(...args);
-    }, delay);
-  }, [callback, delay]);
+  quality_score?: number;
 }
 
 const OPPORTUNITIES_PER_PAGE = 10;
@@ -68,7 +52,6 @@ export const ArbitrageScanner = () => {
   const [scanInterval, setScanInterval] = useState<NodeJS.Timeout | null>(null);
   const [lastScanTime, setLastScanTime] = useState<Date | null>(null);
   const [scanCount, setScanCount] = useState(0);
-  const [arbitrageMode, setArbitrageMode] = useState<string[]>([]);
   const [isInitializing, setIsInitializing] = useState(false);
   
   // Pagination state
@@ -78,13 +61,159 @@ export const ArbitrageScanner = () => {
   const isScanningRef = useRef(false);
   const mountedRef = useRef(true);
 
-  // ... [keep existing useEffect for settings] ...
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      if (scanInterval) {
+        clearInterval(scanInterval);
+      }
+    };
+  }, [scanInterval]);
+
+  // Load opportunities from database
+  const loadOpportunitiesFromDB = async () => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('arbitrage_opportunities')
+        .select('*')
+        .gt('expires_at', new Date().toISOString())
+        .order('profit_percent', { ascending: false })
+        .limit(100);
+
+      if (error) throw error;
+
+      if (data) {
+        setOpportunities(data);
+        setLastScanTime(new Date());
+      }
+    } catch (error) {
+      console.error('Error loading opportunities:', error);
+    }
+  };
+
+  // Initial load and real-time subscription
+  useEffect(() => {
+    if (user && hasActiveSubscription) {
+      loadOpportunitiesFromDB();
+
+      // Set up real-time subscription
+      const channel = supabase
+        .channel('arbitrage-opportunities')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'arbitrage_opportunities'
+          },
+          () => {
+            loadOpportunitiesFromDB();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [user, hasActiveSubscription]);
+
+  // Perform scan
+  const performScan = async () => {
+    if (isScanningRef.current || !user) return;
+    
+    isScanningRef.current = true;
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        throw new Error('No active session');
+      }
+
+      const response = await supabase.functions.invoke('arbitrage-scanner', {
+        body: { 
+          action: 'scan',
+          userId: user.id 
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
+
+      if (response.error) {
+        throw response.error;
+      }
+
+      setScanCount(prev => prev + 1);
+      setLastScanTime(new Date());
+      
+      // Load updated opportunities from database
+      await loadOpportunitiesFromDB();
+
+      toast({
+        title: "Scan Complete",
+        description: `Found ${response.data?.opportunities_count || 0} opportunities`,
+      });
+    } catch (error: any) {
+      console.error('Scan error:', error);
+      toast({
+        title: "Scan Error",
+        description: error.message || "Failed to scan for opportunities",
+        variant: "destructive",
+      });
+    } finally {
+      isScanningRef.current = false;
+    }
+  };
+
+  // Start scanning
+  const startScanning = async () => {
+    if (!user || !hasActiveSubscription) {
+      toast({
+        title: "Subscription Required",
+        description: "Please subscribe to use the scanner",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsInitializing(true);
+    
+    // Perform initial scan
+    await performScan();
+    
+    setIsInitializing(false);
+    setIsScanning(true);
+
+    // Set up periodic scanning
+    const interval = setInterval(performScan, 30000); // Scan every 30 seconds
+    setScanInterval(interval);
+  };
+
+  // Stop scanning
+  const stopScanning = () => {
+    if (scanInterval) {
+      clearInterval(scanInterval);
+      setScanInterval(null);
+    }
+    setIsScanning(false);
+    isScanningRef.current = false;
+  };
 
   // Optimized sorted opportunities with pagination
   const paginatedOpportunities = useMemo(() => {
     const filtered = opportunities
       .filter(opp => new Date(opp.expires_at) > new Date())
-      .sort((a, b) => Math.abs(b.profit_percent) - Math.abs(a.profit_percent));
+      .sort((a, b) => {
+        // Sort by quality score first (if available), then by profit
+        if (a.quality_score && b.quality_score && a.quality_score !== b.quality_score) {
+          return b.quality_score - a.quality_score;
+        }
+        return Math.abs(b.profit_percent) - Math.abs(a.profit_percent);
+      });
     
     setTotalPages(Math.ceil(filtered.length / OPPORTUNITIES_PER_PAGE));
     
@@ -99,13 +228,35 @@ export const ArbitrageScanner = () => {
     setCurrentPage(1);
   }, [opportunities.length]);
 
-  // ... [keep existing performScan function] ...
+  // Show subscription requirement if not subscribed
+  if (subscriptionLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <p className="text-muted-foreground">Loading subscription...</p>
+      </div>
+    );
+  }
 
-  // ... [keep existing startScanning/stopScanning] ...
-
-  // ... [keep existing real-time updates] ...
-
-  // ... [keep existing loading/subscription checks] ...
+  if (!hasActiveSubscription) {
+    return (
+      <div className="space-y-6">
+        <Card className="border-yellow-500">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Lock className="h-5 w-5" />
+              Subscription Required
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground mb-4">
+              You need an active subscription to use the Arbitrage Scanner.
+            </p>
+            <PlansSection />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -133,12 +284,12 @@ export const ArbitrageScanner = () => {
               </Button>
 
               {isScanning ? (
-                <Button onClick={() => {}} variant="destructive" size="sm">
+                <Button onClick={stopScanning} variant="destructive" size="sm">
                   <Pause className="h-4 w-4 mr-2" />
                   Stop
                 </Button>
               ) : (
-                <Button onClick={() => {}} size="sm" disabled={isInitializing}>
+                <Button onClick={startScanning} size="sm" disabled={isInitializing}>
                   <Play className="h-4 w-4 mr-2" />
                   {isInitializing ? 'Starting...' : 'Start'}
                 </Button>
