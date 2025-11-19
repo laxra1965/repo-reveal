@@ -31,12 +31,14 @@ export const StatisticsDashboard = () => {
       try {
         setLoading(true);
         
-        // FIXED: Fetch ALL active opportunities (not just user's)
-        // Opportunities are now shared across all users
+        // Fetch ALL opportunities (shared, not user-specific)
+        // Filter only active opportunities
         const { data: opportunities, error } = await supabase
           .from('arbitrage_opportunities')
           .select('*')
-          .gt('expires_at', new Date().toISOString()); // Only active opportunities
+          .gt('expires_at', new Date().toISOString())
+          .order('profit_percent', { ascending: false })
+          .limit(1000); // Limit to most recent 1000
 
         if (error) throw error;
 
@@ -121,7 +123,7 @@ export const StatisticsDashboard = () => {
 
     fetchStats();
     
-    // Set up real-time subscription for ALL opportunities
+    // Set up real-time subscription for opportunities
     const channel = supabase
       .channel('stats-updates')
       .on('postgres_changes', 
@@ -129,16 +131,20 @@ export const StatisticsDashboard = () => {
           event: '*', 
           schema: 'public', 
           table: 'arbitrage_opportunities'
-          // REMOVED user_id filter - we want all opportunities
         }, 
         () => {
+          console.log('Opportunity change detected, refreshing stats...');
           fetchStats();
         }
       )
       .subscribe();
 
+    // Also refresh every 30 seconds
+    const intervalId = setInterval(fetchStats, 30000);
+
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(intervalId);
     };
   }, [user]);
 
