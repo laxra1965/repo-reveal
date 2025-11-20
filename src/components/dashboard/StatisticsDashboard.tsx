@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, DollarSign, Activity, BarChart3 } from "lucide-react";
+import { TrendingUp, DollarSign, Activity, BarChart3, ChevronDown, ChevronUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 
 interface ExchangeStats {
@@ -11,6 +12,7 @@ interface ExchangeStats {
   totalVolume: number;
   successRate: number;
   avgQualityScore: number;
+  maxProfit: number;
 }
 
 export const StatisticsDashboard = () => {
@@ -20,9 +22,11 @@ export const StatisticsDashboard = () => {
     totalOpportunities: 0,
     avgProfit: 0,
     totalVolume: 0,
-    successRate: 0
+    successRate: 0,
+    maxProfit: 0
   });
   const [loading, setLoading] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -31,14 +35,11 @@ export const StatisticsDashboard = () => {
       try {
         setLoading(true);
         
-        // Fetch ALL opportunities (shared, not user-specific)
-        // Filter only active opportunities
+        // Fetch all opportunities for the user
         const { data: opportunities, error } = await supabase
           .from('arbitrage_opportunities')
           .select('*')
-          .gt('expires_at', new Date().toISOString())
-          .order('profit_percent', { ascending: false })
-          .limit(1000); // Limit to most recent 1000
+          .eq('user_id', user.id);
 
         if (error) throw error;
 
@@ -54,16 +55,18 @@ export const StatisticsDashboard = () => {
           totalVolume: number;
           profitableCount: number;
           totalQualityScore: number;
+          maxProfit: number;
         }>();
 
         let totalOpps = 0;
         let totalProfitSum = 0;
         let totalVolumeSum = 0;
         let totalProfitable = 0;
+        let globalMaxProfit = 0;
 
         opportunities.forEach(opp => {
           const exchanges = [opp.exchange1, opp.exchange2, opp.exchange3]
-            .filter((val, idx, arr) => arr.indexOf(val) === idx); // unique exchanges
+            .filter((val, idx, arr) => arr.indexOf(val) === idx);
           
           const profit = Number(opp.profit_percent) || 0;
           const volume = Number(opp.start_amount) || 0;
@@ -74,6 +77,11 @@ export const StatisticsDashboard = () => {
           totalProfitSum += profit;
           totalVolumeSum += volume;
           if (isProfitable) totalProfitable++;
+          
+          // Track global max profit
+          if (Math.abs(profit) > globalMaxProfit) {
+            globalMaxProfit = Math.abs(profit);
+          }
 
           exchanges.forEach(exchange => {
             if (!exchange) return;
@@ -85,6 +93,7 @@ export const StatisticsDashboard = () => {
                 totalVolume: 0,
                 profitableCount: 0,
                 totalQualityScore: 0,
+                maxProfit: 0
               });
             }
 
@@ -94,6 +103,11 @@ export const StatisticsDashboard = () => {
             stat.totalVolume += volume;
             if (isProfitable) stat.profitableCount++;
             stat.totalQualityScore += qualityScore;
+            
+            // Track exchange-specific max profit
+            if (Math.abs(profit) > stat.maxProfit) {
+              stat.maxProfit = Math.abs(profit);
+            }
           });
         });
 
@@ -105,6 +119,7 @@ export const StatisticsDashboard = () => {
           totalVolume: data.totalVolume,
           successRate: data.count > 0 ? (data.profitableCount / data.count) * 100 : 0,
           avgQualityScore: data.count > 0 ? data.totalQualityScore / data.count : 0,
+          maxProfit: data.maxProfit
         })).sort((a, b) => b.totalOpportunities - a.totalOpportunities);
 
         setStats(exchangeStats);
@@ -112,7 +127,8 @@ export const StatisticsDashboard = () => {
           totalOpportunities: totalOpps,
           avgProfit: totalOpps > 0 ? totalProfitSum / totalOpps : 0,
           totalVolume: totalVolumeSum,
-          successRate: totalOpps > 0 ? (totalProfitable / totalOpps) * 100 : 0
+          successRate: totalOpps > 0 ? (totalProfitable / totalOpps) * 100 : 0,
+          maxProfit: globalMaxProfit
         });
       } catch (error) {
         console.error('Error fetching statistics:', error);
@@ -123,35 +139,31 @@ export const StatisticsDashboard = () => {
 
     fetchStats();
     
-    // Set up real-time subscription for opportunities
+    // Set up real-time subscription
     const channel = supabase
       .channel('stats-updates')
       .on('postgres_changes', 
         { 
           event: '*', 
           schema: 'public', 
-          table: 'arbitrage_opportunities'
+          table: 'arbitrage_opportunities',
+          filter: `user_id=eq.${user.id}`
         }, 
         () => {
-          console.log('Opportunity change detected, refreshing stats...');
           fetchStats();
         }
       )
       .subscribe();
 
-    // Also refresh every 30 seconds
-    const intervalId = setInterval(fetchStats, 30000);
-
     return () => {
       supabase.removeChannel(channel);
-      clearInterval(intervalId);
     };
   }, [user]);
 
   if (loading) {
     return (
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {[...Array(4)].map((_, i) => (
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        {[...Array(5)].map((_, i) => (
           <Card key={i} className="animate-pulse">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <div className="h-4 bg-muted rounded w-24"></div>
@@ -169,8 +181,8 @@ export const StatisticsDashboard = () => {
 
   return (
     <div className="space-y-4">
-      {/* Overall Statistics */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {/* Overall Statistics - Always Visible */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Opportunities</CardTitle>
@@ -179,7 +191,7 @@ export const StatisticsDashboard = () => {
           <CardContent>
             <div className="text-2xl font-bold">{totalStats.totalOpportunities}</div>
             <p className="text-xs text-muted-foreground">
-              Active arbitrage opportunities
+              Detected arbitrage opportunities
             </p>
           </CardContent>
         </Card>
@@ -212,6 +224,19 @@ export const StatisticsDashboard = () => {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Max Profit</CardTitle>
+            <TrendingUp className="h-4 w-4 text-green-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-500">{totalStats.maxProfit.toFixed(4)}%</div>
+            <p className="text-xs text-muted-foreground">
+              Highest detected profit
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Volume</CardTitle>
             <BarChart3 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -224,84 +249,106 @@ export const StatisticsDashboard = () => {
         </Card>
       </div>
 
-      {/* Quality Metrics */}
+      {/* Expandable Detailed Statistics */}
       {stats.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Quality Metrics</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Premium Opportunities</p>
-                <p className="text-2xl font-bold text-purple-500">
-                  {stats.filter(s => s.avgQualityScore >= 50).length}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">High Quality</p>
-                <p className="text-2xl font-bold text-blue-500">
-                  {stats.filter(s => s.avgQualityScore >= 35 && s.avgQualityScore < 50).length}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Average Quality Score</p>
-                <p className="text-2xl font-bold">
-                  {(stats.reduce((sum, s) => sum + (s.avgQualityScore || 0), 0) / stats.length).toFixed(0)}
-                </p>
-              </div>
+            <div className="flex justify-between items-center">
+              <CardTitle>Detailed Statistics</CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="flex items-center gap-2"
+              >
+                {isExpanded ? (
+                  <>
+                    <ChevronUp className="h-4 w-4" />
+                    Hide Details
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-4 w-4" />
+                    Show Details
+                  </>
+                )}
+              </Button>
             </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Exchange Statistics */}
-      {stats.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Statistics by Exchange</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {stats.map((stat) => (
-                <div key={stat.exchange} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-sm">{stat.exchange}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {stat.totalOpportunities} opportunities
-                      </span>
-                    </div>
-                    <span className="text-sm font-medium">
-                      {stat.successRate.toFixed(1)}% success
-                    </span>
+          {isExpanded && (
+            <CardContent>
+              {/* Quality Metrics */}
+              <div className="mb-6 p-4 bg-muted/30 rounded-lg">
+                <h3 className="font-semibold mb-3">Quality Metrics</h3>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Premium Opportunities</p>
+                    <p className="text-2xl font-bold text-purple-500">
+                      {stats.filter(s => s.avgQualityScore >= 50).length}
+                    </p>
                   </div>
-                  
-                  <div className="grid grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <p className="text-muted-foreground text-xs">Avg Profit</p>
-                      <p className="font-medium">{stat.avgProfit.toFixed(4)}%</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground text-xs">Volume</p>
-                      <p className="font-medium">${stat.totalVolume.toFixed(2)}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground text-xs">Opportunities</p>
-                      <p className="font-medium">{stat.totalOpportunities}</p>
-                    </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">High Quality</p>
+                    <p className="text-2xl font-bold text-blue-500">
+                      {stats.filter(s => s.avgQualityScore >= 35 && s.avgQualityScore < 50).length}
+                    </p>
                   </div>
-                  
-                  <div className="w-full bg-secondary rounded-full h-2">
-                    <div 
-                      className="bg-primary h-2 rounded-full transition-all" 
-                      style={{ width: `${Math.min(stat.successRate, 100)}%` }}
-                    />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Average Quality Score</p>
+                    <p className="text-2xl font-bold">
+                      {(stats.reduce((sum, s) => sum + (s.avgQualityScore || 0), 0) / stats.length).toFixed(0)}
+                    </p>
                   </div>
                 </div>
-              ))}
-            </div>
-          </CardContent>
+              </div>
+
+              {/* Exchange Statistics */}
+              <div className="space-y-4">
+                <h3 className="font-semibold">Statistics by Exchange</h3>
+                {stats.map((stat) => (
+                  <div key={stat.exchange} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-sm">{stat.exchange}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {stat.totalOpportunities} opportunities
+                        </span>
+                      </div>
+                      <span className="text-sm font-medium">
+                        {stat.successRate.toFixed(1)}% success
+                      </span>
+                    </div>
+                    
+                    <div className="grid grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <p className="text-muted-foreground text-xs">Avg Profit</p>
+                        <p className="font-medium">{stat.avgProfit.toFixed(4)}%</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground text-xs">Max Profit</p>
+                        <p className="font-medium text-green-500">{stat.maxProfit.toFixed(4)}%</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground text-xs">Volume</p>
+                        <p className="font-medium">${stat.totalVolume.toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground text-xs">Opportunities</p>
+                        <p className="font-medium">{stat.totalOpportunities}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="w-full bg-secondary rounded-full h-2">
+                      <div 
+                        className="bg-primary h-2 rounded-full transition-all" 
+                        style={{ width: `${Math.min(stat.successRate, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          )}
         </Card>
       )}
 
