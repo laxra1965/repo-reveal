@@ -48,7 +48,7 @@ const API_CONFIG: Record<string, ExchangeConfig> = {
     rateLimit: { requests: 10, window: 1000 } // 10 requests per second
   }
 };
-
+// Add helper here
 interface ExchangeConfig {
   type: 'single';
   url: string;
