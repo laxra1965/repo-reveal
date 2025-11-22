@@ -190,7 +190,6 @@ export const ArbitrageScanner = () => {
     isScanningRef.current = true;
     
     try {
-      /* 
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
@@ -221,7 +220,6 @@ export const ArbitrageScanner = () => {
         title: "Scan Complete",
         description: `Found ${response.data?.opportunities_count || 0} opportunities`,
       });
-      */
     } catch (error: any) {
       console.error('Scan error:', error);
       toast({
