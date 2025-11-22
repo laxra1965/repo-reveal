@@ -1,23 +1,248 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import ccxt from 'https://esm.sh/ccxt@4.1.17';
+import { createHmac } from "https://deno.land/std@0.177.0/node/crypto.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Helper interfaces
+interface TradeStep {
+  action: 'BUY' | 'SELL';
+  symbol: string;
+  price: number;
+  amount: number;
+  exchange: string;
+}
+
 interface ExecutionResult {
   success: boolean;
   orderId?: string;
   executedPrice?: number;
   executedAmount?: number;
-  fee?: number;
   error?: string;
 }
 
-// Trade executor using CCXT
+// Exchange API implementations
+class BinanceAPI {
+  constructor(
+    private apiKey: string,
+    private apiSecret: string,
+    private testMode: boolean = false
+  ) {}
+
+  private getBaseUrl(): string {
+    return this.testMode 
+      ? 'https://testnet.binance.vision/api'
+      : 'https://api.binance.com/api';
+  }
+
+  private sign(params: Record<string, any>): string {
+    const queryString = Object.entries(params)
+      .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+      .join('&');
+    
+    return createHmac('sha256', this.apiSecret)
+      .update(queryString)
+      .digest('hex');
+  }
+
+  async placeOrder(
+    symbol: string,
+    side: 'BUY' | 'SELL',
+    quantity: number
+  ): Promise<ExecutionResult> {
+    try {
+      const timestamp = Date.now();
+      const params = {
+        symbol,
+        side,
+        type: 'MARKET',
+        quantity: quantity.toFixed(8),
+        timestamp,
+      };
+
+      const signature = this.sign(params);
+      const queryString = Object.entries({ ...params, signature })
+        .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+        .join('&');
+
+      const response = await fetch(
+        `${this.getBaseUrl()}/v3/order?${queryString}`,
+        {
+          method: 'POST',
+          headers: {
+            'X-MBX-APIKEY': this.apiKey,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Binance API error: ${error}`);
+      }
+
+      const data = await response.json();
+      
+      return {
+        success: true,
+        orderId: data.orderId,
+        executedPrice: parseFloat(data.fills?.[0]?.price || data.price || '0'),
+        executedAmount: parseFloat(data.executedQty || '0'),
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  async getBalance(asset: string): Promise<number> {
+    try {
+      const timestamp = Date.now();
+      const params = { timestamp };
+      const signature = this.sign(params);
+
+      const response = await fetch(
+        `${this.getBaseUrl()}/v3/account?timestamp=${timestamp}&signature=${signature}`,
+        {
+          headers: {
+            'X-MBX-APIKEY': this.apiKey,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch balance');
+      }
+
+      const data = await response.json();
+      const balance = data.balances.find((b: any) => b.asset === asset);
+      
+      return parseFloat(balance?.free || '0');
+    } catch (error) {
+      console.error('Error fetching Binance balance:', error);
+      return 0;
+    }
+  }
+}
+
+class BybitAPI {
+  constructor(
+    private apiKey: string,
+    private apiSecret: string,
+    private testMode: boolean = false
+  ) {}
+
+  private getBaseUrl(): string {
+    return this.testMode
+      ? 'https://api-testnet.bybit.com'
+      : 'https://api.bybit.com';
+  }
+
+  private sign(params: string, timestamp: string): string {
+    const signString = timestamp + this.apiKey + '5000' + params;
+    return createHmac('sha256', this.apiSecret)
+      .update(signString)
+      .digest('hex');
+  }
+
+  async placeOrder(
+    symbol: string,
+    side: 'Buy' | 'Sell',
+    quantity: number
+  ): Promise<ExecutionResult> {
+    try {
+      const timestamp = Date.now().toString();
+      const params = JSON.stringify({
+        category: 'spot',
+        symbol,
+        side,
+        orderType: 'Market',
+        qty: quantity.toString(),
+      });
+
+      const signature = this.sign(params, timestamp);
+
+      const response = await fetch(
+        `${this.getBaseUrl()}/v5/order/create`,
+        {
+          method: 'POST',
+          headers: {
+            'X-BAPI-API-KEY': this.apiKey,
+            'X-BAPI-SIGN': signature,
+            'X-BAPI-TIMESTAMP': timestamp,
+            'X-BAPI-RECV-WINDOW': '5000',
+            'Content-Type': 'application/json',
+          },
+          body: params,
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Bybit API error: ${error}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.retCode !== 0) {
+        throw new Error(data.retMsg);
+      }
+
+      return {
+        success: true,
+        orderId: data.result.orderId,
+        executedPrice: parseFloat(data.result.avgPrice || '0'),
+        executedAmount: parseFloat(data.result.cumExecQty || '0'),
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  async getBalance(asset: string): Promise<number> {
+    try {
+      const timestamp = Date.now().toString();
+      const params = `accountType=UNIFIED&timestamp=${timestamp}`;
+      const signature = this.sign(params, timestamp);
+
+      const response = await fetch(
+        `${this.getBaseUrl()}/v5/account/wallet-balance?${params}`,
+        {
+          headers: {
+            'X-BAPI-API-KEY': this.apiKey,
+            'X-BAPI-SIGN': signature,
+            'X-BAPI-TIMESTAMP': timestamp,
+            'X-BAPI-RECV-WINDOW': '5000',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch balance');
+      }
+
+      const data = await response.json();
+      
+      if (data.retCode !== 0) {
+        throw new Error(data.retMsg);
+      }
+
+      const coin = data.result?.list?.[0]?.coin?.find((c: any) => c.coin === asset);
+      return parseFloat(coin?.walletBalance || '0');
+    } catch (error) {
+      console.error('Error fetching Bybit balance:', error);
+      return 0;
+    }
+  }
+}
+
+// Trade executor
 class TradeExecutor {
   constructor(
     private supabase: any,
@@ -25,85 +250,39 @@ class TradeExecutor {
     private maxTradeAmount: number
   ) {}
 
-  /**
-   * Initialize and configure the specific CCXT exchange client
-   */
-  private async getExchangeClient(exchangeName: string) {
-    // 1. Fetch credentials from DB
+  private async getExchangeAPI(exchange: string) {
     const { data: credential } = await this.supabase
       .from('exchange_credentials')
       .select('*')
       .eq('user_id', this.userId)
-      .eq('exchange', exchangeName)
+      .eq('exchange', exchange)
       .eq('is_connected', true)
       .single();
 
     if (!credential) {
-      throw new Error(`No credentials found for ${exchangeName}`);
+      throw new Error(`No credentials found for ${exchange}`);
     }
 
-    // 2. Check if exchange exists in CCXT
-    const exchangeId = exchangeName.toLowerCase();
-    if (!ccxt[exchangeId]) {
-      throw new Error(`Exchange ${exchangeName} is not supported by CCXT lib`);
-    }
-
-    // 3. Initialize Client
-    const exchange = new ccxt[exchangeId]({
-      apiKey: credential.api_key,
-      secret: credential.api_secret,
-      enableRateLimit: true, // Crucial for stability
-      options: { defaultType: 'spot' }
-    });
-
-    // 4. Handle Sandbox/Testnet modes
-    if (credential.test_mode) {
-      exchange.setSandboxMode(true);
-    }
-
-    return exchange;
-  }
-
-  /**
-   * Helper to execute a single CCXT Market Order
-   */
-  private async executeStep(
-    exchangeName: string,
-    symbol: string,
-    side: 'buy' | 'sell',
-    amount: number
-  ): Promise<ExecutionResult> {
-    try {
-      const client = await this.getExchangeClient(exchangeName);
-      
-      // CCXT expects symbols like 'BTC/USDT', ensure slash exists
-      // If incoming is 'BTCUSDT', this might need adjustment depending on data source,
-      // but assuming we construct it with slashes in executeTrade.
-      
-      const order = await client.createMarketOrder(symbol, side, amount);
-
-      // Wait for order to fill if needed or just return result
-      // For some exchanges, we might want to fetch the order result again to get exact 'filled' status
-      // But for speed, we usually rely on the response.
-      
-      return {
-        success: true,
-        orderId: order.id,
-        executedPrice: order.average || order.price,
-        executedAmount: order.filled || order.amount,
-        fee: order.fee ? order.fee.cost : 0
-      };
-    } catch (err: any) {
-      console.error(`Order failed on ${exchangeName}:`, err.message);
-      return {
-        success: false,
-        error: err.message
-      };
+    switch (exchange.toLowerCase()) {
+      case 'binance':
+        return new BinanceAPI(
+          credential.api_key,
+          credential.api_secret,
+          credential.test_mode
+        );
+      case 'bybit':
+        return new BybitAPI(
+          credential.api_key,
+          credential.api_secret,
+          credential.test_mode
+        );
+      default:
+        throw new Error(`Unsupported exchange: ${exchange}`);
     }
   }
 
   async executeTrade(opportunity: any): Promise<any> {
-    // 1. Create initial trade history record
+    // Create trade history record
     const { data: tradeRecord, error: tradeError } = await this.supabase
       .from('trade_history')
       .insert({
@@ -133,108 +312,112 @@ class TradeExecutor {
     };
 
     try {
-      // Validate trade amount against position limit (Subscription check)
+      // Validate trade amount against position limit
       if (opportunity.start_amount > this.maxTradeAmount) {
         throw new Error(
           `Trade amount $${opportunity.start_amount} exceeds position limit $${this.maxTradeAmount}`
         );
       }
 
-      // --- STEP 1 ---
-      const sym1 = `${opportunity.base_symbol}/${opportunity.intermediate_symbol}`;
-      const side1 = opportunity.step1_action.toLowerCase();
+      // Step 1: Execute first trade
+      console.log(`Executing Step 1: ${opportunity.step1_action} ${opportunity.base_symbol}${opportunity.intermediate_symbol}`);
       
-      console.log(`Executing Step 1: ${side1} ${sym1} on ${opportunity.exchange1}`);
-      
-      const step1Result = await this.executeStep(
-        opportunity.exchange1,
-        sym1,
-        side1,
+      const api1 = await this.getExchangeAPI(opportunity.exchange1);
+      const step1Result = await api1.placeOrder(
+        `${opportunity.base_symbol}${opportunity.intermediate_symbol}`,
+        opportunity.step1_action,
         opportunity.step1_amount
       );
 
-      if (!step1Result.success) throw new Error(`Step 1 failed: ${step1Result.error}`);
+      if (!step1Result.success) {
+        throw new Error(`Step 1 failed: ${step1Result.error}`);
+      }
 
       executionDetails.steps.push({
         step: 1,
-        action: side1,
-        symbol: sym1,
+        action: opportunity.step1_action,
+        symbol: `${opportunity.base_symbol}${opportunity.intermediate_symbol}`,
         exchange: opportunity.exchange1,
         orderId: step1Result.orderId,
         expectedPrice: opportunity.step1_price,
         executedPrice: step1Result.executedPrice,
+        expectedAmount: opportunity.step1_amount,
         executedAmount: step1Result.executedAmount,
         timestamp: new Date().toISOString(),
       });
 
-      await this.supabase.from('trade_history').update({ 
-        completed_steps: 1,
-        execution_details: executionDetails 
-      }).eq('id', tradeId);
+      await this.supabase
+        .from('trade_history')
+        .update({ 
+          completed_steps: 1,
+          execution_details: executionDetails 
+        })
+        .eq('id', tradeId);
 
-      // --- STEP 2 ---
-      const sym2 = `${opportunity.intermediate_symbol}/${opportunity.quote_symbol}`;
-      const side2 = opportunity.step2_action.toLowerCase();
-
-      console.log(`Executing Step 2: ${side2} ${sym2} on ${opportunity.exchange2}`);
-
-      const step2Result = await this.executeStep(
-        opportunity.exchange2,
-        sym2,
-        side2,
+      // Step 2: Execute second trade
+      console.log(`Executing Step 2: ${opportunity.step2_action} ${opportunity.intermediate_symbol}${opportunity.quote_symbol}`);
+      
+      const api2 = await this.getExchangeAPI(opportunity.exchange2);
+      const step2Result = await api2.placeOrder(
+        `${opportunity.intermediate_symbol}${opportunity.quote_symbol}`,
+        opportunity.step2_action,
         opportunity.step2_amount
       );
 
-      if (!step2Result.success) throw new Error(`Step 2 failed: ${step2Result.error}`);
+      if (!step2Result.success) {
+        throw new Error(`Step 2 failed: ${step2Result.error}`);
+      }
 
       executionDetails.steps.push({
         step: 2,
-        action: side2,
-        symbol: sym2,
+        action: opportunity.step2_action,
+        symbol: `${opportunity.intermediate_symbol}${opportunity.quote_symbol}`,
         exchange: opportunity.exchange2,
         orderId: step2Result.orderId,
         expectedPrice: opportunity.step2_price,
         executedPrice: step2Result.executedPrice,
+        expectedAmount: opportunity.step2_amount,
         executedAmount: step2Result.executedAmount,
         timestamp: new Date().toISOString(),
       });
 
-      await this.supabase.from('trade_history').update({ 
-        completed_steps: 2,
-        execution_details: executionDetails 
-      }).eq('id', tradeId);
+      await this.supabase
+        .from('trade_history')
+        .update({ 
+          completed_steps: 2,
+          execution_details: executionDetails 
+        })
+        .eq('id', tradeId);
 
-      // --- STEP 3 ---
-      const sym3 = `${opportunity.base_symbol}/${opportunity.quote_symbol}`;
-      const side3 = opportunity.step3_action.toLowerCase();
-
-      console.log(`Executing Step 3: ${side3} ${sym3} on ${opportunity.exchange3}`);
-
-      const step3Result = await this.executeStep(
-        opportunity.exchange3,
-        sym3,
-        side3,
+      // Step 3: Execute third trade
+      console.log(`Executing Step 3: ${opportunity.step3_action} ${opportunity.base_symbol}${opportunity.quote_symbol}`);
+      
+      const api3 = await this.getExchangeAPI(opportunity.exchange3);
+      const step3Result = await api3.placeOrder(
+        `${opportunity.base_symbol}${opportunity.quote_symbol}`,
+        opportunity.step3_action,
         opportunity.step3_amount
       );
 
-      if (!step3Result.success) throw new Error(`Step 3 failed: ${step3Result.error}`);
+      if (!step3Result.success) {
+        throw new Error(`Step 3 failed: ${step3Result.error}`);
+      }
 
       executionDetails.steps.push({
         step: 3,
-        action: side3,
-        symbol: sym3,
+        action: opportunity.step3_action,
+        symbol: `${opportunity.base_symbol}${opportunity.quote_symbol}`,
         exchange: opportunity.exchange3,
         orderId: step3Result.orderId,
         expectedPrice: opportunity.step3_price,
         executedPrice: step3Result.executedPrice,
+        expectedAmount: opportunity.step3_amount,
         executedAmount: step3Result.executedAmount,
         timestamp: new Date().toISOString(),
       });
 
-      // --- CALCULATION ---
-      // Calculate actual profit based on the final step execution
-      // This assumes the last step converts back to the start currency
-      const finalAmount = (step3Result.executedAmount || 0) * (step3Result.executedPrice || 0);
+      // Calculate actual profit
+      const finalAmount = step3Result.executedAmount! * step3Result.executedPrice!;
       const actualProfit = finalAmount - opportunity.start_amount;
       
       executionDetails.endTime = new Date().toISOString();
@@ -254,7 +437,7 @@ class TradeExecutor {
         })
         .eq('id', tradeId);
 
-      // Log success to scanner_logs
+      // Log success
       await this.supabase
         .from('scanner_logs')
         .insert({
@@ -275,8 +458,7 @@ class TradeExecutor {
         actualProfit,
         executionDetails,
       };
-
-    } catch (error: any) {
+    } catch (error) {
       // Update trade record as failed
       executionDetails.error = error.message;
       executionDetails.endTime = new Date().toISOString();
@@ -311,20 +493,17 @@ class TradeExecutor {
   }
 }
 
-// Main Server Handler
+// Main handler
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Initialize Supabase Admin
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // 1. Auth Check
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Missing authorization' }), {
@@ -343,7 +522,6 @@ serve(async (req) => {
       });
     }
 
-    // 2. Parse Request
     const { opportunityId } = await req.json();
 
     if (!opportunityId) {
@@ -353,7 +531,7 @@ serve(async (req) => {
       });
     }
 
-    // 3. Check Subscription & Limits
+    // Check subscription and get position limit
     const { data: subscription } = await supabase
       .from('user_subscriptions')
       .select(`
@@ -381,7 +559,7 @@ serve(async (req) => {
 
     // Determine max trade amount based on tier
     const tierName = subscription.subscription_plans?.name || '';
-    let maxTradeAmount = 100; // Default for basic
+    let maxTradeAmount = 100; // Default
 
     if (tierName.includes('Tier 1') || tierName.includes('Scanner Only')) {
       return new Response(
@@ -397,12 +575,12 @@ serve(async (req) => {
       maxTradeAmount = 1000;
     }
 
-    // 4. Fetch Opportunity Details
+    // Fetch opportunity
     const { data: opportunity, error: oppError } = await supabase
       .from('arbitrage_opportunities')
       .select('*')
       .eq('id', opportunityId)
-      .gt('expires_at', new Date().toISOString()) // Ensure not expired
+      .gt('expires_at', new Date().toISOString())
       .single();
 
     if (oppError || !opportunity) {
@@ -415,7 +593,7 @@ serve(async (req) => {
       );
     }
 
-    // 5. Execute Trade
+    // Execute trade
     const executor = new TradeExecutor(supabase, user.id, maxTradeAmount);
     const result = await executor.executeTrade(opportunity);
 
@@ -423,8 +601,7 @@ serve(async (req) => {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
-
-  } catch (error: any) {
+  } catch (error) {
     console.error('Trade execution error:', error);
     return new Response(
       JSON.stringify({ 
