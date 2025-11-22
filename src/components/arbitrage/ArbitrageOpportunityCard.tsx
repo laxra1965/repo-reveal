@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { useTradeExecution } from '@/hooks/useTradeExecution';
+import { useTradeExecution } from '@/hooks/useTradeExecution'; // Imported hook
 import { ArrowRight, TrendingUp, TrendingDown, Clock, Eye, EyeOff, Zap, AlertTriangle, Target, AlertCircle } from 'lucide-react';
 
 interface Opportunity {
@@ -44,39 +44,13 @@ interface ArbitrageOpportunityCardProps {
 
 export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportunityCardProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  
-  // FIX 1 & 4: Initialize timeLeft state and calculation logic
-  const calculateTimeLeft = () => {
-    const expiresAt = new Date(opportunity.expires_at);
-    const now = new Date();
-    const diff = Math.max(0, expiresAt.getTime() - now.getTime());
-    return Math.floor(diff / 1000);
-  };
-
-  const [timeLeft, setTimeLeft] = useState(calculateTimeLeft());
   const { toast } = useToast();
+  
+  // Initialize trade execution hook
   const { executeTrade, executing } = useTradeExecution();
 
-  // FIX 1: Live Ticker
-  useEffect(() => {
-    // Update immediately to prevent initial flash of wrong time
-    setTimeLeft(calculateTimeLeft());
-
-    const timer = setInterval(() => {
-      const remaining = calculateTimeLeft();
-      setTimeLeft(remaining);
-      
-      // Stop timer if expired to save resources
-      if (remaining <= 0) {
-        clearInterval(timer);
-      }
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [opportunity.expires_at]);
-
-  // FIX 2: Error Handling
   const handleTrade = async () => {
+    // Execute the trade using the hook
     const result = await executeTrade(opportunity.id);
     
     if (result.success) {
@@ -85,34 +59,18 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
         description: `Successfully initiated trade for ${opportunity.base_symbol}-${opportunity.quote_symbol}`,
         variant: "default",
       });
-    } else {
-      toast({
-        title: "Execution Failed",
-        description: result.error || "Failed to execute trade. Check exchange connectivity.",
-        variant: "destructive",
-      });
     }
   };
 
-  // FIX 3: Dynamic Risk Calculation (Memoized)
-  const riskMetrics = useMemo(() => {
-    const isCrossExchange = opportunity.type === 'cross_exchange' || 
-                           (opportunity.exchange1 !== opportunity.exchange2) || 
-                           (opportunity.exchange2 !== opportunity.exchange3);
-    
-    const highProfit = opportunity.profit_percent > 1.5;
-
-    return {
-      complexity: isCrossExchange ? 'High' : 'Medium',
-      speedRequired: highProfit ? 'Critical' : 'High', // Higher profit arbs vanish faster
-      marketImpact: opportunity.start_amount > 1000 ? 'Medium' : 'Low',
-      successRate: isCrossExchange ? '~65%' : '~85%', // Single exchange usually has higher success rate
-      complexityColor: isCrossExchange ? 'text-orange-500' : 'text-blue-500'
-    };
-  }, [opportunity]);
-
   const formatExchange = (exchange: string) => {
     return exchange.charAt(0).toUpperCase() + exchange.slice(1);
+  };
+
+  const getTimeLeft = () => {
+    const expiresAt = new Date(opportunity.expires_at);
+    const now = new Date();
+    const timeLeft = Math.max(0, expiresAt.getTime() - now.getTime());
+    return Math.floor(timeLeft / 1000);
   };
 
   const formatCurrency = (amount: number, decimals = 8) => {
@@ -131,18 +89,15 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
     return null;
   };
 
-  // Updated to use state 'timeLeft'
   const getUrgencyIndicator = () => {
+    const timeLeft = getTimeLeft();
     if (timeLeft < 10) return <AlertTriangle className="h-4 w-4 text-red-500 animate-pulse" />;
     if (timeLeft < 30) return <Clock className="h-4 w-4 text-yellow-500" />;
     return <Clock className="h-4 w-4 text-muted-foreground" />;
   };
 
   const signalType = opportunity.signal_type || 'arbitrage';
-  
-  // FIX 5: Safe Division
-  const arbFactor = opportunity.arb_factor || 
-    (opportunity.start_amount > 0 ? opportunity.end_amount / opportunity.start_amount : 0);
+  const arbFactor = opportunity.arb_factor || (opportunity.end_amount / opportunity.start_amount);
 
   const getSignalBadge = () => {
     if (signalType === 'arbitrage') {
@@ -282,8 +237,8 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
               {getUrgencyIndicator()}
               Expires
             </div>
-            <div className={`font-semibold ${timeLeft < 10 ? 'text-red-500' : ''}`}>
-              {timeLeft}s
+            <div className="font-semibold">
+              {getTimeLeft()}s
             </div>
           </div>
         </div>
@@ -405,14 +360,14 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
               </div>
             </div>
 
-            {/* FIX 3: Dynamic Risk Assessment Display */}
+            {/* Risk Assessment */}
             <div className="p-3 bg-muted/30 rounded border border-dashed">
               <h5 className="text-xs font-semibold mb-2 text-muted-foreground">RISK ASSESSMENT</h5>
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div>Complexity: <span className={`font-semibold ${riskMetrics.complexityColor}`}>{riskMetrics.complexity}</span></div>
-                <div>Speed Required: <span className="font-semibold">{riskMetrics.speedRequired}</span></div>
-                <div>Market Impact: <span className="font-semibold">{riskMetrics.marketImpact}</span></div>
-                <div>Success Rate: <span className="font-semibold">{riskMetrics.successRate}</span></div>
+                <div>Complexity: <span className="font-semibold">Medium</span></div>
+                <div>Speed Required: <span className="font-semibold">High</span></div>
+                <div>Market Impact: <span className="font-semibold">Low</span></div>
+                <div>Success Rate: <span className="font-semibold">~75%</span></div>
               </div>
             </div>
           </div>
