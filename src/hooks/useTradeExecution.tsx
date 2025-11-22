@@ -24,11 +24,20 @@ export const useTradeExecution = () => {
         throw new Error('No active session');
       }
 
+      // UPDATED LOGIC START
       toast({
-        title: "Executing Trade",
-        description: "Starting trade execution... This may take a few moments.",
+        title: "Trade Execution Disabled",
+        description: "Auto-trading is currently being set up.",
+        variant: "destructive",
       });
 
+      // TEMPORARY RETURN - Remove when function is ready
+      return {
+        success: false,
+        error: 'Trade execution is currently disabled'
+      };
+
+      /* UNCOMMENT WHEN EDGE FUNCTION IS DEPLOYED
       const response = await supabase.functions.invoke('execute-trade', {
         body: { opportunityId },
         headers: {
@@ -52,6 +61,9 @@ export const useTradeExecution = () => {
       }
 
       return result;
+      */
+      // UPDATED LOGIC END
+
     } catch (error: any) {
       console.error('Trade execution error:', error);
       
