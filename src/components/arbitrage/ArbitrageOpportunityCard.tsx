@@ -3,7 +3,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { useTradeExecution } from '@/hooks/useTradeExecution'; // Imported hook
 import { ArrowRight, TrendingUp, TrendingDown, Clock, Eye, EyeOff, Zap, AlertTriangle, Target, AlertCircle } from 'lucide-react';
 
 interface Opportunity {
@@ -34,7 +33,7 @@ interface Opportunity {
   arb_factor?: number;
   overpriced_leg?: string | null;
   price_deviation?: number | null;
-  quality_score?: number;
+  quality_score?: number; // Added for the quality score badge
 }
 
 interface ArbitrageOpportunityCardProps {
@@ -45,21 +44,12 @@ interface ArbitrageOpportunityCardProps {
 export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportunityCardProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const { toast } = useToast();
-  
-  // Initialize trade execution hook
-  const { executeTrade, executing } = useTradeExecution();
 
-  const handleTrade = async () => {
-    // Execute the trade using the hook
-    const result = await executeTrade(opportunity.id);
-    
-    if (result.success) {
-      toast({
-        title: "Trade Initiated",
-        description: `Successfully initiated trade for ${opportunity.base_symbol}-${opportunity.quote_symbol}`,
-        variant: "default",
-      });
-    }
+  const handleTrade = () => {
+    toast({
+      title: "Trade Execution",
+      description: "Trade execution functionality requires API credentials to be configured in Settings",
+    });
   };
 
   const formatExchange = (exchange: string) => {
@@ -75,6 +65,13 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
 
   const formatCurrency = (amount: number, decimals = 8) => {
     return amount.toFixed(decimals);
+  };
+
+  const getProfitColorClass = () => {
+    if (opportunity.profit_percent > 1) return 'text-green-400';
+    if (opportunity.profit_percent > 0.5) return 'text-green-500';
+    if (opportunity.profit_percent > 0.1) return 'text-green-600';
+    return 'text-green-700';
   };
 
   const getRankBadgeVariant = () => {
@@ -389,20 +386,18 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
             {rank === 1 && (
               <Button 
                 onClick={handleTrade}
-                disabled={executing}
                 className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-black font-semibold"
               >
                 <Zap className="h-4 w-4 mr-2" />
-                {executing ? 'Executing...' : 'Execute Top Trade'}
+                Execute Top Trade
               </Button>
             )}
             {rank !== 1 && (
               <Button 
                 onClick={handleTrade}
-                disabled={executing}
                 className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800"
               >
-                {executing ? 'Executing...' : 'Execute Trade'}
+                Execute Trade
               </Button>
             )}
           </div>

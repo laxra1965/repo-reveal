@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
-import { useTradeExecution } from '@/hooks/useTradeExecution';
+import { useTradeExecution } from '@/hooks/useTradeExecution'; // Imported trade execution hook
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -41,17 +41,16 @@ interface Opportunity {
 }
 
 const OPPORTUNITIES_PER_PAGE = 10;
-const AUTO_TRADE_MIN_PROFIT = 0.5; // Extracted constant for easier adjustment
 
 export const ArbitrageScanner = () => {
   const { user } = useAuth();
   const { hasActiveSubscription, subscription, loading: subscriptionLoading } = useSubscription();
-  const { executeTrade } = useTradeExecution();
+  const { executeTrade } = useTradeExecution(); // Initialized trade execution
   const { toast } = useToast();
   
   const [isScanning, setIsScanning] = useState(false);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
-  const [autoTradeEnabled, setAutoTradeEnabled] = useState(false);
+  const [autoTradeEnabled, setAutoTradeEnabled] = useState(false); // Added auto-trade state
   const [showSettings, setShowSettings] = useState(false);
   const [scanInterval, setScanInterval] = useState<NodeJS.Timeout | null>(null);
   const [lastScanTime, setLastScanTime] = useState<Date | null>(null);
@@ -64,9 +63,6 @@ export const ArbitrageScanner = () => {
 
   const isScanningRef = useRef(false);
   const mountedRef = useRef(true);
-  
-  // OPTIMIZATION: Track processed IDs to prevent double-execution
-  const processedTradeIds = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     return () => {
@@ -93,45 +89,24 @@ export const ArbitrageScanner = () => {
     loadAutoTradeSetting();
   }, [user]);
 
-  // OPTIMIZED: Auto-execute when new opportunities arrive
+  // Auto-execute when new opportunities arrive
   useEffect(() => {
     if (!autoTradeEnabled || !opportunities.length) return;
     
     const executeTopOpportunity = async () => {
-      // 1. Sort logic aligned with UI (Quality Score -> Profit)
       const topOpp = opportunities
-        .filter(o => o.profit_percent > AUTO_TRADE_MIN_PROFIT)
-        .sort((a, b) => {
-          if (a.quality_score && b.quality_score && a.quality_score !== b.quality_score) {
-            return b.quality_score - a.quality_score;
-          }
-          return b.profit_percent - a.profit_percent;
-        })[0];
+        .filter(o => o.profit_percent > 0.5) // Min threshold
+        .sort((a, b) => b.profit_percent - a.profit_percent)[0];
       
-      // 2. SAFETY CHECK: Ensure we haven't processed this ID yet
-      if (topOpp && !processedTradeIds.current.has(topOpp.id)) {
-        
-        // 3. Mark as processed IMMEDIATELY before await
-        processedTradeIds.current.add(topOpp.id);
-        
-        console.log(`Auto-executing opportunity: ${topOpp.id} (${topOpp.profit_percent}% profit)`);
-        
-        try {
-          await executeTrade(topOpp.id);
-          
-          toast({
-            title: "Auto-Trade Triggered",
-            description: `Executing ${topOpp.base_symbol} arbitrage path`,
-          });
-        } catch (error) {
-          console.error("Auto-trade execution failed:", error);
-          // Note: We do NOT remove from set on error to prevent infinite retry loops on a bad trade
-        }
+      if (topOpp) {
+        // Optional: You might want to check if this specific opp ID hasn't been executed yet
+        // to avoid duplicate execution attempts if the list doesn't refresh fast enough
+        await executeTrade(topOpp.id);
       }
     };
     
     executeTopOpportunity();
-  }, [opportunities, autoTradeEnabled, executeTrade, toast]);
+  }, [opportunities, autoTradeEnabled, executeTrade]);
 
   // Load opportunities from database
   const loadOpportunitiesFromDB = async () => {
@@ -334,7 +309,7 @@ export const ArbitrageScanner = () => {
               </CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
                 Real-time monitoring • Showing top {OPPORTUNITIES_PER_PAGE} opportunities per page
-                {autoTradeEnabled && <span className="text-green-600 font-semibold ml-2 animate-pulse">• Auto-Trade Active</span>}
+                {autoTradeEnabled && <span className="text-green-500 font-medium ml-2">• Auto-Trade Active</span>}
               </p>
             </div>
             <div className="flex gap-2">
