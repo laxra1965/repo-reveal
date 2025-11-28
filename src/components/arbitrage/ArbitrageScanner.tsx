@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
-import { useTradeExecution } from '@/hooks/useTradeExecution'; // Imported trade execution hook
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -45,12 +44,10 @@ const OPPORTUNITIES_PER_PAGE = 10;
 export const ArbitrageScanner = () => {
   const { user } = useAuth();
   const { hasActiveSubscription, subscription, loading: subscriptionLoading } = useSubscription();
-  const { executeTrade } = useTradeExecution(); // Initialized trade execution
   const { toast } = useToast();
   
   const [isScanning, setIsScanning] = useState(false);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
-  const [autoTradeEnabled, setAutoTradeEnabled] = useState(false); // Added auto-trade state
   const [showSettings, setShowSettings] = useState(false);
   const [scanInterval, setScanInterval] = useState<NodeJS.Timeout | null>(null);
   const [lastScanTime, setLastScanTime] = useState<Date | null>(null);
@@ -72,41 +69,6 @@ export const ArbitrageScanner = () => {
       }
     };
   }, [scanInterval]);
-
-  // Load auto-trade setting
-  useEffect(() => {
-    const loadAutoTradeSetting = async () => {
-      if (!user) return;
-      const { data } = await supabase
-        .from('user_settings')
-        .select('auto_trade')
-        .eq('user_id', user.id)
-        .single();
-      
-      setAutoTradeEnabled(data?.auto_trade || false);
-    };
-    
-    loadAutoTradeSetting();
-  }, [user]);
-
-  // Auto-execute when new opportunities arrive
-  useEffect(() => {
-    if (!autoTradeEnabled || !opportunities.length) return;
-    
-    const executeTopOpportunity = async () => {
-      const topOpp = opportunities
-        .filter(o => o.profit_percent > 0.5) // Min threshold
-        .sort((a, b) => b.profit_percent - a.profit_percent)[0];
-      
-      if (topOpp) {
-        // Optional: You might want to check if this specific opp ID hasn't been executed yet
-        // to avoid duplicate execution attempts if the list doesn't refresh fast enough
-        await executeTrade(topOpp.id);
-      }
-    };
-    
-    executeTopOpportunity();
-  }, [opportunities, autoTradeEnabled, executeTrade]);
 
   // Load opportunities from database
   const loadOpportunitiesFromDB = async () => {
@@ -309,7 +271,6 @@ export const ArbitrageScanner = () => {
               </CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
                 Real-time monitoring • Showing top {OPPORTUNITIES_PER_PAGE} opportunities per page
-                {autoTradeEnabled && <span className="text-green-500 font-medium ml-2">• Auto-Trade Active</span>}
               </p>
             </div>
             <div className="flex gap-2">

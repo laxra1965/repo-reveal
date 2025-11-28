@@ -346,7 +346,7 @@ async function fetchAllExchangeData(enabledExchanges: string[]): Promise<Record<
 
 // Enhanced triangular arbitrage finder with volume analysis and short signal detection
 function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: string, tradeAmount: number, minProfitPercent: number = 0.001, filterProfitable: boolean = true, customPairs: string[] = [], detectShortSignals: boolean = false): any[] {
-  let opportunities: any[] = [];
+  const opportunities: any[] = [];
 
   // Expanded base currencies for more arbitrage opportunities - focus on high-liquidity pairs
   let commonBases = [
@@ -631,8 +631,6 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
     }
   }
 
-  // Deduplicate opportunities using enhanced algorithm
-  opportunities = deduplicateOpportunities(opportunities);
   // Sort by absolute profit percentage descending to show best opportunities first
   return opportunities
     .sort((a, b) => Math.abs(b.profit_percent) - Math.abs(a.profit_percent))
@@ -641,7 +639,7 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
 
 // Cross-exchange arbitrage finder with short signal detection
 function findCrossExchangeArbitrage(priceMap: Record<string, any>, quoteCurrency: string, tradeAmount: number, minProfitPercent: number = 0.001, filterProfitable: boolean = true, customPairs: string[] = [], detectShortSignals: boolean = false): any[] {
-  let opportunities: any[] = [];
+  const opportunities: any[] = [];
 
   // Use same base currencies as triangular arbitrage
   let commonBases = [
@@ -839,8 +837,6 @@ function findCrossExchangeArbitrage(priceMap: Record<string, any>, quoteCurrency
     }
   }
 
-  // Deduplicate opportunities using enhanced algorithm
-  opportunities = deduplicateOpportunities(opportunities);
   // Sort by absolute profit percentage descending
   return opportunities
     .sort((a, b) => Math.abs(b.profit_percent) - Math.abs(a.profit_percent))
