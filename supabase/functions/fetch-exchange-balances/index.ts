@@ -100,7 +100,7 @@ async function fetchBinanceBalance(apiKey: string, apiSecret: string): Promise<E
       totalUSDT: 0,
       assets: {},
       timestamp: new Date().toISOString(),
-      error: error.message,
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
@@ -189,7 +189,7 @@ async function fetchBybitBalance(apiKey: string, apiSecret: string): Promise<Exc
       totalUSDT: 0,
       assets: {},
       timestamp: new Date().toISOString(),
-      error: error.message,
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
@@ -279,7 +279,7 @@ async function fetchGateBalance(apiKey: string, apiSecret: string): Promise<Exch
       totalUSDT: 0,
       assets: {},
       timestamp: new Date().toISOString(),
-      error: error.message,
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
@@ -375,7 +375,7 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error('Error fetching balances:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

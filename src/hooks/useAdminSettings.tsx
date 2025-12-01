@@ -10,7 +10,7 @@ export const useAdminSettings = () => {
       try {
         const { data, error } = await supabase
           .from('admin_settings')
-          .select('key, value');
+          .select('key, value') as { data: Array<{ key: string; value: string }> | null; error: any };
 
         if (error) throw error;
 
