@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useAdminSettings } from '@/hooks/useAdminSettings';
 import { Copy, Upload } from 'lucide-react';
 
 interface Transaction {
@@ -30,9 +31,10 @@ const Payment = () => {
   const [submitting, setSubmitting] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
+  const { getSetting: getAdminSetting } = useAdminSettings();
   const navigate = useNavigate();
 
-  const USDT_ADDRESS = "TQzjbHBa9ckat52PtVn7m2SSEM7dJXQ2uP"; // Your USDT-TRC20 address
+  const USDT_ADDRESS = getAdminSetting('usdt_address', 'TQzjbHBa9ckat52PtVn7m2SSEM7dJXQ2uP');
 
   useEffect(() => {
     if (!user) {

@@ -1,4 +1,5 @@
 import { useAuth } from '@/hooks/useAuth';
+import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -9,13 +10,12 @@ import { AdminUsersList } from '@/components/admin/AdminUsersList';
 import { AdminSystemMaintenance } from '@/components/admin/AdminSystemMaintenance';
 import { ArrowLeft, Settings, CreditCard, Users, Shield, UserCog, Wrench } from 'lucide-react';
 
-const ADMIN_EMAILS = ['laxracorp@gmail.com', 'admin@arbitrage.com'];
-
 const Admin = () => {
-  const { user, loading, signOut } = useAuth();
+  const { user, loading: authLoading, signOut } = useAuth();
+  const { isAdmin, loading: adminLoading } = useIsAdmin();
   const navigate = useNavigate();
   
-  const isAdmin = user?.email && ADMIN_EMAILS.includes(user.email);
+  const loading = authLoading || adminLoading;
 
   useEffect(() => {
     if (!loading && !user) {
