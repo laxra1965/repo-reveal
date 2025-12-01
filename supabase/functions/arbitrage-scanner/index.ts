@@ -169,7 +169,8 @@ async function fetchExchangeData(exchangeName: string, config: ExchangeConfig): 
     throw new Error(`Unsupported exchange type: ${config.type} for ${exchangeName}`);
   } catch (error) {
     console.error(`Error fetching ${exchangeName}:`, error);
-    return { exchangeName, error: error.message };
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return { exchangeName, error: errorMessage };
   }
 }
 
@@ -316,7 +317,8 @@ async function fetchAllExchangeData(enabledExchanges: string[]): Promise<Record<
       return { name, data: result.data, fetchTime };
     } catch (error) {
       console.error(`Failed to fetch ${name}:`, error);
-      return { name, error: error.message };
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      return { name, error: errorMessage };
     }
   });
 
@@ -1329,12 +1331,10 @@ serve(async (req) => {
       const arbitrageTypes = settings?.arbitrage_types || ['triangular', 'cross_exchange'];
       const customPairs = settings?.custom_pairs || [];
 
-      // Clear expired opportunities in background
-      EdgeRuntime.waitUntil(
-        supabase.rpc('cleanup_expired_opportunities').then(
-          () => console.log('Background cleanup completed'),
-          (error: any) => console.error('Background cleanup failed:', error)
-        )
+      // Clear expired opportunities in background (non-blocking)
+      supabase.rpc('cleanup_expired_opportunities').then(
+        () => console.log('Background cleanup completed'),
+        (error: any) => console.error('Background cleanup failed:', error)
       );
 
       // Fetch exchange data
@@ -1549,15 +1549,15 @@ serve(async (req) => {
         }
       }
 
-      // Cleanup expired opportunities in background
-      EdgeRuntime.waitUntil((async () => {
+      // Cleanup expired opportunities in background (non-blocking)
+      (async () => {
         try {
           await supabase.rpc('cleanup_expired_opportunities');
           console.log('Background cleanup completed');
         } catch (error) {
           console.error('Background cleanup failed:', error);
         }
-      })());
+      })();
 
       return new Response(JSON.stringify({
         success: true,
@@ -1588,15 +1588,15 @@ serve(async (req) => {
       });
     }
 
-    // Cleanup expired opportunities in background
-    EdgeRuntime.waitUntil((async () => {
+    // Cleanup expired opportunities in background (non-blocking)
+    (async () => {
       try {
         await supabase.rpc('cleanup_expired_opportunities');
         console.log('Background cleanup completed');
       } catch (error) {
         console.error('Background cleanup failed:', error);
       }
-    })());
+    })();
 
     // Fetch user settings
     const { data: userSettings, error: settingsError } = await supabase
@@ -1692,7 +1692,8 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error('Error in arbitrage scanner:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });

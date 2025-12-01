@@ -20,7 +20,7 @@ export const useIsAdmin = () => {
           .from('admin_users')
           .select('id')
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle() as { data: { id: string } | null; error: any };
 
         if (error && error.code !== 'PGRST116') {
           console.error('Error checking admin status:', error);

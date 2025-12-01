@@ -71,7 +71,7 @@ export const StatisticsDashboard = () => {
           const profit = Number(opp.profit_percent) || 0;
           const volume = Number(opp.start_amount) || 0;
           const isProfitable = profit > 0;
-          const qualityScore = Number(opp.quality_score) || 0;
+          const qualityScore = Number(opp.quality_score ?? 0);
 
           totalOpps++;
           totalProfitSum += profit;
