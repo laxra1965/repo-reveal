@@ -17,6 +17,7 @@ import Pricing from "./pages/Pricing";
 import AdminApprove from "./pages/AdminApprove";
 import Profile from "./pages/Profile";
 import TradeHistory from "./pages/TradeHistory";
+import AutoTrade from "./pages/AutoTrade";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,7 @@ const App = () => (
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/trade-history" element={<TradeHistory />} />
+            <Route path="/auto-trade" element={<AutoTrade />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/admin-login" element={<AdminAuth />} />
             <Route path="/payment/:transactionId" element={<Payment />} />
