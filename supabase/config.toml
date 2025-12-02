@@ -8,3 +8,12 @@ verify_jwt = false
 
 [functions.fetch-exchange-balances]
 verify_jwt = true
+
+[functions.execute-trade]
+verify_jwt = true
+
+[functions.auto-trade-scheduler]
+verify_jwt = false
+
+[functions.scheduled-arb-scan]
+verify_jwt = false
