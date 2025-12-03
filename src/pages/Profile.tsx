@@ -3,6 +3,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { ProfileSection } from '@/components/profile/ProfileSection';
+import { ExchangeCredentialsManager } from '@/components/profile/ExchangeCredentialsManager';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ArrowLeft } from 'lucide-react';
@@ -65,6 +66,8 @@ const Profile = () => {
         </div>
 
         <ProfileSection subscription={subscription} />
+        
+        <ExchangeCredentialsManager />
       </main>
     </div>
   );
