@@ -348,8 +348,40 @@ async function fetchAllExchangeData(enabledExchanges: string[]): Promise<Record<
 // Usage example in your handler:
 // const exchangeData = await fetchAllExchangeData(['binance', 'bybit', 'okx']);" 
 
+// Fetch top gainers/losers from Binance for dynamic pair discovery
+async function fetchTopMovers(): Promise<string[]> {
+  try {
+    const response = await fetch('https://api.binance.com/api/v3/ticker/24hr', {
+      headers: { 'User-Agent': 'ArbitrageScanner/2.0' },
+      signal: AbortSignal.timeout(5000)
+    });
+    
+    if (!response.ok) return [];
+    
+    const data = await response.json();
+    
+    // Filter USDT pairs and sort by absolute price change
+    const usdtPairs = data
+      .filter((t: any) => t.symbol.endsWith('USDT') && parseFloat(t.quoteVolume) > 1000000)
+      .map((t: any) => ({
+        symbol: t.symbol.replace('USDT', ''),
+        change: Math.abs(parseFloat(t.priceChangePercent)),
+        volume: parseFloat(t.quoteVolume)
+      }))
+      .sort((a: any, b: any) => b.change - a.change);
+    
+    // Get top 30 gainers and top 30 losers (highest volatility = more arb opportunities)
+    const topMovers = usdtPairs.slice(0, 60).map((t: any) => t.symbol);
+    console.log(`Fetched ${topMovers.length} top movers for scanning`);
+    return topMovers;
+  } catch (error) {
+    console.error('Failed to fetch top movers:', error);
+    return [];
+  }
+}
+
 // Enhanced triangular arbitrage finder with volume analysis and short signal detection
-function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: string, tradeAmount: number, minProfitPercent: number = 0.001, filterProfitable: boolean = true, customPairs: string[] = [], detectShortSignals: boolean = false): any[] {
+async function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: string, tradeAmount: number, minProfitPercent: number = 0.001, filterProfitable: boolean = true, customPairs: string[] = [], detectShortSignals: boolean = false): Promise<any[]> {
   const opportunities: any[] = [];
 
   // Expanded base currencies for more arbitrage opportunities - focus on high-liquidity pairs
@@ -368,8 +400,20 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
 
     // Additional high-volume pairs
     'ARB', 'OP', 'IMX', 'APE', 'LDO', 'RNDR', 'INJ', 'PEPE', 'WLD', 'SEI',
-    'TIA', 'ORDI', 'STX', 'PYTH', 'JUP', 'BLUR', 'WIF', 'BONK', 'FLOKI', 'GALA'
+    'TIA', 'ORDI', 'STX', 'PYTH', 'JUP', 'BLUR', 'WIF', 'BONK', 'FLOKI', 'GALA',
+    
+    // Tier 4 - More volatile pairs
+    'DYDX', 'GMX', 'SUI', 'APT', 'FET', 'AGIX', 'RNDR', 'CFX', 'MASK', 'LRC',
+    'ENS', 'SSV', 'RPL', 'FXS', 'MAGIC', 'HOOK', 'HIGH', 'EDU', 'ID', 'ARKM'
   ];
+
+  // Fetch and add top movers (gainers/losers) dynamically
+  const topMovers = await fetchTopMovers();
+  if (topMovers.length > 0) {
+    const newMovers = topMovers.filter(m => !commonBases.includes(m));
+    commonBases = [...commonBases, ...newMovers];
+    console.log(`Added ${newMovers.length} top gainers/losers to scanning list`);
+  }
 
   // Add custom pairs from user settings
   if (customPairs && customPairs.length > 0) {
@@ -1341,7 +1385,7 @@ serve(async (req) => {
 
       for (const quoteCurrency of quoteCurrencies) {
         if (arbitrageTypes.includes('triangular')) {
-          const foundOpps = findTriangularArbitrage(exchangeData, quoteCurrency, tradeAmount, minProfitPercent, filterProfitable, customPairs, detectShortSignals);
+          const foundOpps = await findTriangularArbitrage(exchangeData, quoteCurrency, tradeAmount, minProfitPercent, filterProfitable, customPairs, detectShortSignals);
           foundOpps.forEach(opp => opp.type = 'triangular');
           triangularOpps.push(...foundOpps);
         }
@@ -1485,7 +1529,7 @@ serve(async (req) => {
 
           for (const quoteCurrency of quoteCurrencies) {
             if ((userSettings.arbitrage_types || []).includes('triangular')) {
-              const foundOpps = findTriangularArbitrage(
+              const foundOpps = await findTriangularArbitrage(
                 exchangeData,
                 quoteCurrency, // Pass quoteCurrency directly
                 actualTradeAmount,
@@ -1626,7 +1670,7 @@ serve(async (req) => {
 
     for (const quoteCurrency of quoteCurrencies) {
       if (arbitrageTypes.includes('triangular')) {
-        const foundOpps = findTriangularArbitrage(
+        const foundOpps = await findTriangularArbitrage(
           exchangeData,
           quoteCurrency, // Pass quoteCurrency directly
           tradeAmount,

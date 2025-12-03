@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
 import { supabase } from '@/integrations/supabase/client';
@@ -10,7 +10,7 @@ import { ArbitrageSettings } from './ArbitrageSettings';
 import { ArbitrageOpportunityCard } from './ArbitrageOpportunityCard';
 import { ArbitrageLogPanel } from './ArbitrageLogPanel';
 import { PlansSection } from '@/components/plans/PlansSection';
-import { Play, Pause, Settings, TrendingUp, Lock, Crown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Play, Pause, Settings, TrendingUp, Lock, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface Opportunity {
   id: string;
@@ -41,15 +41,17 @@ interface Opportunity {
 
 const OPPORTUNITIES_PER_PAGE = 10;
 
+// Memoized opportunity card to prevent unnecessary re-renders
+const MemoizedOpportunityCard = memo(ArbitrageOpportunityCard);
+
 export const ArbitrageScanner = () => {
   const { user } = useAuth();
-  const { hasActiveSubscription, subscription, loading: subscriptionLoading } = useSubscription();
+  const { hasActiveSubscription, loading: subscriptionLoading } = useSubscription();
   const { toast } = useToast();
   
   const [isScanning, setIsScanning] = useState(false);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [showSettings, setShowSettings] = useState(false);
-  const [scanInterval, setScanInterval] = useState<NodeJS.Timeout | null>(null);
   const [lastScanTime, setLastScanTime] = useState<Date | null>(null);
   const [scanCount, setScanCount] = useState(0);
   const [isInitializing, setIsInitializing] = useState(false);
@@ -60,19 +62,21 @@ export const ArbitrageScanner = () => {
 
   const isScanningRef = useRef(false);
   const mountedRef = useRef(true);
+  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      if (scanInterval) {
-        clearInterval(scanInterval);
+      if (scanIntervalRef.current) {
+        clearInterval(scanIntervalRef.current);
       }
     };
-  }, [scanInterval]);
+  }, []);
 
-  // Load opportunities from database
-  const loadOpportunitiesFromDB = async () => {
-    if (!user) return;
+  // Load opportunities from database - memoized to prevent recreation
+  const loadOpportunitiesFromDB = useCallback(async () => {
+    if (!user || !mountedRef.current) return;
     
     try {
       const { data, error } = await supabase
@@ -84,21 +88,30 @@ export const ArbitrageScanner = () => {
 
       if (error) throw error;
 
-      if (data) {
-        setOpportunities(data);
+      if (data && mountedRef.current) {
+        // Only update if data actually changed
+        setOpportunities(prev => {
+          const prevIds = new Set(prev.map(o => o.id));
+          const newIds = new Set(data.map(o => o.id));
+          const hasChanged = prev.length !== data.length || 
+            data.some(o => !prevIds.has(o.id)) ||
+            prev.some(o => !newIds.has(o.id));
+          return hasChanged ? data : prev;
+        });
         setLastScanTime(new Date());
       }
     } catch (error) {
       console.error('Error loading opportunities:', error);
     }
-  };
+  }, [user]);
 
   // Initial load and real-time subscription
   useEffect(() => {
     if (user && hasActiveSubscription) {
       loadOpportunitiesFromDB();
 
-      // Set up real-time subscription
+      // Set up real-time subscription with debounce
+      let debounceTimer: NodeJS.Timeout;
       const channel = supabase
         .channel('arbitrage-opportunities')
         .on(
@@ -109,19 +122,26 @@ export const ArbitrageScanner = () => {
             table: 'arbitrage_opportunities'
           },
           () => {
-            loadOpportunitiesFromDB();
+            // Debounce rapid updates
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+              if (mountedRef.current) {
+                loadOpportunitiesFromDB();
+              }
+            }, 500);
           }
         )
         .subscribe();
 
       return () => {
+        clearTimeout(debounceTimer);
         supabase.removeChannel(channel);
       };
     }
-  }, [user, hasActiveSubscription]);
+  }, [user, hasActiveSubscription, loadOpportunitiesFromDB]);
 
   // Perform scan
-  const performScan = async () => {
+  const performScan = useCallback(async () => {
     if (isScanningRef.current || !user) return;
     
     isScanningRef.current = true;
@@ -147,30 +167,36 @@ export const ArbitrageScanner = () => {
         throw response.error;
       }
 
-      setScanCount(prev => prev + 1);
-      setLastScanTime(new Date());
+      if (mountedRef.current) {
+        setScanCount(prev => prev + 1);
+        setLastScanTime(new Date());
+      }
       
       // Load updated opportunities from database
       await loadOpportunitiesFromDB();
 
-      toast({
-        title: "Scan Complete",
-        description: `Found ${response.data?.opportunities_count || 0} opportunities`,
-      });
+      if (mountedRef.current) {
+        toast({
+          title: "Scan Complete",
+          description: `Found ${response.data?.opportunities_count || 0} opportunities`,
+        });
+      }
     } catch (error: any) {
       console.error('Scan error:', error);
-      toast({
-        title: "Scan Error",
-        description: error.message || "Failed to scan for opportunities",
-        variant: "destructive",
-      });
+      if (mountedRef.current) {
+        toast({
+          title: "Scan Error",
+          description: error.message || "Failed to scan for opportunities",
+          variant: "destructive",
+        });
+      }
     } finally {
       isScanningRef.current = false;
     }
-  };
+  }, [user, loadOpportunitiesFromDB, toast]);
 
   // Start scanning
-  const startScanning = async () => {
+  const startScanning = useCallback(async () => {
     if (!user || !hasActiveSubscription) {
       toast({
         title: "Subscription Required",
@@ -185,23 +211,24 @@ export const ArbitrageScanner = () => {
     // Perform initial scan
     await performScan();
     
-    setIsInitializing(false);
-    setIsScanning(true);
+    if (mountedRef.current) {
+      setIsInitializing(false);
+      setIsScanning(true);
 
-    // Set up periodic scanning
-    const interval = setInterval(performScan, 30000); // Scan every 30 seconds
-    setScanInterval(interval);
-  };
+      // Set up periodic scanning
+      scanIntervalRef.current = setInterval(performScan, 30000);
+    }
+  }, [user, hasActiveSubscription, toast, performScan]);
 
   // Stop scanning
-  const stopScanning = () => {
-    if (scanInterval) {
-      clearInterval(scanInterval);
-      setScanInterval(null);
+  const stopScanning = useCallback(() => {
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
     }
     setIsScanning(false);
     isScanningRef.current = false;
-  };
+  }, []);
 
   // Optimized sorted opportunities with pagination
   const paginatedOpportunities = useMemo(() => {
@@ -337,7 +364,7 @@ export const ArbitrageScanner = () => {
         )}
 
         {paginatedOpportunities.map((opportunity, index) => (
-          <ArbitrageOpportunityCard 
+          <MemoizedOpportunityCard 
             key={opportunity.id} 
             opportunity={opportunity}
             rank={(currentPage - 1) * OPPORTUNITIES_PER_PAGE + index + 1}
