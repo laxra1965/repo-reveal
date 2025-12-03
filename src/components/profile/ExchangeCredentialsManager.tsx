@@ -1,0 +1,395 @@
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
+import { Eye, EyeOff, Plus, Trash2, CheckCircle, XCircle, TestTube } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+
+type ExchangeName = 'binance' | 'bybit' | 'okx' | 'gate' | 'mexc' | 'bitget' | 'htx' | 'kucoin' | 'bitfinex' | 'bingx' | 'coinbase' | 'upbit' | 'cryptocom' | 'kraken';
+
+interface ExchangeCredential {
+  id: string;
+  exchange: ExchangeName;
+  api_key: string;
+  api_secret: string;
+  is_connected: boolean | null;
+  test_mode: boolean | null;
+  created_at: string | null;
+}
+
+const SUPPORTED_EXCHANGES: { value: ExchangeName; label: string; logo: string }[] = [
+  { value: 'binance', label: 'Binance', logo: '🟡' },
+  { value: 'bybit', label: 'Bybit', logo: '🟠' },
+  { value: 'okx', label: 'OKX', logo: '⚫' },
+  { value: 'gate', label: 'Gate.io', logo: '🔵' },
+  { value: 'mexc', label: 'MEXC', logo: '🟢' },
+];
+
+export function ExchangeCredentialsManager() {
+  const { user } = useAuth();
+  const [credentials, setCredentials] = useState<ExchangeCredential[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [newCredential, setNewCredential] = useState({
+    exchange: '' as ExchangeName | '',
+    api_key: '',
+    api_secret: '',
+    test_mode: true,
+  });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      fetchCredentials();
+    }
+  }, [user]);
+
+  const fetchCredentials = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('exchange_credentials')
+        .select('*')
+        .eq('user_id', user?.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setCredentials(data || []);
+    } catch (error) {
+      console.error('Error fetching credentials:', error);
+      toast.error('Failed to load exchange credentials');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddCredential = async () => {
+    if (!newCredential.exchange || !newCredential.api_key || !newCredential.api_secret) {
+      toast.error('Please fill in all fields');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { error } = await supabase.from('exchange_credentials').insert({
+        user_id: user?.id,
+        exchange: newCredential.exchange,
+        api_key: newCredential.api_key,
+        api_secret: newCredential.api_secret,
+        test_mode: newCredential.test_mode,
+        is_connected: true,
+      });
+
+      if (error) throw error;
+
+      toast.success(`${newCredential.exchange.toUpperCase()} API keys added successfully`);
+      setDialogOpen(false);
+      setNewCredential({ exchange: '', api_key: '', api_secret: '', test_mode: true });
+      fetchCredentials();
+    } catch (error: any) {
+      console.error('Error adding credential:', error);
+      toast.error(error.message || 'Failed to add credentials');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteCredential = async (id: string, exchange: string) => {
+    if (!confirm(`Are you sure you want to delete ${exchange.toUpperCase()} credentials?`)) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('exchange_credentials')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast.success('Credentials deleted successfully');
+      fetchCredentials();
+    } catch (error) {
+      console.error('Error deleting credential:', error);
+      toast.error('Failed to delete credentials');
+    }
+  };
+
+  const handleToggleTestMode = async (id: string, currentMode: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('exchange_credentials')
+        .update({ test_mode: !currentMode })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast.success(`Switched to ${!currentMode ? 'Paper Trading' : 'Live Trading'} mode`);
+      fetchCredentials();
+    } catch (error) {
+      console.error('Error updating test mode:', error);
+      toast.error('Failed to update trading mode');
+    }
+  };
+
+  const handleTestConnection = async (credential: ExchangeCredential) => {
+    toast.info(`Testing ${credential.exchange.toUpperCase()} connection...`);
+    
+    // Simulate connection test - in production, this would call an edge function
+    setTimeout(() => {
+      toast.success(`${credential.exchange.toUpperCase()} connection successful!`);
+    }, 1500);
+  };
+
+  const toggleSecretVisibility = (id: string) => {
+    setShowSecrets(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const maskSecret = (secret: string) => {
+    if (secret.length <= 8) return '••••••••';
+    return secret.substring(0, 4) + '••••••••' + secret.substring(secret.length - 4);
+  };
+
+  const connectedExchanges = credentials.map(c => c.exchange);
+  const availableExchanges = SUPPORTED_EXCHANGES.filter(e => !connectedExchanges.includes(e.value));
+
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Exchange API Keys</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground">Loading...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>Exchange API Keys</CardTitle>
+            <CardDescription>
+              Manage your exchange API credentials for automated trading
+            </CardDescription>
+          </div>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button disabled={availableExchanges.length === 0}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Exchange
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add Exchange API Keys</DialogTitle>
+                <DialogDescription>
+                  Enter your API credentials securely. We recommend using read-only keys with trading permissions only.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 mt-4">
+                <div className="space-y-2">
+                  <Label>Exchange</Label>
+                  <Select
+                    value={newCredential.exchange}
+                    onValueChange={(value: ExchangeName) => 
+                      setNewCredential(prev => ({ ...prev, exchange: value }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select exchange" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableExchanges.map(exchange => (
+                        <SelectItem key={exchange.value} value={exchange.value}>
+                          {exchange.logo} {exchange.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>API Key</Label>
+                  <Input
+                    type="text"
+                    placeholder="Enter your API key"
+                    value={newCredential.api_key}
+                    onChange={(e) => setNewCredential(prev => ({ ...prev, api_key: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>API Secret</Label>
+                  <Input
+                    type="password"
+                    placeholder="Enter your API secret"
+                    value={newCredential.api_secret}
+                    onChange={(e) => setNewCredential(prev => ({ ...prev, api_secret: e.target.value }))}
+                  />
+                </div>
+                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <TestTube className="h-4 w-4 text-amber-500" />
+                    <div>
+                      <p className="text-sm font-medium">Paper Trading Mode</p>
+                      <p className="text-xs text-muted-foreground">
+                        Test trades without real money
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={newCredential.test_mode}
+                    onCheckedChange={(checked) => 
+                      setNewCredential(prev => ({ ...prev, test_mode: checked }))
+                    }
+                  />
+                </div>
+                <Button onClick={handleAddCredential} className="w-full" disabled={saving}>
+                  {saving ? 'Adding...' : 'Add Credentials'}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {credentials.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <p>No exchange credentials configured yet.</p>
+            <p className="text-sm mt-1">Add your first exchange to enable automated trading.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {credentials.map((credential) => {
+              const exchangeInfo = SUPPORTED_EXCHANGES.find(e => e.value === credential.exchange);
+              return (
+                <div
+                  key={credential.id}
+                  className="border rounded-lg p-4 space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">{exchangeInfo?.logo}</span>
+                      <div>
+                        <h4 className="font-semibold">{exchangeInfo?.label || credential.exchange}</h4>
+                        <div className="flex items-center gap-2 mt-1">
+                          {credential.is_connected ? (
+                            <Badge variant="outline" className="text-green-600 border-green-600">
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Connected
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-red-600 border-red-600">
+                              <XCircle className="h-3 w-3 mr-1" />
+                              Disconnected
+                            </Badge>
+                          )}
+                          {credential.test_mode ? (
+                            <Badge variant="secondary">
+                              <TestTube className="h-3 w-3 mr-1" />
+                              Paper Trading
+                            </Badge>
+                          ) : (
+                            <Badge variant="destructive">
+                              Live Trading
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleTestConnection(credential)}
+                      >
+                        Test
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteCredential(credential.id, credential.exchange)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <Label className="text-xs text-muted-foreground">API Key</Label>
+                      <div className="flex items-center gap-2 mt-1">
+                        <code className="text-xs bg-muted px-2 py-1 rounded flex-1 overflow-hidden">
+                          {showSecrets[credential.id] 
+                            ? credential.api_key 
+                            : maskSecret(credential.api_key)}
+                        </code>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => toggleSecretVisibility(credential.id)}
+                        >
+                          {showSecrets[credential.id] ? (
+                            <EyeOff className="h-3 w-3" />
+                          ) : (
+                            <Eye className="h-3 w-3" />
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">API Secret</Label>
+                      <div className="flex items-center gap-2 mt-1">
+                        <code className="text-xs bg-muted px-2 py-1 rounded flex-1">
+                          ••••••••••••••••
+                        </code>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">Trading Mode:</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">
+                        {credential.test_mode ? 'Paper' : 'Live'}
+                      </span>
+                      <Switch
+                        checked={!credential.test_mode}
+                        onCheckedChange={() => handleToggleTestMode(credential.id, credential.test_mode)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

@@ -117,7 +117,16 @@ async function executeBinanceOrder(
     }
 
     if (testMode) {
-      return { success: true, orderId: 'TEST_ORDER', filledQty: quantity, avgPrice: 0 };
+      // Paper trading simulation - return simulated success
+      console.log(`[PAPER TRADE] Binance ${side} ${quantity} ${symbol}`);
+      const simulatedPrice = side === 'BUY' ? 1.001 : 0.999; // Simulate slight slippage
+      return { 
+        success: true, 
+        orderId: `PAPER_${Date.now()}`, 
+        filledQty: quantity, 
+        avgPrice: simulatedPrice,
+        isPaperTrade: true
+      };
     }
 
     return {
