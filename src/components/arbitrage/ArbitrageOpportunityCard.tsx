@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
-import { ArrowRight, TrendingUp, TrendingDown, Clock, Eye, EyeOff, Zap, AlertTriangle, Target, AlertCircle, Loader2 } from 'lucide-react';
+import { ArrowRight, TrendingUp, TrendingDown, Clock, Eye, EyeOff, Zap, AlertTriangle, Target, AlertCircle, Loader2, TestTube } from 'lucide-react';
 
 interface Opportunity {
   id: string;
@@ -46,6 +46,7 @@ interface ArbitrageOpportunityCardProps {
 export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportunityCardProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
+  const [isPaperExecuting, setIsPaperExecuting] = useState(false);
   const [hasCredentials, setHasCredentials] = useState<boolean | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
@@ -149,6 +150,69 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
       });
     } finally {
       setIsExecuting(false);
+    }
+  };
+
+  const handlePaperTrade = async () => {
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to execute paper trades",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsPaperExecuting(true);
+
+    try {
+      // Simulate paper trade with realistic results
+      const slippage = (Math.random() - 0.5) * 0.002; // +/- 0.1% slippage simulation
+      const simulatedProfit = opportunity.profit_amount * (1 + slippage);
+      const simulatedFinalAmount = opportunity.start_amount + simulatedProfit;
+
+      // Create paper trade history entry
+      const { error: insertError } = await supabase
+        .from('trade_history')
+        .insert({
+          user_id: user.id,
+          opportunity_id: opportunity.id,
+          base_symbol: opportunity.base_symbol,
+          quote_symbol: opportunity.quote_symbol,
+          intermediate_symbol: opportunity.intermediate_symbol,
+          start_amount: opportunity.start_amount,
+          expected_profit: opportunity.profit_amount,
+          actual_profit: simulatedProfit,
+          final_amount: simulatedFinalAmount,
+          status: 'completed',
+          total_steps: 3,
+          completed_steps: 3,
+          execution_details: {
+            is_paper_trade: true,
+            log: [
+              { step: 1, success: true, isPaperTrade: true, orderId: `PAPER_${Date.now()}_1`, filledQty: opportunity.step1_amount, timestamp: new Date().toISOString() },
+              { step: 2, success: true, isPaperTrade: true, orderId: `PAPER_${Date.now()}_2`, filledQty: opportunity.step2_amount, timestamp: new Date().toISOString() },
+              { step: 3, success: true, isPaperTrade: true, orderId: `PAPER_${Date.now()}_3`, filledQty: opportunity.step3_amount, timestamp: new Date().toISOString() }
+            ],
+            simulated_slippage: slippage
+          }
+        });
+
+      if (insertError) throw insertError;
+
+      toast({
+        title: "Paper Trade Completed",
+        description: `Simulated profit: $${simulatedProfit.toFixed(4)} (${((simulatedProfit / opportunity.start_amount) * 100).toFixed(4)}%)`,
+      });
+    } catch (error: any) {
+      console.error('Paper trade error:', error);
+      toast({
+        title: "Paper Trade Failed",
+        description: error.message || "Failed to simulate trade",
+        variant: "destructive",
+      });
+    } finally {
+      setIsPaperExecuting(false);
     }
   };
 
@@ -482,17 +546,33 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
             {isExpanded ? 'Hide Details' : 'Show Details'}
           </Button>
           
-          <div className="flex gap-2 items-center">
+          <div className="flex gap-2 items-center flex-wrap">
             {hasCredentials === false && (
               <Badge variant="outline" className="text-yellow-600 border-yellow-500">
                 <AlertTriangle className="h-3 w-3 mr-1" />
                 Missing API Keys
               </Badge>
             )}
+            {/* Paper Trade Button */}
+            <Button 
+              onClick={handlePaperTrade}
+              disabled={isPaperExecuting}
+              variant="outline"
+              size="sm"
+              className="border-yellow-500/50 text-yellow-600 hover:bg-yellow-500/10"
+            >
+              {isPaperExecuting ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <TestTube className="h-4 w-4 mr-2" />
+              )}
+              {isPaperExecuting ? 'Simulating...' : 'Paper Trade'}
+            </Button>
+            {/* Live Trade Buttons */}
             {rank === 1 && (
               <Button 
                 onClick={handleTrade}
-                disabled={isExecuting}
+                disabled={isExecuting || isPaperExecuting}
                 className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-black font-semibold"
               >
                 {isExecuting ? (
@@ -506,7 +586,7 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
             {rank !== 1 && (
               <Button 
                 onClick={handleTrade}
-                disabled={isExecuting}
+                disabled={isExecuting || isPaperExecuting}
                 className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800"
               >
                 {isExecuting ? (

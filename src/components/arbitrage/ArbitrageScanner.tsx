@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { ArbitrageSettings } from './ArbitrageSettings';
 import { ArbitrageOpportunityCard } from './ArbitrageOpportunityCard';
 import { ArbitrageLogPanel } from './ArbitrageLogPanel';
+import { PaperTradeHistory } from './PaperTradeHistory';
 import { PlansSection } from '@/components/plans/PlansSection';
 import { Play, Pause, Settings, TrendingUp, Lock, ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -409,6 +410,9 @@ export const ArbitrageScanner = () => {
           </Card>
         )}
       </div>
+
+      {/* Paper Trade History */}
+      <PaperTradeHistory />
 
       {/* Log Panel */}
       <ArbitrageLogPanel />
