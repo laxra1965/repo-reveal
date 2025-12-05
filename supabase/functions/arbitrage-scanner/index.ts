@@ -1205,6 +1205,58 @@ function calculateQualityScore(
 // ============================================================================
 
 /**
+ * Sanitize numeric values to prevent database overflow
+ * Database columns have precision 8, scale 4 (max value < 10^4)
+ */
+function sanitizeNumericValue(value: number, maxValue: number = 9999.9999): number {
+  if (!isFinite(value) || isNaN(value)) return 0;
+  // Clamp value to valid range and round to 4 decimal places
+  const clamped = Math.max(-maxValue, Math.min(maxValue, value));
+  return Math.round(clamped * 10000) / 10000;
+}
+
+/**
+ * Sanitize large numeric values (for prices that can be larger)
+ */
+function sanitizeLargeNumeric(value: number): number {
+  if (!isFinite(value) || isNaN(value)) return 0;
+  // For larger numbers, round to reasonable precision
+  return Math.round(value * 100000000) / 100000000;
+}
+
+/**
+ * Sanitize opportunity data before database insert
+ */
+function sanitizeOpportunityForDB(opp: any): any {
+  return {
+    ...opp,
+    // Prices can be large (like BTC price), use large numeric sanitizer
+    step1_price: sanitizeLargeNumeric(opp.step1_price),
+    step2_price: sanitizeLargeNumeric(opp.step2_price),
+    step3_price: sanitizeLargeNumeric(opp.step3_price),
+    // Amounts should be bounded
+    step1_amount: sanitizeLargeNumeric(opp.step1_amount),
+    step2_amount: sanitizeLargeNumeric(opp.step2_amount),
+    step3_amount: sanitizeLargeNumeric(opp.step3_amount),
+    start_amount: sanitizeLargeNumeric(opp.start_amount),
+    end_amount: sanitizeLargeNumeric(opp.end_amount),
+    profit_amount: sanitizeLargeNumeric(opp.profit_amount),
+    // Percentages should be bounded
+    profit_percent: sanitizeNumericValue(opp.profit_percent, 999.9999),
+    // Volumes can be large
+    step1_volume: sanitizeLargeNumeric(opp.step1_volume || 0),
+    step2_volume: sanitizeLargeNumeric(opp.step2_volume || 0),
+    step3_volume: sanitizeLargeNumeric(opp.step3_volume || 0),
+    // Other numeric fields
+    estimated_slippage: sanitizeNumericValue(opp.estimated_slippage || 0),
+    liquidity_score: Math.min(100, Math.max(0, Math.round(opp.liquidity_score || 0))),
+    quality_score: sanitizeNumericValue(opp.quality_score || 0),
+    arb_factor: sanitizeNumericValue(opp.arb_factor || 1, 99.9999),
+    price_deviation: opp.price_deviation ? sanitizeNumericValue(opp.price_deviation, 999.9999) : null
+  };
+}
+
+/**
  * Efficient database upsert that prevents duplicates
  */
 async function upsertOpportunities(
@@ -1221,7 +1273,7 @@ async function upsertOpportunities(
   const BATCH_SIZE = 50;
   
   for (let i = 0; i < opportunities.length; i += BATCH_SIZE) {
-    const batch = opportunities.slice(i, i + BATCH_SIZE);
+    const batch = opportunities.slice(i, i + BATCH_SIZE).map(sanitizeOpportunityForDB);
     
     try {
       // Delete existing opportunities with same path to prevent duplicates
