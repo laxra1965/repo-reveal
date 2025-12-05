@@ -360,9 +360,9 @@ async function fetchTopMovers(): Promise<string[]> {
     
     const data = await response.json();
     
-    // Filter USDT pairs and sort by absolute price change
+    // Filter USDT pairs and sort by absolute price change - EXPANDED coverage
     const usdtPairs = data
-      .filter((t: any) => t.symbol.endsWith('USDT') && parseFloat(t.quoteVolume) > 1000000)
+      .filter((t: any) => t.symbol.endsWith('USDT') && parseFloat(t.quoteVolume) > 50000) // Lowered from 1M to 50K for more pairs
       .map((t: any) => ({
         symbol: t.symbol.replace('USDT', ''),
         change: Math.abs(parseFloat(t.priceChangePercent)),
@@ -370,8 +370,8 @@ async function fetchTopMovers(): Promise<string[]> {
       }))
       .sort((a: any, b: any) => b.change - a.change);
     
-    // Get top 30 gainers and top 30 losers (highest volatility = more arb opportunities)
-    const topMovers = usdtPairs.slice(0, 60).map((t: any) => t.symbol);
+    // Get top 150 movers for maximum scanning coverage
+    const topMovers = usdtPairs.slice(0, 150).map((t: any) => t.symbol);
     console.log(`Fetched ${topMovers.length} top movers for scanning`);
     return topMovers;
   } catch (error) {
@@ -381,10 +381,10 @@ async function fetchTopMovers(): Promise<string[]> {
 }
 
 // Enhanced triangular arbitrage finder with volume analysis and short signal detection
-async function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: string, tradeAmount: number, minProfitPercent: number = 0.001, filterProfitable: boolean = true, customPairs: string[] = [], detectShortSignals: boolean = false): Promise<any[]> {
+async function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: string, tradeAmount: number, minProfitPercent: number = 0.0005, filterProfitable: boolean = true, customPairs: string[] = [], detectShortSignals: boolean = false): Promise<any[]> {
   const opportunities: any[] = [];
 
-  // Expanded base currencies for more arbitrage opportunities - focus on high-liquidity pairs
+  // MASSIVELY expanded base currencies for maximum arbitrage detection
   let commonBases = [
     // Major cryptocurrencies (Tier 1 - Highest liquidity)
     'BTC', 'ETH', 'BNB', 'XRP', 'ADA', 'SOL', 'DOGE', 'MATIC', 'DOT', 'AVAX',
@@ -398,13 +398,28 @@ async function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurre
     'KAVA', 'ZIL', 'ENJ', 'BAT', 'ZRX', 'REN', 'KNC', 'BAND', 'SXP', 'RSR',
     'OGN', 'DENT', 'WIN', 'HOT', 'ANKR', 'COTI', 'CHR', 'MDT', 'STMX', 'DF',
 
-    // Additional high-volume pairs
+    // High-volume pairs
     'ARB', 'OP', 'IMX', 'APE', 'LDO', 'RNDR', 'INJ', 'PEPE', 'WLD', 'SEI',
     'TIA', 'ORDI', 'STX', 'PYTH', 'JUP', 'BLUR', 'WIF', 'BONK', 'FLOKI', 'GALA',
     
-    // Tier 4 - More volatile pairs
-    'DYDX', 'GMX', 'SUI', 'APT', 'FET', 'AGIX', 'RNDR', 'CFX', 'MASK', 'LRC',
-    'ENS', 'SSV', 'RPL', 'FXS', 'MAGIC', 'HOOK', 'HIGH', 'EDU', 'ID', 'ARKM'
+    // Tier 4 - Volatile pairs
+    'DYDX', 'GMX', 'SUI', 'APT', 'FET', 'AGIX', 'CFX', 'MASK', 'LRC',
+    'ENS', 'SSV', 'RPL', 'FXS', 'MAGIC', 'HOOK', 'HIGH', 'EDU', 'ID', 'ARKM',
+
+    // Tier 5 - Additional altcoins for broader coverage
+    'JASMY', 'OCEAN', 'STORJ', 'CELR', 'ONE', 'HBAR', 'EGLD', 'FLOW', 'ROSE', 'QTUM',
+    'ICX', 'ONT', 'ZEN', 'SC', 'RVN', 'WAVES', 'DASH', 'DCR', 'KSM', 'IOST',
+    'LOOM', 'PERL', 'TROY', 'VIDT', 'IRIS', 'COS', 'MBL', 'DREP', 'WAN', 'FUN',
+    'CTK', 'HARD', 'STRAX', 'SFP', 'POND', 'ALICE', 'DEGO', 'BAKE', 'BURGER', 'SLP',
+
+    // Tier 6 - Meme and trending coins
+    'TURBO', 'LADYS', 'AIDOGE', 'ARB', 'RDNT', 'PENDLE', 'LEVER', 'LQTY', 'USDP',
+    'TUSD', 'CVX', 'SPELL', 'ALCX', 'BADGER', 'TRIBE', 'RARE', 'SUPER', 'TVK', 'RAD',
+    'FORTH', 'BOND', 'MLN', 'MIR', 'PERP', 'ALPHA', 'ORN', 'AUCTION', 'PHA', 'VOXEL',
+    
+    // Tier 7 - DeFi and newer tokens
+    'LINA', 'REEF', 'SUN', 'PUNDIX', 'OG', 'KEY', 'DOCK', 'TOMO', 'NKN', 'ARPA',
+    'CTSI', 'AUDIO', 'BICO', 'CLV', 'MOVR', 'MBOX', 'REQ', 'AERGO', 'FIRO', 'BEAM'
   ];
 
   // Fetch and add top movers (gainers/losers) dynamically

@@ -5,13 +5,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { ArbitrageSettings } from './ArbitrageSettings';
 import { ArbitrageOpportunityCard } from './ArbitrageOpportunityCard';
 import { ArbitrageLogPanel } from './ArbitrageLogPanel';
 import { PaperTradeHistory } from './PaperTradeHistory';
 import { PlansSection } from '@/components/plans/PlansSection';
-import { Play, Pause, Settings, TrendingUp, Lock, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Play, Pause, Settings, TrendingUp, Lock, ChevronLeft, ChevronRight, TestTube } from 'lucide-react';
 
 interface Opportunity {
   id: string;
@@ -56,11 +58,15 @@ export const ArbitrageScanner = () => {
   const [lastScanTime, setLastScanTime] = useState<Date | null>(null);
   const [scanCount, setScanCount] = useState(0);
   const [isInitializing, setIsInitializing] = useState(false);
+  const [autoPaperTrade, setAutoPaperTrade] = useState(false);
+  const [autoPaperTradeCount, setAutoPaperTradeCount] = useState(0);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
+  // Track which opportunities have been auto-traded
+  const autoTradedIdsRef = useRef<Set<string>>(new Set());
   const isScanningRef = useRef(false);
   const mountedRef = useRef(true);
   const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -196,6 +202,66 @@ export const ArbitrageScanner = () => {
     }
   }, [user, loadOpportunitiesFromDB, toast]);
 
+  // Auto paper trade function
+  const executeAutoPaperTrade = useCallback(async (opportunity: Opportunity) => {
+    if (!user || autoTradedIdsRef.current.has(opportunity.id)) return;
+    
+    // Mark as traded to prevent duplicates
+    autoTradedIdsRef.current.add(opportunity.id);
+    
+    try {
+      const slippage = (Math.random() - 0.5) * 0.002;
+      const simulatedProfit = opportunity.profit_amount * (1 + slippage);
+      const simulatedFinalAmount = opportunity.start_amount + simulatedProfit;
+
+      await supabase.from('trade_history').insert({
+        user_id: user.id,
+        opportunity_id: opportunity.id,
+        base_symbol: opportunity.base_symbol,
+        quote_symbol: opportunity.quote_symbol,
+        intermediate_symbol: opportunity.intermediate_symbol,
+        start_amount: opportunity.start_amount,
+        expected_profit: opportunity.profit_amount,
+        actual_profit: simulatedProfit,
+        final_amount: simulatedFinalAmount,
+        status: 'completed',
+        total_steps: 3,
+        completed_steps: 3,
+        execution_details: {
+          is_paper_trade: true,
+          auto_executed: true,
+          log: [
+            { step: 1, success: true, isPaperTrade: true, orderId: `PAPER_AUTO_${Date.now()}_1`, timestamp: new Date().toISOString() },
+            { step: 2, success: true, isPaperTrade: true, orderId: `PAPER_AUTO_${Date.now()}_2`, timestamp: new Date().toISOString() },
+            { step: 3, success: true, isPaperTrade: true, orderId: `PAPER_AUTO_${Date.now()}_3`, timestamp: new Date().toISOString() }
+          ]
+        }
+      });
+
+      setAutoPaperTradeCount(prev => prev + 1);
+    } catch (error) {
+      console.error('Auto paper trade error:', error);
+      autoTradedIdsRef.current.delete(opportunity.id); // Allow retry on error
+    }
+  }, [user]);
+
+  // Auto paper trade effect - execute on new profitable opportunities
+  useEffect(() => {
+    if (!autoPaperTrade || !isScanning || opportunities.length === 0) return;
+
+    // Find new opportunities that haven't been auto-traded yet
+    const newOpportunities = opportunities.filter(opp => 
+      !autoTradedIdsRef.current.has(opp.id) && 
+      opp.profit_percent > 0 &&
+      new Date(opp.expires_at) > new Date()
+    );
+
+    // Execute paper trades for top 3 new opportunities
+    newOpportunities.slice(0, 3).forEach(opp => {
+      executeAutoPaperTrade(opp);
+    });
+  }, [opportunities, autoPaperTrade, isScanning, executeAutoPaperTrade]);
+
   // Start scanning
   const startScanning = useCallback(async () => {
     if (!user || !hasActiveSubscription) {
@@ -327,17 +393,36 @@ export const ArbitrageScanner = () => {
         </CardHeader>
         <CardContent>
           <div className="flex justify-between items-center text-sm text-muted-foreground">
-            <div className="flex gap-4">
+            <div className="flex gap-4 flex-wrap items-center">
               <span>Status: <Badge variant={isScanning ? "default" : "secondary"}>
                 {isScanning ? "Scanning" : "Stopped"}
               </Badge></span>
               <span>Scans: {scanCount}</span>
               <span>Total: {opportunities.length}</span>
               <span>Showing: {paginatedOpportunities.length}</span>
+              {autoPaperTrade && (
+                <span className="flex items-center gap-1">
+                  <TestTube className="h-3 w-3" />
+                  Auto Trades: {autoPaperTradeCount}
+                </span>
+              )}
             </div>
-            {lastScanTime && (
-              <span>Last update: {lastScanTime.toLocaleTimeString()}</span>
-            )}
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="auto-paper"
+                  checked={autoPaperTrade}
+                  onCheckedChange={setAutoPaperTrade}
+                />
+                <Label htmlFor="auto-paper" className="text-xs flex items-center gap-1 cursor-pointer">
+                  <TestTube className="h-3 w-3" />
+                  Auto Paper Trade
+                </Label>
+              </div>
+              {lastScanTime && (
+                <span>Last update: {lastScanTime.toLocaleTimeString()}</span>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
