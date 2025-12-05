@@ -1115,14 +1115,16 @@ function processOpportunitiesPipeline( // Renamed to avoid clash with existing f
     };
   });
   
-  // Step 4: Filter by minimum profit
+  // Step 4: Filter by minimum profit AND maximum realistic profit (filter out bad data)
+  const MAX_REALISTIC_PROFIT = 50; // 50% max - anything higher is likely bad data
   const filteredOpportunities = scoredOpportunities.filter(opp => 
-    Math.abs(opp.profit_percent) >= minProfitPercent
+    Math.abs(opp.profit_percent) >= minProfitPercent && 
+    Math.abs(opp.profit_percent) <= MAX_REALISTIC_PROFIT
   );
   
   const lowQualityRemoved = scoredOpportunities.length - filteredOpportunities.length;
   
-  console.log(`After profit filtering (>=${minProfitPercent}%): ${filteredOpportunities.length} (removed ${lowQualityRemoved})`);
+  console.log(`After profit filtering (>=${minProfitPercent}%, <=${MAX_REALISTIC_PROFIT}%): ${filteredOpportunities.length} (removed ${lowQualityRemoved})`);
   
   // Step 5: Sort by quality score, then profit
   const sortedOpportunities = filteredOpportunities.sort((a, b) => {
@@ -1269,49 +1271,71 @@ async function upsertOpportunities(
   
   console.log(`Upserting ${opportunities.length} opportunities to database...`);
   
-  // Batch operations for better performance
-  const BATCH_SIZE = 50;
-  
-  for (let i = 0; i < opportunities.length; i += BATCH_SIZE) {
-    const batch = opportunities.slice(i, i + BATCH_SIZE).map(sanitizeOpportunityForDB);
+  // Process each opportunity individually to handle conflicts properly
+  for (const opp of opportunities) {
+    const sanitizedOpp = sanitizeOpportunityForDB(opp);
     
     try {
-      // Delete existing opportunities with same path to prevent duplicates
-      // This logic will need to be adjusted if 'user_id' is also part of the unique key
-      // For now, it matches the original deduplication intent based on the path.
-      const deletePromises = batch.map(opp => {
-        const { pathKey } = generateOpportunityKey(opp);
-        
-        return supabase
-          .from('arbitrage_opportunities')
-          .delete()
-          .eq('base_symbol', opp.base_symbol)
-          .eq('quote_symbol', opp.quote_symbol)
-          .eq('intermediate_symbol', opp.intermediate_symbol)
-          .eq('exchange1', opp.exchange1)
-          .eq('exchange2', opp.exchange2)
-          .eq('exchange3', opp.exchange3)
-          .eq('type', opp.type)
-          .eq('user_id', opp.user_id); // Assuming user_id is now part of the opportunity object for upsert
-      });
+      // First try to delete any existing matching opportunity
+      await supabase
+        .from('arbitrage_opportunities')
+        .delete()
+        .eq('base_symbol', sanitizedOpp.base_symbol)
+        .eq('quote_symbol', sanitizedOpp.quote_symbol)
+        .eq('intermediate_symbol', sanitizedOpp.intermediate_symbol)
+        .eq('exchange1', sanitizedOpp.exchange1)
+        .eq('exchange2', sanitizedOpp.exchange2)
+        .eq('exchange3', sanitizedOpp.exchange3)
+        .eq('type', sanitizedOpp.type)
+        .eq('user_id', sanitizedOpp.user_id);
       
-      await Promise.all(deletePromises);
-      
-      // Insert new opportunities
+      // Then insert the new one
       const { data, error } = await supabase
         .from('arbitrage_opportunities')
-        .insert(batch)
-        .select();
+        .insert(sanitizedOpp)
+        .select()
+        .single();
       
       if (error) {
-        console.error('Batch insert error:', error);
-        errors += batch.length;
+        // If it's a duplicate error, try update instead
+        if (error.code === '23505') {
+          const { error: updateError } = await supabase
+            .from('arbitrage_opportunities')
+            .update({
+              profit_percent: sanitizedOpp.profit_percent,
+              profit_amount: sanitizedOpp.profit_amount,
+              quality_score: sanitizedOpp.quality_score,
+              expires_at: sanitizedOpp.expires_at,
+              detected_at: new Date().toISOString(),
+              step1_price: sanitizedOpp.step1_price,
+              step2_price: sanitizedOpp.step2_price,
+              step3_price: sanitizedOpp.step3_price,
+            })
+            .eq('base_symbol', sanitizedOpp.base_symbol)
+            .eq('quote_symbol', sanitizedOpp.quote_symbol)
+            .eq('intermediate_symbol', sanitizedOpp.intermediate_symbol)
+            .eq('exchange1', sanitizedOpp.exchange1)
+            .eq('exchange2', sanitizedOpp.exchange2)
+            .eq('exchange3', sanitizedOpp.exchange3)
+            .eq('type', sanitizedOpp.type)
+            .eq('user_id', sanitizedOpp.user_id);
+          
+          if (updateError) {
+            console.error('Update fallback error:', updateError);
+            errors++;
+          } else {
+            updated++;
+          }
+        } else {
+          console.error('Insert error:', error);
+          errors++;
+        }
       } else {
-        inserted += data.length;
+        inserted++;
       }
     } catch (error) {
-      console.error('Batch processing error:', error);
-      errors += batch.length;
+      console.error('Processing error:', error);
+      errors++;
     }
   }
   
