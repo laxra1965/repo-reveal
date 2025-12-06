@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Eye, EyeOff, Plus, Trash2, CheckCircle, XCircle, TestTube } from 'lucide-react';
+import { Eye, EyeOff, Plus, Trash2, CheckCircle, XCircle, TestTube, Loader2, ShieldCheck } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -58,6 +58,7 @@ export function ExchangeCredentialsManager() {
     test_mode: true,
   });
   const [saving, setSaving] = useState(false);
+  const [testingConnection, setTestingConnection] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -153,12 +154,48 @@ export function ExchangeCredentialsManager() {
   };
 
   const handleTestConnection = async (credential: ExchangeCredential) => {
-    toast.info(`Testing ${credential.exchange.toUpperCase()} connection...`);
+    setTestingConnection(credential.id);
     
-    // Simulate connection test - in production, this would call an edge function
-    setTimeout(() => {
-      toast.success(`${credential.exchange.toUpperCase()} connection successful!`);
-    }, 1500);
+    try {
+      const { data, error } = await supabase.functions.invoke('validate-api-keys', {
+        body: {
+          exchange: credential.exchange,
+          apiKey: credential.api_key,
+          apiSecret: credential.api_secret
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.valid && data.canTrade) {
+        toast.success(`${credential.exchange.toUpperCase()} API validated with trading permissions!`);
+        // Update connection status
+        await supabase
+          .from('exchange_credentials')
+          .update({ is_connected: true })
+          .eq('id', credential.id);
+        fetchCredentials();
+      } else if (data.valid && !data.canTrade) {
+        toast.warning(`${credential.exchange.toUpperCase()} API key is valid but doesn't have trading permissions. Enable "Spot Trading" in your exchange settings.`);
+        await supabase
+          .from('exchange_credentials')
+          .update({ is_connected: false })
+          .eq('id', credential.id);
+        fetchCredentials();
+      } else {
+        toast.error(`${credential.exchange.toUpperCase()} validation failed: ${data.error || 'Unknown error'}`);
+        await supabase
+          .from('exchange_credentials')
+          .update({ is_connected: false })
+          .eq('id', credential.id);
+        fetchCredentials();
+      }
+    } catch (error: any) {
+      console.error('Connection test error:', error);
+      toast.error(`Failed to test ${credential.exchange.toUpperCase()} connection: ${error.message || 'Unknown error'}`);
+    } finally {
+      setTestingConnection(null);
+    }
   };
 
   const toggleSecretVisibility = (id: string) => {
@@ -324,8 +361,14 @@ export function ExchangeCredentialsManager() {
                         variant="outline"
                         size="sm"
                         onClick={() => handleTestConnection(credential)}
+                        disabled={testingConnection === credential.id}
                       >
-                        Test
+                        {testingConnection === credential.id ? (
+                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                        ) : (
+                          <ShieldCheck className="h-4 w-4 mr-1" />
+                        )}
+                        {testingConnection === credential.id ? 'Testing...' : 'Test API'}
                       </Button>
                       <Button
                         variant="ghost"

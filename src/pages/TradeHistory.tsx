@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, TrendingUp, TrendingDown, DollarSign, Percent } from 'lucide-react';
+import { ArrowLeft, TrendingUp, TrendingDown, DollarSign, Percent, TestTube } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface TradeHistory {
@@ -26,6 +26,8 @@ interface TradeHistory {
   error_message: string | null;
   completed_steps: number;
   total_steps: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  execution_details: any;
 }
 
 interface TradeStats {
@@ -221,50 +223,80 @@ const TradeHistory = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Date</TableHead>
+                      <TableHead>Exchanges</TableHead>
                       <TableHead>Path</TableHead>
+                      <TableHead>Type</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Start Amount</TableHead>
                       <TableHead className="text-right">Final Amount</TableHead>
-                      <TableHead className="text-right">Expected Profit</TableHead>
                       <TableHead className="text-right">Actual Profit</TableHead>
                       <TableHead>Progress</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {trades.map((trade) => (
-                      <TableRow key={trade.id}>
-                        <TableCell className="whitespace-nowrap">
-                          {format(new Date(trade.started_at), 'MMM dd, HH:mm:ss')}
-                        </TableCell>
-                        <TableCell className="font-mono text-xs">
-                          {trade.quote_symbol} → {trade.base_symbol} → {trade.intermediate_symbol} → {trade.quote_symbol}
-                        </TableCell>
-                        <TableCell>{getStatusBadge(trade.status)}</TableCell>
-                        <TableCell className="text-right font-mono">
-                          ${trade.start_amount.toFixed(2)}
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          {trade.final_amount ? `$${trade.final_amount.toFixed(2)}` : '-'}
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-muted-foreground">
-                          ${trade.expected_profit.toFixed(2)}
-                        </TableCell>
-                        <TableCell className={`text-right font-mono ${
-                          trade.actual_profit 
-                            ? trade.actual_profit >= 0 
-                              ? 'text-green-500' 
-                              : 'text-red-500'
-                            : ''
-                        }`}>
-                          {trade.actual_profit ? `$${trade.actual_profit.toFixed(2)}` : '-'}
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-xs text-muted-foreground">
-                            {trade.completed_steps}/{trade.total_steps} steps
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {trades.map((trade) => {
+                      const exchanges = trade.execution_details 
+                        ? [trade.execution_details.exchange1, trade.execution_details.exchange2, trade.execution_details.exchange3].filter(Boolean)
+                        : [];
+                      const isPaperTrade = trade.execution_details?.queued_from === 'auto_trade' && exchanges.length === 0;
+                      
+                      return (
+                        <TableRow key={trade.id}>
+                          <TableCell className="whitespace-nowrap">
+                            {format(new Date(trade.started_at), 'MMM dd, HH:mm:ss')}
+                          </TableCell>
+                          <TableCell>
+                            {exchanges.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {[...new Set(exchanges)].map((ex, i) => (
+                                  <Badge key={i} variant="outline" className="text-xs capitalize">
+                                    {String(ex)}
+                                  </Badge>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {trade.quote_symbol} → {trade.base_symbol} → {trade.intermediate_symbol}
+                          </TableCell>
+                          <TableCell>
+                            {isPaperTrade || trade.execution_details?.queued_from === 'auto_trade' ? (
+                              <Badge variant="secondary" className="text-xs">
+                                <TestTube className="h-3 w-3 mr-1" />
+                                Paper
+                              </Badge>
+                            ) : (
+                              <Badge variant="default" className="text-xs">
+                                Live
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>{getStatusBadge(trade.status)}</TableCell>
+                          <TableCell className="text-right font-mono">
+                            ${trade.start_amount.toFixed(2)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            {trade.final_amount ? `$${trade.final_amount.toFixed(2)}` : '-'}
+                          </TableCell>
+                          <TableCell className={`text-right font-mono ${
+                            trade.actual_profit 
+                              ? trade.actual_profit >= 0 
+                                ? 'text-green-500' 
+                                : 'text-red-500'
+                              : ''
+                          }`}>
+                            {trade.actual_profit ? `$${trade.actual_profit.toFixed(2)}` : '-'}
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-xs text-muted-foreground">
+                              {trade.completed_steps}/{trade.total_steps} steps
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
