@@ -35,6 +35,10 @@ const EXCHANGE_APIS: Record<string, { baseUrl: string; orderEndpoint: string }> 
   okx: {
     baseUrl: 'https://www.okx.com',
     orderEndpoint: '/api/v5/trade/order'
+  },
+  gate: {
+    baseUrl: 'https://api.gateio.ws',
+    orderEndpoint: '/api/v4/spot/orders'
   }
 };
 
@@ -280,6 +284,96 @@ async function executeOKXOrder(
   }
 }
 
+// Execute order on Gate.io
+async function executeGateOrder(
+  credentials: ExchangeCredentials,
+  symbol: string,
+  side: 'buy' | 'sell',
+  quantity: number,
+  testMode: boolean
+): Promise<{ success: boolean; orderId?: string; filledQty?: number; avgPrice?: number; error?: string; isPaperTrade?: boolean }> {
+  try {
+    // Gate.io paper trade simulation
+    if (testMode) {
+      console.log(`[PAPER TRADE] Gate ${side} ${quantity} ${symbol}`);
+      const simulatedSlippage = side === 'buy' ? 1.002 : 0.998;
+      return { 
+        success: true, 
+        orderId: `PAPER_GATE_${Date.now()}`, 
+        filledQty: quantity, 
+        avgPrice: simulatedSlippage,
+        isPaperTrade: true
+      };
+    }
+
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const currencyPair = symbol.replace('/', '_').toUpperCase();
+    
+    const body = JSON.stringify({
+      currency_pair: currencyPair,
+      side,
+      type: 'market',
+      amount: quantity.toFixed(8),
+      time_in_force: 'ioc'
+    });
+
+    // Generate signature for Gate.io
+    const method = 'POST';
+    const url = '/api/v4/spot/orders';
+    const queryString = '';
+    
+    // Hash the body
+    const encoder = new TextEncoder();
+    const bodyHash = await crypto.subtle.digest('SHA-512', encoder.encode(body));
+    const bodyHashHex = Array.from(new Uint8Array(bodyHash))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+    
+    const signString = `${method}\n${url}\n${queryString}\n${bodyHashHex}\n${timestamp}`;
+    
+    const keyData = encoder.encode(credentials.api_secret);
+    const key = await crypto.subtle.importKey(
+      'raw',
+      keyData,
+      { name: 'HMAC', hash: 'SHA-512' },
+      false,
+      ['sign']
+    );
+    
+    const signatureBuffer = await crypto.subtle.sign('HMAC', key, encoder.encode(signString));
+    const signature = Array.from(new Uint8Array(signatureBuffer))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+
+    const response = await fetch(`${EXCHANGE_APIS.gate.baseUrl}${EXCHANGE_APIS.gate.orderEndpoint}`, {
+      method: 'POST',
+      headers: {
+        'KEY': credentials.api_key,
+        'SIGN': signature,
+        'Timestamp': timestamp,
+        'Content-Type': 'application/json'
+      },
+      body
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || data.label) {
+      return { success: false, error: data.message || data.label || 'Gate order failed' };
+    }
+
+    return {
+      success: true,
+      orderId: data.id,
+      filledQty: parseFloat(data.filled_amount || quantity),
+      avgPrice: parseFloat(data.avg_deal_price || 0)
+    };
+  } catch (error) {
+    console.error('Gate order error:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
 // Main trade execution function
 async function executeArbitrageTrade(
   supabase: any,
@@ -316,6 +410,8 @@ async function executeArbitrageTrade(
       step1Result = await executeBybitOrder(step1Creds, step1Symbol, step1Side === 'BUY' ? 'Buy' : 'Sell', currentAmount / opportunity.step1_price, step1Creds.test_mode);
     } else if (exchange1 === 'okx') {
       step1Result = await executeOKXOrder(step1Creds, step1Symbol, step1Side === 'BUY' ? 'buy' : 'sell', currentAmount / opportunity.step1_price, step1Creds.test_mode);
+    } else if (exchange1 === 'gate') {
+      step1Result = await executeGateOrder(step1Creds, step1Symbol, step1Side === 'BUY' ? 'buy' : 'sell', currentAmount / opportunity.step1_price, step1Creds.test_mode);
     } else {
       throw new Error(`Unsupported exchange: ${opportunity.exchange1}`);
     }
@@ -354,6 +450,8 @@ async function executeArbitrageTrade(
       step2Result = await executeBybitOrder(step2Creds, step2Symbol, step2Side === 'BUY' ? 'Buy' : 'Sell', currentAmount, step2Creds.test_mode);
     } else if (exchange2 === 'okx') {
       step2Result = await executeOKXOrder(step2Creds, step2Symbol, step2Side === 'BUY' ? 'buy' : 'sell', currentAmount, step2Creds.test_mode);
+    } else if (exchange2 === 'gate') {
+      step2Result = await executeGateOrder(step2Creds, step2Symbol, step2Side === 'BUY' ? 'buy' : 'sell', currentAmount, step2Creds.test_mode);
     } else {
       throw new Error(`Unsupported exchange: ${opportunity.exchange2}`);
     }
@@ -391,6 +489,8 @@ async function executeArbitrageTrade(
       step3Result = await executeBybitOrder(step3Creds, step3Symbol, step3Side === 'BUY' ? 'Buy' : 'Sell', currentAmount, step3Creds.test_mode);
     } else if (exchange3 === 'okx') {
       step3Result = await executeOKXOrder(step3Creds, step3Symbol, step3Side === 'BUY' ? 'buy' : 'sell', currentAmount, step3Creds.test_mode);
+    } else if (exchange3 === 'gate') {
+      step3Result = await executeGateOrder(step3Creds, step3Symbol, step3Side === 'BUY' ? 'buy' : 'sell', currentAmount, step3Creds.test_mode);
     } else {
       throw new Error(`Unsupported exchange: ${opportunity.exchange3}`);
     }
