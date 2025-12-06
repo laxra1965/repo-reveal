@@ -23,24 +23,143 @@ interface TradeStep {
 }
 
 // Exchange API endpoints
-const EXCHANGE_APIS: Record<string, { baseUrl: string; orderEndpoint: string }> = {
+const EXCHANGE_APIS: Record<string, { baseUrl: string; orderEndpoint: string; permissionsEndpoint?: string }> = {
   binance: {
     baseUrl: 'https://api.binance.com',
-    orderEndpoint: '/api/v3/order'
+    orderEndpoint: '/api/v3/order',
+    permissionsEndpoint: '/api/v3/account'
   },
   bybit: {
     baseUrl: 'https://api.bybit.com',
-    orderEndpoint: '/v5/order/create'
+    orderEndpoint: '/v5/order/create',
+    permissionsEndpoint: '/v5/user/query-api'
   },
   okx: {
     baseUrl: 'https://www.okx.com',
-    orderEndpoint: '/api/v5/trade/order'
+    orderEndpoint: '/api/v5/trade/order',
+    permissionsEndpoint: '/api/v5/account/config'
   },
   gate: {
     baseUrl: 'https://api.gateio.ws',
-    orderEndpoint: '/api/v4/spot/orders'
+    orderEndpoint: '/api/v4/spot/orders',
+    permissionsEndpoint: '/api/v4/spot/accounts'
   }
 };
+
+// Friendly error messages for common API errors
+function getHumanReadableError(error: string, exchange: string): string {
+  const lowerError = error.toLowerCase();
+  
+  if (lowerError.includes('not authorized') || lowerError.includes('unauthorized') || lowerError.includes('permission') || lowerError.includes('api key')) {
+    return `API key for ${exchange} doesn't have trading permissions. Please enable "Spot Trading" in your ${exchange} API settings.`;
+  }
+  if (lowerError.includes('invalid signature') || lowerError.includes('signature')) {
+    return `Invalid API signature for ${exchange}. Please verify your API key and secret are correct.`;
+  }
+  if (lowerError.includes('insufficient') || lowerError.includes('balance')) {
+    return `Insufficient balance on ${exchange} to execute this trade.`;
+  }
+  if (lowerError.includes('rate limit') || lowerError.includes('too many')) {
+    return `Rate limit exceeded on ${exchange}. Please wait a moment before retrying.`;
+  }
+  if (lowerError.includes('ip') || lowerError.includes('whitelist')) {
+    return `IP not whitelisted for ${exchange} API. Add your server IP to the API whitelist.`;
+  }
+  if (lowerError.includes('expired') || lowerError.includes('timestamp')) {
+    return `Request timestamp issue with ${exchange}. This may be a temporary sync error.`;
+  }
+  if (lowerError.includes('minimum') || lowerError.includes('min qty') || lowerError.includes('lot size')) {
+    return `Trade amount too small for ${exchange}. Try increasing the trade amount.`;
+  }
+  if (lowerError.includes('symbol') || lowerError.includes('pair')) {
+    return `Trading pair not available on ${exchange}.`;
+  }
+  
+  return `${exchange} error: ${error}`;
+}
+
+// Validate API key permissions before trading
+async function validateBinancePermissions(credentials: ExchangeCredentials): Promise<{ valid: boolean; canTrade: boolean; error?: string }> {
+  try {
+    const timestamp = Date.now();
+    const params = new URLSearchParams({
+      timestamp: timestamp.toString(),
+      recvWindow: '5000'
+    });
+
+    const queryString = params.toString();
+    const encoder = new TextEncoder();
+    const keyData = encoder.encode(credentials.api_secret);
+    const messageData = encoder.encode(queryString);
+    
+    const key = await crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const signatureBuffer = await crypto.subtle.sign('HMAC', key, messageData);
+    const signature = Array.from(new Uint8Array(signatureBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+    const response = await fetch(`${EXCHANGE_APIS.binance.baseUrl}/api/v3/account?${queryString}&signature=${signature}`, {
+      headers: { 'X-MBX-APIKEY': credentials.api_key }
+    });
+
+    const data = await response.json();
+    
+    if (!response.ok) {
+      if (data.code === -2015) return { valid: false, canTrade: false, error: 'Invalid API key or IP not whitelisted' };
+      if (data.code === -1022) return { valid: false, canTrade: false, error: 'Invalid API signature - check your secret key' };
+      return { valid: false, canTrade: false, error: data.msg || 'API validation failed' };
+    }
+
+    return { valid: true, canTrade: data.canTrade === true };
+  } catch (error) {
+    return { valid: false, canTrade: false, error: error instanceof Error ? error.message : 'Connection failed' };
+  }
+}
+
+async function validateBybitPermissions(credentials: ExchangeCredentials): Promise<{ valid: boolean; canTrade: boolean; error?: string }> {
+  try {
+    const timestamp = Date.now();
+    const recvWindow = 5000;
+    const signPayload = `${timestamp}${credentials.api_key}${recvWindow}`;
+    
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey('raw', encoder.encode(credentials.api_secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const signatureBuffer = await crypto.subtle.sign('HMAC', key, encoder.encode(signPayload));
+    const signature = Array.from(new Uint8Array(signatureBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+    const response = await fetch(`${EXCHANGE_APIS.bybit.baseUrl}/v5/user/query-api`, {
+      headers: {
+        'X-BAPI-API-KEY': credentials.api_key,
+        'X-BAPI-SIGN': signature,
+        'X-BAPI-TIMESTAMP': timestamp.toString(),
+        'X-BAPI-RECV-WINDOW': recvWindow.toString()
+      }
+    });
+
+    const data = await response.json();
+    
+    if (data.retCode !== 0) {
+      return { valid: false, canTrade: false, error: data.retMsg || 'API validation failed' };
+    }
+
+    const permissions = data.result?.permissions || {};
+    const canSpotTrade = permissions.Spot?.includes('SpotTrade') || false;
+    
+    return { valid: true, canTrade: canSpotTrade };
+  } catch (error) {
+    return { valid: false, canTrade: false, error: error instanceof Error ? error.message : 'Connection failed' };
+  }
+}
+
+async function validateExchangePermissions(exchange: string, credentials: ExchangeCredentials): Promise<{ valid: boolean; canTrade: boolean; error?: string }> {
+  switch (exchange.toLowerCase()) {
+    case 'binance':
+      return validateBinancePermissions(credentials);
+    case 'bybit':
+      return validateBybitPermissions(credentials);
+    default:
+      // For other exchanges, assume valid if credentials exist (will fail on actual trade if invalid)
+      return { valid: true, canTrade: true };
+  }
+}
 
 // Generate signature for Binance
 function generateBinanceSignature(queryString: string, secret: string): string {
@@ -387,6 +506,33 @@ async function executeArbitrageTrade(
   let completedSteps = 0;
 
   try {
+    // Validate all exchange permissions before starting
+    const exchanges = [opportunity.exchange1, opportunity.exchange2, opportunity.exchange3];
+    const uniqueExchanges = [...new Set(exchanges.map((e: string) => e.toLowerCase()))];
+    
+    for (const exchange of uniqueExchanges) {
+      const creds = credentials[exchange];
+      if (!creds) {
+        throw new Error(`Missing API credentials for ${exchange}. Please add your ${exchange} API keys in Profile settings.`);
+      }
+      
+      // Skip validation for paper trading
+      if (!creds.test_mode) {
+        console.log(`Validating ${exchange} API permissions...`);
+        const validation = await validateExchangePermissions(exchange, creds);
+        
+        if (!validation.valid) {
+          throw new Error(`${exchange} API key validation failed: ${validation.error}`);
+        }
+        
+        if (!validation.canTrade) {
+          throw new Error(`${exchange} API key doesn't have trading permissions. Please enable "Spot Trading" in your ${exchange} API settings.`);
+        }
+        
+        console.log(`✓ ${exchange} API key validated with trading permissions`);
+      }
+    }
+
     // Update trade status to executing
     await supabase
       .from('trade_history')
@@ -417,7 +563,7 @@ async function executeArbitrageTrade(
     }
 
     if (!step1Result.success) {
-      throw new Error(`Step 1 failed: ${step1Result.error}`);
+      throw new Error(getHumanReadableError(step1Result.error || 'Unknown error', opportunity.exchange1));
     }
 
     executionLog.push({ step: 1, ...step1Result, timestamp: new Date().toISOString() });
@@ -457,7 +603,7 @@ async function executeArbitrageTrade(
     }
 
     if (!step2Result.success) {
-      throw new Error(`Step 2 failed: ${step2Result.error}`);
+      throw new Error(getHumanReadableError(step2Result.error || 'Unknown error', opportunity.exchange2));
     }
 
     executionLog.push({ step: 2, ...step2Result, timestamp: new Date().toISOString() });
@@ -496,7 +642,7 @@ async function executeArbitrageTrade(
     }
 
     if (!step3Result.success) {
-      throw new Error(`Step 3 failed: ${step3Result.error}`);
+      throw new Error(getHumanReadableError(step3Result.error || 'Unknown error', opportunity.exchange3));
     }
 
     executionLog.push({ step: 3, ...step3Result, timestamp: new Date().toISOString() });
