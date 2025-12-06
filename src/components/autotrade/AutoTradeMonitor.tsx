@@ -183,6 +183,22 @@ export const AutoTradeMonitor = () => {
     return new Date(dateString).toLocaleString();
   };
 
+  const isApiPermissionError = (error: string): boolean => {
+    const lower = error.toLowerCase();
+    return lower.includes('permission') || lower.includes('authorized') || lower.includes('trading') || lower.includes('api key');
+  };
+
+  const getErrorTitle = (error: string): string => {
+    const lower = error.toLowerCase();
+    if (lower.includes('permission') || lower.includes('trading')) return 'API Permission Error';
+    if (lower.includes('authorized')) return 'Authorization Failed';
+    if (lower.includes('balance') || lower.includes('insufficient')) return 'Insufficient Balance';
+    if (lower.includes('signature')) return 'Invalid API Signature';
+    if (lower.includes('rate limit')) return 'Rate Limited';
+    if (lower.includes('ip')) return 'IP Not Whitelisted';
+    return 'Trade Failed';
+  };
+
   const queuedCount = queuedTrades.filter(t => t.status === 'queued').length;
   const processingCount = queuedTrades.filter(t => t.status === 'processing').length;
   const completedCount = tradeHistory.filter(t => t.status === 'completed').length;
@@ -374,7 +390,7 @@ export const AutoTradeMonitor = () => {
                     {tradeHistory
                       .filter(t => t.status === 'failed')
                       .map(trade => (
-                        <div key={trade.id} className="p-3 border rounded-lg border-red-200">
+                        <div key={trade.id} className="p-3 border rounded-lg border-destructive/30 bg-destructive/5">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               {getStatusBadge(trade.status)}
@@ -387,8 +403,23 @@ export const AutoTradeMonitor = () => {
                             </span>
                           </div>
                           {trade.error_message && (
-                            <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 rounded text-xs text-red-600 dark:text-red-400">
-                              {trade.error_message}
+                            <div className="mt-2 p-3 bg-destructive/10 border border-destructive/20 rounded-md">
+                              <div className="flex items-start gap-2">
+                                <XCircle className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
+                                <div className="space-y-1">
+                                  <p className="text-sm font-medium text-destructive">
+                                    {getErrorTitle(trade.error_message)}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {trade.error_message}
+                                  </p>
+                                  {isApiPermissionError(trade.error_message) && (
+                                    <p className="text-xs text-muted-foreground mt-2">
+                                      <strong>Tip:</strong> Go to your exchange and enable "Spot Trading" permission for your API key.
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
                             </div>
                           )}
                           <div className="mt-2 text-xs text-muted-foreground">
