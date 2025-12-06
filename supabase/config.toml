@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.scheduled-arb-scan]
 verify_jwt = false
+
+[functions.validate-api-keys]
+verify_jwt = true
