@@ -4,8 +4,11 @@ import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { ProfileSection } from '@/components/profile/ProfileSection';
 import { ExchangeCredentialsManager } from '@/components/profile/ExchangeCredentialsManager';
+<<<<<<< HEAD
 import { EnabledExchangesManager } from '@/components/profile/EnabledExchangesManager';
 import { CredentialsMigrationPanel } from '@/components/profile/CredentialsMigrationPanel';
+=======
+>>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ArrowLeft } from 'lucide-react';
@@ -68,11 +71,15 @@ const Profile = () => {
         </div>
 
         <ProfileSection subscription={subscription} />
+<<<<<<< HEAD
 
         <EnabledExchangesManager />
 
         <CredentialsMigrationPanel />
 
+=======
+        
+>>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
         <ExchangeCredentialsManager />
       </main>
     </div>
