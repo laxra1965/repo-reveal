@@ -1,9 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-<<<<<<< HEAD
-import { getExchangeCircuitBreaker, CircuitState } from './utils/circuit-breaker.ts';
-=======
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -53,11 +49,7 @@ const EXCHANGE_APIS: Record<string, { baseUrl: string; orderEndpoint: string; pe
 // Friendly error messages for common API errors
 function getHumanReadableError(error: string, exchange: string): string {
   const lowerError = error.toLowerCase();
-<<<<<<< HEAD
 
-=======
-  
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
   if (lowerError.includes('not authorized') || lowerError.includes('unauthorized') || lowerError.includes('permission') || lowerError.includes('api key')) {
     return `API key for ${exchange} doesn't have trading permissions. Please enable "Spot Trading" in your ${exchange} API settings.`;
   }
@@ -82,7 +74,6 @@ function getHumanReadableError(error: string, exchange: string): string {
   if (lowerError.includes('symbol') || lowerError.includes('pair')) {
     return `Trading pair not available on ${exchange}.`;
   }
-<<<<<<< HEAD
 
   return `${exchange} error: ${error}`;
 }
@@ -118,12 +109,6 @@ async function decryptCredentials(supabaseUrl: string, supabaseServiceKey: strin
   };
 }
 
-=======
-  
-  return `${exchange} error: ${error}`;
-}
-
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
 // Validate API key permissions before trading
 async function validateBinancePermissions(credentials: ExchangeCredentials): Promise<{ valid: boolean; canTrade: boolean; error?: string }> {
   try {
@@ -137,11 +122,7 @@ async function validateBinancePermissions(credentials: ExchangeCredentials): Pro
     const encoder = new TextEncoder();
     const keyData = encoder.encode(credentials.api_secret);
     const messageData = encoder.encode(queryString);
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
     const key = await crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
     const signatureBuffer = await crypto.subtle.sign('HMAC', key, messageData);
     const signature = Array.from(new Uint8Array(signatureBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
@@ -151,11 +132,7 @@ async function validateBinancePermissions(credentials: ExchangeCredentials): Pro
     });
 
     const data = await response.json();
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
     if (!response.ok) {
       if (data.code === -2015) return { valid: false, canTrade: false, error: 'Invalid API key or IP not whitelisted' };
       if (data.code === -1022) return { valid: false, canTrade: false, error: 'Invalid API signature - check your secret key' };
@@ -173,11 +150,7 @@ async function validateBybitPermissions(credentials: ExchangeCredentials): Promi
     const timestamp = Date.now();
     const recvWindow = 5000;
     const signPayload = `${timestamp}${credentials.api_key}${recvWindow}`;
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
     const encoder = new TextEncoder();
     const key = await crypto.subtle.importKey('raw', encoder.encode(credentials.api_secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
     const signatureBuffer = await crypto.subtle.sign('HMAC', key, encoder.encode(signPayload));
@@ -193,22 +166,14 @@ async function validateBybitPermissions(credentials: ExchangeCredentials): Promi
     });
 
     const data = await response.json();
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
     if (data.retCode !== 0) {
       return { valid: false, canTrade: false, error: data.retMsg || 'API validation failed' };
     }
 
     const permissions = data.result?.permissions || {};
     const canSpotTrade = permissions.Spot?.includes('SpotTrade') || false;
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
     return { valid: true, canTrade: canSpotTrade };
   } catch (error) {
     return { valid: false, canTrade: false, error: error instanceof Error ? error.message : 'Connection failed' };
@@ -227,38 +192,6 @@ async function validateExchangePermissions(exchange: string, credentials: Exchan
   }
 }
 
-// Generate signature for Binance
-function generateBinanceSignature(queryString: string, secret: string): string {
-  const encoder = new TextEncoder();
-  const keyData = encoder.encode(secret);
-  const messageData = encoder.encode(queryString);
-<<<<<<< HEAD
-
-=======
-  
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
-  // Using SubtleCrypto for HMAC-SHA256
-  return crypto.subtle.importKey(
-    'raw',
-    keyData,
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-<<<<<<< HEAD
-  ).then(key =>
-    crypto.subtle.sign('HMAC', key, messageData)
-  ).then(signature =>
-=======
-  ).then(key => 
-    crypto.subtle.sign('HMAC', key, messageData)
-  ).then(signature => 
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
-    Array.from(new Uint8Array(signature))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('')
-  ) as unknown as string;
-}
-
 // Execute order on Binance
 async function executeBinanceOrder(
   credentials: ExchangeCredentials,
@@ -266,7 +199,7 @@ async function executeBinanceOrder(
   side: 'BUY' | 'SELL',
   quantity: number,
   testMode: boolean
-): Promise<{ success: boolean; orderId?: string; filledQty?: number; avgPrice?: number; error?: string }> {
+): Promise<{ success: boolean; orderId?: string; filledQty?: number; avgPrice?: number; error?: string; isPaperTrade?: boolean }> {
   try {
     const timestamp = Date.now();
     const params = new URLSearchParams({
@@ -279,20 +212,12 @@ async function executeBinanceOrder(
     });
 
     const queryString = params.toString();
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
     // Generate signature
     const encoder = new TextEncoder();
     const keyData = encoder.encode(credentials.api_secret);
     const messageData = encoder.encode(queryString);
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
     const key = await crypto.subtle.importKey(
       'raw',
       keyData,
@@ -300,11 +225,7 @@ async function executeBinanceOrder(
       false,
       ['sign']
     );
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
     const signatureBuffer = await crypto.subtle.sign('HMAC', key, messageData);
     const signature = Array.from(new Uint8Array(signatureBuffer))
       .map(b => b.toString(16).padStart(2, '0'))
@@ -331,17 +252,10 @@ async function executeBinanceOrder(
       // Paper trading simulation - return simulated success
       console.log(`[PAPER TRADE] Binance ${side} ${quantity} ${symbol}`);
       const simulatedPrice = side === 'BUY' ? 1.001 : 0.999; // Simulate slight slippage
-<<<<<<< HEAD
       return {
         success: true,
         orderId: `PAPER_${Date.now()}`,
         filledQty: quantity,
-=======
-      return { 
-        success: true, 
-        orderId: `PAPER_${Date.now()}`, 
-        filledQty: quantity, 
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
         avgPrice: simulatedPrice,
         isPaperTrade: true
       };
@@ -370,11 +284,7 @@ async function executeBybitOrder(
   try {
     const timestamp = Date.now();
     const recvWindow = 5000;
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
     const body = JSON.stringify({
       category: 'spot',
       symbol: symbol.replace('/', ''),
@@ -388,11 +298,7 @@ async function executeBybitOrder(
     const encoder = new TextEncoder();
     const keyData = encoder.encode(credentials.api_secret);
     const messageData = encoder.encode(signPayload);
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
     const key = await crypto.subtle.importKey(
       'raw',
       keyData,
@@ -400,11 +306,7 @@ async function executeBybitOrder(
       false,
       ['sign']
     );
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
     const signatureBuffer = await crypto.subtle.sign('HMAC', key, messageData);
     const signature = Array.from(new Uint8Array(signatureBuffer))
       .map(b => b.toString(16).padStart(2, '0'))
@@ -452,11 +354,7 @@ async function executeOKXOrder(
 ): Promise<{ success: boolean; orderId?: string; filledQty?: number; avgPrice?: number; error?: string }> {
   try {
     const timestamp = new Date().toISOString();
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
     const body = JSON.stringify({
       instId: symbol.replace('/', '-'),
       tdMode: 'cash',
@@ -470,11 +368,7 @@ async function executeOKXOrder(
     const encoder = new TextEncoder();
     const keyData = encoder.encode(credentials.api_secret);
     const messageData = encoder.encode(signPayload);
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
     const key = await crypto.subtle.importKey(
       'raw',
       keyData,
@@ -482,11 +376,7 @@ async function executeOKXOrder(
       false,
       ['sign']
     );
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
     const signatureBuffer = await crypto.subtle.sign('HMAC', key, messageData);
     const signature = btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)));
 
@@ -535,17 +425,10 @@ async function executeGateOrder(
     if (testMode) {
       console.log(`[PAPER TRADE] Gate ${side} ${quantity} ${symbol}`);
       const simulatedSlippage = side === 'buy' ? 1.002 : 0.998;
-<<<<<<< HEAD
       return {
         success: true,
         orderId: `PAPER_GATE_${Date.now()}`,
         filledQty: quantity,
-=======
-      return { 
-        success: true, 
-        orderId: `PAPER_GATE_${Date.now()}`, 
-        filledQty: quantity, 
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
         avgPrice: simulatedSlippage,
         isPaperTrade: true
       };
@@ -553,11 +436,7 @@ async function executeGateOrder(
 
     const timestamp = Math.floor(Date.now() / 1000).toString();
     const currencyPair = symbol.replace('/', '_').toUpperCase();
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
     const body = JSON.stringify({
       currency_pair: currencyPair,
       side,
@@ -570,26 +449,16 @@ async function executeGateOrder(
     const method = 'POST';
     const url = '/api/v4/spot/orders';
     const queryString = '';
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
     // Hash the body
     const encoder = new TextEncoder();
     const bodyHash = await crypto.subtle.digest('SHA-512', encoder.encode(body));
     const bodyHashHex = Array.from(new Uint8Array(bodyHash))
       .map(b => b.toString(16).padStart(2, '0'))
       .join('');
-<<<<<<< HEAD
 
     const signString = `${method}\n${url}\n${queryString}\n${bodyHashHex}\n${timestamp}`;
 
-=======
-    
-    const signString = `${method}\n${url}\n${queryString}\n${bodyHashHex}\n${timestamp}`;
-    
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
     const keyData = encoder.encode(credentials.api_secret);
     const key = await crypto.subtle.importKey(
       'raw',
@@ -598,11 +467,7 @@ async function executeGateOrder(
       false,
       ['sign']
     );
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
     const signatureBuffer = await crypto.subtle.sign('HMAC', key, encoder.encode(signString));
     const signature = Array.from(new Uint8Array(signatureBuffer))
       .map(b => b.toString(16).padStart(2, '0'))
@@ -653,26 +518,17 @@ async function executeArbitrageTrade(
     // Validate all exchange permissions before starting
     const exchanges = [opportunity.exchange1, opportunity.exchange2, opportunity.exchange3];
     const uniqueExchanges = [...new Set(exchanges.map((e: string) => e.toLowerCase()))];
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
     for (const exchange of uniqueExchanges) {
       const creds = credentials[exchange];
       if (!creds) {
         throw new Error(`Missing API credentials for ${exchange}. Please add your ${exchange} API keys in Profile settings.`);
       }
-<<<<<<< HEAD
 
-=======
-      
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
       // Skip validation for paper trading
       if (!creds.test_mode) {
         console.log(`Validating ${exchange} API permissions...`);
         const validation = await validateExchangePermissions(exchange, creds);
-<<<<<<< HEAD
 
         if (!validation.valid) {
           throw new Error(`${exchange} API key validation failed: ${validation.error}`);
@@ -682,17 +538,6 @@ async function executeArbitrageTrade(
           throw new Error(`${exchange} API key doesn't have trading permissions. Please enable "Spot Trading" in your ${exchange} API settings.`);
         }
 
-=======
-        
-        if (!validation.valid) {
-          throw new Error(`${exchange} API key validation failed: ${validation.error}`);
-        }
-        
-        if (!validation.canTrade) {
-          throw new Error(`${exchange} API key doesn't have trading permissions. Please enable "Spot Trading" in your ${exchange} API settings.`);
-        }
-        
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
         console.log(`✓ ${exchange} API key validated with trading permissions`);
       }
     }
@@ -708,20 +553,12 @@ async function executeArbitrageTrade(
     if (!step1Creds) throw new Error(`No credentials for ${opportunity.exchange1}`);
 
     console.log(`Step 1: ${opportunity.step1_action} on ${opportunity.exchange1}`);
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
     let step1Result;
     const exchange1 = opportunity.exchange1.toLowerCase();
     const step1Symbol = `${opportunity.base_symbol}${opportunity.quote_symbol}`;
     const step1Side = opportunity.step1_action.includes('BUY') ? 'BUY' : 'SELL';
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
     if (exchange1 === 'binance') {
       step1Result = await executeBinanceOrder(step1Creds, step1Symbol, step1Side as 'BUY' | 'SELL', currentAmount / opportunity.step1_price, step1Creds.test_mode);
     } else if (exchange1 === 'bybit') {
@@ -745,11 +582,7 @@ async function executeArbitrageTrade(
     // Update progress
     await supabase
       .from('trade_history')
-<<<<<<< HEAD
       .update({
-=======
-      .update({ 
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
         completed_steps: completedSteps,
         execution_details: { ...opportunity.execution_details, log: executionLog }
       })
@@ -760,20 +593,12 @@ async function executeArbitrageTrade(
     if (!step2Creds) throw new Error(`No credentials for ${opportunity.exchange2}`);
 
     console.log(`Step 2: ${opportunity.step2_action} on ${opportunity.exchange2}`);
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
     let step2Result;
     const exchange2 = opportunity.exchange2.toLowerCase();
     const step2Symbol = `${opportunity.base_symbol}${opportunity.intermediate_symbol}`;
     const step2Side = opportunity.step2_action.includes('BUY') ? 'BUY' : 'SELL';
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
     if (exchange2 === 'binance') {
       step2Result = await executeBinanceOrder(step2Creds, step2Symbol, step2Side as 'BUY' | 'SELL', currentAmount, step2Creds.test_mode);
     } else if (exchange2 === 'bybit') {
@@ -796,11 +621,7 @@ async function executeArbitrageTrade(
 
     await supabase
       .from('trade_history')
-<<<<<<< HEAD
       .update({
-=======
-      .update({ 
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
         completed_steps: completedSteps,
         execution_details: { ...opportunity.execution_details, log: executionLog }
       })
@@ -811,20 +632,12 @@ async function executeArbitrageTrade(
     if (!step3Creds) throw new Error(`No credentials for ${opportunity.exchange3}`);
 
     console.log(`Step 3: ${opportunity.step3_action} on ${opportunity.exchange3}`);
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
     let step3Result;
     const exchange3 = opportunity.exchange3.toLowerCase();
     const step3Symbol = `${opportunity.intermediate_symbol}${opportunity.quote_symbol}`;
     const step3Side = opportunity.step3_action.includes('BUY') ? 'BUY' : 'SELL';
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
     if (exchange3 === 'binance') {
       step3Result = await executeBinanceOrder(step3Creds, step3Symbol, step3Side as 'BUY' | 'SELL', currentAmount, step3Creds.test_mode);
     } else if (exchange3 === 'bybit') {
@@ -850,11 +663,7 @@ async function executeArbitrageTrade(
     // Mark trade as completed
     await supabase
       .from('trade_history')
-<<<<<<< HEAD
       .update({
-=======
-      .update({ 
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
         status: 'completed',
         completed_steps: completedSteps,
         completed_at: new Date().toISOString(),
@@ -881,7 +690,6 @@ async function executeArbitrageTrade(
     return { success: true, actualProfit };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-<<<<<<< HEAD
 
     // Check if this is a partial failure (completed some steps but not all)
     const isPartialFailure = completedSteps > 0 && completedSteps < 3;
@@ -893,7 +701,7 @@ async function executeArbitrageTrade(
       console.log('Creating recovery state for partial failure...');
 
       try {
-        const { data: existingRecovery, error: checkError } = await supabase
+        const { data: existingRecovery } = await supabase
           .from('trade_recovery_state')
           .select('id')
           .eq('trade_id', tradeId)
@@ -923,11 +731,11 @@ async function executeArbitrageTrade(
         console.error('Error in recovery state creation:', recoveryCreationError);
       }
 
-      // Mark trade as needs_recovery instead of failed
+      // Mark trade as failed with partial info
       await supabase
         .from('trade_history')
         .update({
-          status: 'needs_recovery',
+          status: 'failed',
           completed_steps: completedSteps,
           completed_at: new Date().toISOString(),
           error_message: errorMessage,
@@ -978,32 +786,6 @@ async function executeArbitrageTrade(
         }
       });
     }
-=======
-    
-    // Mark trade as failed
-    await supabase
-      .from('trade_history')
-      .update({ 
-        status: 'failed',
-        completed_steps: completedSteps,
-        completed_at: new Date().toISOString(),
-        error_message: errorMessage,
-        execution_details: { ...opportunity.execution_details, log: executionLog, error: errorMessage }
-      })
-      .eq('id', tradeId);
-
-    // Log failure
-    await supabase.from('scanner_logs').insert({
-      user_id: opportunity.user_id,
-      log_type: 'trade_failed',
-      message: `Trade failed: ${errorMessage}`,
-      details: {
-        trade_id: tradeId,
-        completed_steps: completedSteps,
-        error: errorMessage
-      }
-    });
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
 
     return { success: false, error: errorMessage };
   }
@@ -1048,7 +830,6 @@ serve(async (req) => {
       }
 
       const credMap: Record<string, ExchangeCredentials> = {};
-<<<<<<< HEAD
 
       // Decrypt credentials if needed
       for (const c of credentials) {
@@ -1065,16 +846,6 @@ serve(async (req) => {
           test_mode: c.test_mode
         };
       }
-=======
-      credentials.forEach(c => {
-        credMap[c.exchange.toLowerCase()] = {
-          api_key: c.api_key,
-          api_secret: c.api_secret,
-          exchange: c.exchange,
-          test_mode: c.test_mode
-        };
-      });
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
 
       const result = await executeArbitrageTrade(
         supabase,
@@ -1124,14 +895,22 @@ serve(async (req) => {
       }
 
       const credMap: Record<string, ExchangeCredentials> = {};
-      credentials.forEach(c => {
+
+      // Decrypt credentials if needed
+      for (const c of credentials) {
+        const decrypted = await decryptCredentials(
+          Deno.env.get('SUPABASE_URL')!,
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+          c
+        );
+
         credMap[c.exchange.toLowerCase()] = {
-          api_key: c.api_key,
-          api_secret: c.api_secret,
+          api_key: decrypted.api_key,
+          api_secret: decrypted.api_secret,
           exchange: c.exchange,
           test_mode: c.test_mode
         };
-      });
+      }
 
       const results = [];
       for (const trade of pendingTrades) {

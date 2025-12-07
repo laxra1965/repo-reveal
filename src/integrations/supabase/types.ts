@@ -56,6 +56,36 @@ export type Database = {
         }
         Relationships: []
       }
+      api_cache: {
+        Row: {
+          cache_data: Json
+          cache_key: string
+          created_at: string | null
+          expires_at: string
+          hit_count: number | null
+          id: string
+          last_accessed_at: string | null
+        }
+        Insert: {
+          cache_data: Json
+          cache_key: string
+          created_at?: string | null
+          expires_at: string
+          hit_count?: number | null
+          id?: string
+          last_accessed_at?: string | null
+        }
+        Update: {
+          cache_data?: Json
+          cache_key?: string
+          created_at?: string | null
+          expires_at?: string
+          hit_count?: number | null
+          id?: string
+          last_accessed_at?: string | null
+        }
+        Relationships: []
+      }
       arbitrage_opportunities: {
         Row: {
           arb_factor: number | null
@@ -262,9 +292,13 @@ export type Database = {
           api_key: string
           api_secret: string
           created_at: string | null
+          encrypted_api_key: string | null
+          encrypted_api_secret: string | null
+          encryption_version: number | null
           exchange: Database["public"]["Enums"]["exchange_name"]
           id: string
           is_connected: boolean | null
+          migration_status: string | null
           test_mode: boolean | null
           updated_at: string | null
           user_id: string
@@ -273,9 +307,13 @@ export type Database = {
           api_key: string
           api_secret: string
           created_at?: string | null
+          encrypted_api_key?: string | null
+          encrypted_api_secret?: string | null
+          encryption_version?: number | null
           exchange: Database["public"]["Enums"]["exchange_name"]
           id?: string
           is_connected?: boolean | null
+          migration_status?: string | null
           test_mode?: boolean | null
           updated_at?: string | null
           user_id: string
@@ -284,14 +322,133 @@ export type Database = {
           api_key?: string
           api_secret?: string
           created_at?: string | null
+          encrypted_api_key?: string | null
+          encrypted_api_secret?: string | null
+          encryption_version?: number | null
           exchange?: Database["public"]["Enums"]["exchange_name"]
           id?: string
           is_connected?: boolean | null
+          migration_status?: string | null
           test_mode?: boolean | null
           updated_at?: string | null
           user_id?: string
         }
         Relationships: []
+      }
+      ml_features: {
+        Row: {
+          created_at: string | null
+          id: string
+          opportunity_id: string | null
+          profit_percent: number
+          user_id: string
+          was_successful: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          opportunity_id?: string | null
+          profit_percent: number
+          user_id: string
+          was_successful?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          opportunity_id?: string | null
+          profit_percent?: number
+          user_id?: string
+          was_successful?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ml_features_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "active_arbitrage_opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ml_features_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "arbitrage_opportunities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ml_models: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          model_name: string
+          model_version: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          model_name: string
+          model_version: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          model_name?: string
+          model_version?: string
+        }
+        Relationships: []
+      }
+      ml_predictions: {
+        Row: {
+          created_at: string | null
+          id: string
+          model_id: string | null
+          opportunity_id: string | null
+          predicted_success_probability: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          model_id?: string | null
+          opportunity_id?: string | null
+          predicted_success_probability: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          model_id?: string | null
+          opportunity_id?: string | null
+          predicted_success_probability?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ml_predictions_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "ml_models"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ml_predictions_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "active_arbitrage_opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ml_predictions_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "arbitrage_opportunities"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -469,6 +626,44 @@ export type Database = {
             columns: ["opportunity_id"]
             isOneToOne: false
             referencedRelation: "arbitrage_opportunities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trade_recovery_state: {
+        Row: {
+          created_at: string | null
+          current_step: number
+          id: string
+          recovery_attempts: number | null
+          recovery_status: string | null
+          trade_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          current_step?: number
+          id?: string
+          recovery_attempts?: number | null
+          recovery_status?: string | null
+          trade_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          current_step?: number
+          id?: string
+          recovery_attempts?: number | null
+          recovery_status?: string | null
+          trade_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trade_recovery_state_trade_id_fkey"
+            columns: ["trade_id"]
+            isOneToOne: true
+            referencedRelation: "trade_history"
             referencedColumns: ["id"]
           },
         ]
@@ -777,6 +972,18 @@ export type Database = {
         }
         Relationships: []
       }
+      user_trade_statistics: {
+        Row: {
+          avg_profit: number | null
+          completed_trades: number | null
+          failed_trades: number | null
+          success_rate: number | null
+          total_profit: number | null
+          total_trades: number | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       build_path_key: {
@@ -817,6 +1024,7 @@ export type Database = {
           trades_last_hour: number
         }[]
       }
+      get_cached: { Args: { key: string }; Returns: Json }
       get_opportunities_needing_validation: {
         Args: never
         Returns: {
@@ -831,6 +1039,10 @@ export type Database = {
           seconds_since_validation: number
           type: string
         }[]
+      }
+      is_credentials_encrypted: {
+        Args: { credential_id: string }
+        Returns: boolean
       }
       mark_opportunity_validated: {
         Args: {
@@ -862,6 +1074,10 @@ export type Database = {
           execution_time_ms: number
           paths_processed: number
         }[]
+      }
+      set_cache: {
+        Args: { data: Json; key: string; ttl_seconds: number }
+        Returns: undefined
       }
       validate_all_opportunities: {
         Args: { price_data: Json }
