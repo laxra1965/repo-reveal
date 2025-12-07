@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 import { useState, useEffect, useCallback } from 'react';
-=======
-import { useState, useEffect } from 'react';
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -39,6 +35,8 @@ interface ExchangeCredential {
   is_connected: boolean | null;
   test_mode: boolean | null;
   created_at: string | null;
+  encrypted_api_key?: string | null;
+  encrypted_api_secret?: string | null;
 }
 
 const SUPPORTED_EXCHANGES: { value: ExchangeName; label: string; logo: string }[] = [
@@ -64,28 +62,14 @@ export function ExchangeCredentialsManager() {
   const [saving, setSaving] = useState(false);
   const [testingConnection, setTestingConnection] = useState<string | null>(null);
 
-<<<<<<< HEAD
   const fetchCredentials = useCallback(async () => {
     if (!user?.id) return;
 
-=======
-  useEffect(() => {
-    if (user) {
-      fetchCredentials();
-    }
-  }, [user]);
-
-  const fetchCredentials = async () => {
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
     try {
       const { data, error } = await supabase
         .from('exchange_credentials')
         .select('*')
-<<<<<<< HEAD
         .eq('user_id', user.id)
-=======
-        .eq('user_id', user?.id)
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -96,15 +80,11 @@ export function ExchangeCredentialsManager() {
     } finally {
       setLoading(false);
     }
-<<<<<<< HEAD
   }, [user?.id]);
 
   useEffect(() => {
     fetchCredentials();
   }, [fetchCredentials]);
-=======
-  };
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
 
   const handleAddCredential = async () => {
     if (!newCredential.exchange || !newCredential.api_key || !newCredential.api_secret) {
@@ -114,7 +94,6 @@ export function ExchangeCredentialsManager() {
 
     setSaving(true);
     try {
-<<<<<<< HEAD
       // Step 1: Encrypt credentials via Edge Function
       console.log('Encrypting API credentials...');
       const { data: encryptedData, error: encryptError } = await supabase.functions.invoke('encrypt-api-keys', {
@@ -148,24 +127,11 @@ export function ExchangeCredentialsManager() {
         migration_status: 'completed',
         test_mode: newCredential.test_mode,
         is_connected: false,  // Will be set to true after validation
-=======
-      const { error } = await supabase.from('exchange_credentials').insert({
-        user_id: user?.id,
-        exchange: newCredential.exchange,
-        api_key: newCredential.api_key,
-        api_secret: newCredential.api_secret,
-        test_mode: newCredential.test_mode,
-        is_connected: true,
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
       });
 
       if (error) throw error;
 
-<<<<<<< HEAD
       toast.success(`${newCredential.exchange.toUpperCase()} API keys added and encrypted successfully`);
-=======
-      toast.success(`${newCredential.exchange.toUpperCase()} API keys added successfully`);
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
       setDialogOpen(false);
       setNewCredential({ exchange: '', api_key: '', api_secret: '', test_mode: true });
       fetchCredentials();
@@ -178,11 +144,7 @@ export function ExchangeCredentialsManager() {
   };
 
   const handleDeleteCredential = async (id: string, exchange: string) => {
-<<<<<<< HEAD
-    if (!confirm(`Are you sure you want to delete ${exchange.toUpperCase()} credentials ? `)) {
-=======
     if (!confirm(`Are you sure you want to delete ${exchange.toUpperCase()} credentials?`)) {
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
       return;
     }
 
@@ -202,12 +164,7 @@ export function ExchangeCredentialsManager() {
     }
   };
 
-<<<<<<< HEAD
-
   const handleToggleTestMode = async (id: string, currentMode: boolean | null) => {
-=======
-  const handleToggleTestMode = async (id: string, currentMode: boolean) => {
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
     try {
       const { error } = await supabase
         .from('exchange_credentials')
@@ -223,8 +180,6 @@ export function ExchangeCredentialsManager() {
       toast.error('Failed to update trading mode');
     }
   };
-
-<<<<<<< HEAD
 
   const handleTestConnection = async (credential: ExchangeCredential) => {
     setTestingConnection(credential.id);
@@ -274,21 +229,6 @@ export function ExchangeCredentialsManager() {
       if (!data) {
         throw new Error('No response from validation service');
       }
-=======
-  const handleTestConnection = async (credential: ExchangeCredential) => {
-    setTestingConnection(credential.id);
-    
-    try {
-      const { data, error } = await supabase.functions.invoke('validate-api-keys', {
-        body: {
-          exchange: credential.exchange,
-          apiKey: credential.api_key,
-          apiSecret: credential.api_secret
-        }
-      });
-
-      if (error) throw error;
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
 
       if (data.valid && data.canTrade) {
         toast.success(`${credential.exchange.toUpperCase()} API validated with trading permissions!`);
@@ -306,12 +246,8 @@ export function ExchangeCredentialsManager() {
           .eq('id', credential.id);
         fetchCredentials();
       } else {
-<<<<<<< HEAD
         const errorMsg = data.error || 'Unknown validation error';
         toast.error(`${credential.exchange.toUpperCase()} validation failed: ${errorMsg}`);
-=======
-        toast.error(`${credential.exchange.toUpperCase()} validation failed: ${data.error || 'Unknown error'}`);
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
         await supabase
           .from('exchange_credentials')
           .update({ is_connected: false })
@@ -320,7 +256,6 @@ export function ExchangeCredentialsManager() {
       }
     } catch (error: any) {
       console.error('Connection test error:', error);
-<<<<<<< HEAD
 
       let errorMessage = 'Unknown error';
       if (error.message) {
@@ -342,9 +277,6 @@ export function ExchangeCredentialsManager() {
         .update({ is_connected: false })
         .eq('id', credential.id);
       fetchCredentials();
-=======
-      toast.error(`Failed to test ${credential.exchange.toUpperCase()} connection: ${error.message || 'Unknown error'}`);
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
     } finally {
       setTestingConnection(null);
     }
@@ -404,11 +336,7 @@ export function ExchangeCredentialsManager() {
                   <Label>Exchange</Label>
                   <Select
                     value={newCredential.exchange}
-<<<<<<< HEAD
                     onValueChange={(value: ExchangeName) =>
-=======
-                    onValueChange={(value: ExchangeName) => 
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
                       setNewCredential(prev => ({ ...prev, exchange: value }))
                     }
                   >
@@ -454,11 +382,7 @@ export function ExchangeCredentialsManager() {
                   </div>
                   <Switch
                     checked={newCredential.test_mode}
-<<<<<<< HEAD
                     onCheckedChange={(checked) =>
-=======
-                    onCheckedChange={(checked) => 
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
                       setNewCredential(prev => ({ ...prev, test_mode: checked }))
                     }
                   />
@@ -539,23 +463,14 @@ export function ExchangeCredentialsManager() {
                       </Button>
                     </div>
                   </div>
-<<<<<<< HEAD
 
-=======
-                  
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <Label className="text-xs text-muted-foreground">API Key</Label>
                       <div className="flex items-center gap-2 mt-1">
                         <code className="text-xs bg-muted px-2 py-1 rounded flex-1 overflow-hidden">
-<<<<<<< HEAD
                           {showSecrets[credential.id]
                             ? credential.api_key
-=======
-                          {showSecrets[credential.id] 
-                            ? credential.api_key 
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
                             : maskSecret(credential.api_key)}
                         </code>
                         <Button
@@ -591,13 +506,8 @@ export function ExchangeCredentialsManager() {
                         {credential.test_mode ? 'Paper' : 'Live'}
                       </span>
                       <Switch
-<<<<<<< HEAD
                         checked={credential.test_mode ?? true}
                         onCheckedChange={() => handleToggleTestMode(credential.id, credential.test_mode ?? true)}
-=======
-                        checked={!credential.test_mode}
-                        onCheckedChange={() => handleToggleTestMode(credential.id, credential.test_mode)}
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
                       />
                     </div>
                   </div>

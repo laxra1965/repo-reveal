@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TrendingUp, TrendingDown, Activity } from 'lucide-react';
-import { wsPoolManager, type WebSocketMetrics } from '@/lib/websocket-monitor';
 
 interface BinancePrice {
   s: string; // symbol
@@ -18,20 +17,21 @@ interface BinancePriceStreamProps {
   isVisible?: boolean;
 }
 
+type ConnectionStatus = 'connected' | 'connecting' | 'disconnected';
+
 export const BinancePriceStream = ({ isVisible = false }: BinancePriceStreamProps) => {
   const [prices, setPrices] = useState<BinancePrice[]>([]);
-  const [metrics, setMetrics] = useState<WebSocketMetrics | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     if (!isVisible) return;
 
-    // Get WebSocket connection from pool
-    const wsUrl = 'wss://zupbliefzhnohsoguwuk.functions.supabase.co/binance-websocket';
-
     const connectWebSocket = () => {
       setConnectionStatus('connecting');
-      ws = new WebSocket('wss://zupbliefzhnohsoguwuk.functions.supabase.co/binance-websocket');
+      const ws = new WebSocket('wss://zupbliefzhnohsoguwuk.functions.supabase.co/binance-websocket');
+      wsRef.current = ws;
 
       ws.onopen = () => {
         console.log('Connected to Binance price stream');
@@ -48,7 +48,7 @@ export const BinancePriceStream = ({ isVisible = false }: BinancePriceStreamProp
                 price.s.includes('BNB') &&
                 (price.s.endsWith('USDT') || price.s.startsWith('BNB'))
               )
-              .slice(0, 20); // Show top 20 BNB pairs
+              .slice(0, 20);
 
             setPrices(bnbPairs);
             setLastUpdate(new Date());
@@ -73,8 +73,8 @@ export const BinancePriceStream = ({ isVisible = false }: BinancePriceStreamProp
     connectWebSocket();
 
     return () => {
-      if (ws) {
-        ws.close();
+      if (wsRef.current) {
+        wsRef.current.close();
       }
     };
   }, [isVisible]);
