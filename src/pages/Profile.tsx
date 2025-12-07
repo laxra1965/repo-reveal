@@ -3,6 +3,9 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { ProfileSection } from '@/components/profile/ProfileSection';
+import { ExchangeCredentialsManager } from '@/components/profile/ExchangeCredentialsManager';
+import { EnabledExchangesManager } from '@/components/profile/EnabledExchangesManager';
+import { CredentialsMigrationPanel } from '@/components/profile/CredentialsMigrationPanel';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ArrowLeft } from 'lucide-react';
@@ -16,7 +19,7 @@ const Profile = () => {
     if (!authLoading && !user) {
       navigate('/auth');
     }
-  }, [user, authLoading, navigate]);
+  }, [user, authLoading]);
 
   const isLoading = authLoading || subscriptionLoading;
 
@@ -51,7 +54,7 @@ const Profile = () => {
           </Button>
         </div>
       </header>
-      
+
       <main className="container mx-auto px-4 py-8 max-w-4xl space-y-6">
         <div className="flex items-center gap-4 mb-8">
           <Avatar className="h-20 w-20">
@@ -65,6 +68,12 @@ const Profile = () => {
         </div>
 
         <ProfileSection subscription={subscription} />
+
+        <EnabledExchangesManager />
+
+        <CredentialsMigrationPanel />
+
+        <ExchangeCredentialsManager />
       </main>
     </div>
   );

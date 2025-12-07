@@ -91,7 +91,7 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
 
   const loadSettings = async () => {
     if (!user) return;
-    
+
     try {
       const { data, error } = await supabase
         .from('user_settings')
@@ -148,7 +148,7 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
 
   const saveSettings = async () => {
     if (!user) return;
-    
+
     setLoading(true);
     try {
       const settingsData = {
@@ -174,7 +174,7 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
       // Save API keys to exchange_credentials table
       for (const exchange of settings.enabled_exchanges) {
         const apiKey = settings.apiKeys[exchange];
-        
+
         // Skip if no keys entered OR if existing credential with no changes
         if (!apiKey || (apiKey.isExisting && !apiKey.key && !apiKey.secret)) {
           console.log(`Skipping ${exchange} - no changes`);
@@ -184,7 +184,7 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
         // Only save if user actually entered new credentials
         if (apiKey.key && apiKey.secret) {
           console.log(`Saving credentials for ${exchange}...`);
-          
+
           const credentialData = {
             user_id: user.id,
             exchange: exchange as any,
@@ -250,12 +250,12 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Scanner Settings & API Configuration</DialogTitle>
+          <DialogTitle>Scanner Settings</DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="space-y-6">
           {/* General Settings */}
           <Card>
             <CardHeader>
@@ -289,7 +289,7 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
                   />
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Min Profit (%)</Label>
@@ -329,7 +329,7 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
                   />
                   <Label>Show only profitable</Label>
                 </div>
-                
+
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     checked={settings.auto_trade}
@@ -340,183 +340,6 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
                   />
                   <Label>Auto-trade (requires API keys)</Label>
                 </div>
-              </div>
-
-              <div>
-                <Label className="mb-2 block">Enabled Exchanges</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {AVAILABLE_EXCHANGES.map((exchange) => (
-                    <div key={exchange} className="flex items-center space-x-2">
-                      <Checkbox
-                        checked={settings.enabled_exchanges.includes(exchange)}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setSettings(prev => ({
-                              ...prev,
-                              enabled_exchanges: [...prev.enabled_exchanges, exchange]
-                            }));
-                          } else {
-                            setSettings(prev => ({
-                              ...prev,
-                              enabled_exchanges: prev.enabled_exchanges.filter(ex => ex !== exchange)
-                            }));
-                          }
-                        }}
-                      />
-                      <Label className="capitalize text-sm">{exchange}</Label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <Label className="mb-2 block">Arbitrage Types</Label>
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      checked={settings.arbitrage_types.includes('triangular')}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setSettings(prev => ({
-                            ...prev,
-                            arbitrage_types: [...prev.arbitrage_types, 'triangular']
-                          }));
-                        } else {
-                          setSettings(prev => ({
-                            ...prev,
-                            arbitrage_types: prev.arbitrage_types.filter(t => t !== 'triangular')
-                          }));
-                        }
-                      }}
-                    />
-                    <Label className="text-sm">Triangular Arbitrage</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      checked={settings.arbitrage_types.includes('cross_exchange')}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setSettings(prev => ({
-                            ...prev,
-                            arbitrage_types: [...prev.arbitrage_types, 'cross_exchange']
-                          }));
-                        } else {
-                          setSettings(prev => ({
-                            ...prev,
-                            arbitrage_types: prev.arbitrage_types.filter(t => t !== 'cross_exchange')
-                          }));
-                        }
-                      }}
-                    />
-                    <Label className="text-sm">Cross-Exchange Arbitrage</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      checked={settings.arbitrage_types.includes('short_signal')}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setSettings(prev => ({
-                            ...prev,
-                            arbitrage_types: [...prev.arbitrage_types, 'short_signal']
-                          }));
-                        } else {
-                          setSettings(prev => ({
-                            ...prev,
-                            arbitrage_types: prev.arbitrage_types.filter(t => t !== 'short_signal')
-                          }));
-                        }
-                      }}
-                    />
-                    <Label className="text-sm">Short Trade Signal</Label>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <Label className="mb-2 block">Custom Trading Pairs</Label>
-                <Textarea
-                  placeholder="BTC, ETH, SOL, DOGE (comma separated)"
-                  value={settings.custom_pairs}
-                  onChange={(e) => setSettings(prev => ({
-                    ...prev,
-                    custom_pairs: e.target.value
-                  }))}
-                  className="text-sm min-h-[80px]"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Add custom pairs to scan in addition to the default 80+ pairs
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* API Keys for Auto-Trading */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Key className="h-4 w-4" />
-                Exchange API Keys
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* API Keys for enabled exchanges */}
-              {AVAILABLE_EXCHANGES.filter(exchange => 
-                settings.enabled_exchanges.includes(exchange)
-              ).map((exchange) => (
-                  <div key={exchange} className="border rounded p-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-medium text-sm capitalize">{exchange}</h4>
-                    <Badge 
-                      variant={settings.apiKeys[exchange]?.isExisting ? "default" : "secondary"} 
-                      className="text-xs"
-                    >
-                      {settings.apiKeys[exchange]?.isExisting ? "Connected" : "Not Set"}
-                    </Badge>
-                  </div>
-                  <div className="space-y-2">
-                    <Input
-                      type="password"
-                      placeholder={settings.apiKeys[exchange]?.isExisting ? "Enter new API Key (leave empty to keep)" : "API Key"}
-                      value={getApiKeyValue(exchange, 'key')}
-                      onChange={(e) => handleApiKeyChange(exchange, 'key', e.target.value)}
-                      className="text-xs"
-                    />
-                    <Input
-                      type="password"
-                      placeholder={settings.apiKeys[exchange]?.isExisting ? "Enter new API Secret (leave empty to keep)" : "API Secret"}
-                      value={getApiKeyValue(exchange, 'secret')}
-                      onChange={(e) => handleApiKeyChange(exchange, 'secret', e.target.value)}
-                      className="text-xs"
-                    />
-                    {exchange === 'okx' && (
-                      <Input
-                        type="password"
-                        placeholder="Passphrase (optional)"
-                        value={getApiKeyValue(exchange, 'passphrase')}
-                        onChange={(e) => handleApiKeyChange(exchange, 'passphrase', e.target.value)}
-                        className="text-xs"
-                      />
-                    )}
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        checked={getTestModeStatus(exchange)}
-                        onCheckedChange={(checked) => handleTestModeChange(exchange, checked as boolean)}
-                      />
-                      <Label className="text-xs">Test Mode</Label>
-                    </div>
-                  </div>
-                </div>
-              ))}
-
-              {/* Security Note */}
-              <div className="bg-muted/50 border border-dashed rounded p-3 space-y-2">
-                <div className="flex items-center gap-2">
-                  <Shield className="h-4 w-4 text-blue-500" />
-                  <span className="font-medium text-sm">Security</span>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  API keys are encrypted and stored securely. Only provide read-only or spot trading permissions.
-                </p>
               </div>
             </CardContent>
           </Card>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TrendingUp, TrendingDown, Activity } from 'lucide-react';
+import { wsPoolManager, type WebSocketMetrics } from '@/lib/websocket-monitor';
 
 interface BinancePrice {
   s: string; // symbol
@@ -19,35 +20,36 @@ interface BinancePriceStreamProps {
 
 export const BinancePriceStream = ({ isVisible = false }: BinancePriceStreamProps) => {
   const [prices, setPrices] = useState<BinancePrice[]>([]);
-  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('disconnected');
+  const [metrics, setMetrics] = useState<WebSocketMetrics | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 
   useEffect(() => {
     if (!isVisible) return;
 
-    let ws: WebSocket | null = null;
-    
+    // Get WebSocket connection from pool
+    const wsUrl = 'wss://zupbliefzhnohsoguwuk.functions.supabase.co/binance-websocket';
+
     const connectWebSocket = () => {
       setConnectionStatus('connecting');
       ws = new WebSocket('wss://zupbliefzhnohsoguwuk.functions.supabase.co/binance-websocket');
-      
+
       ws.onopen = () => {
         console.log('Connected to Binance price stream');
         setConnectionStatus('connected');
       };
-      
+
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          
+
           if (data.type === 'price_update' || data.type === 'initial_data') {
             const bnbPairs = data.data
-              .filter((price: BinancePrice) => 
-                price.s.includes('BNB') && 
+              .filter((price: BinancePrice) =>
+                price.s.includes('BNB') &&
                 (price.s.endsWith('USDT') || price.s.startsWith('BNB'))
               )
               .slice(0, 20); // Show top 20 BNB pairs
-            
+
             setPrices(bnbPairs);
             setLastUpdate(new Date());
           }
@@ -55,21 +57,21 @@ export const BinancePriceStream = ({ isVisible = false }: BinancePriceStreamProp
           console.error('Error processing price data:', error);
         }
       };
-      
+
       ws.onclose = () => {
         console.log('WebSocket disconnected, reconnecting...');
         setConnectionStatus('disconnected');
         setTimeout(connectWebSocket, 3000);
       };
-      
+
       ws.onerror = (error) => {
         console.error('WebSocket error:', error);
         setConnectionStatus('disconnected');
       };
     };
-    
+
     connectWebSocket();
-    
+
     return () => {
       if (ws) {
         ws.close();
@@ -92,7 +94,7 @@ export const BinancePriceStream = ({ isVisible = false }: BinancePriceStreamProp
     const highPrice = parseFloat(high);
     const lowPrice = parseFloat(low);
     const midPrice = (highPrice + lowPrice) / 2;
-    
+
     return currentPrice > midPrice ? 'text-green-600' : 'text-red-600';
   };
 
@@ -133,7 +135,7 @@ export const BinancePriceStream = ({ isVisible = false }: BinancePriceStreamProp
                     )}
                   </div>
                 </div>
-                
+
                 <div className="space-y-1 text-xs">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Price:</span>
@@ -141,21 +143,21 @@ export const BinancePriceStream = ({ isVisible = false }: BinancePriceStreamProp
                       {parseFloat(price.c).toFixed(6)}
                     </span>
                   </div>
-                  
+
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Bid:</span>
                     <span className="font-mono text-green-600">
                       {parseFloat(price.b).toFixed(6)}
                     </span>
                   </div>
-                  
+
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Ask:</span>
                     <span className="font-mono text-red-600">
                       {parseFloat(price.a).toFixed(6)}
                     </span>
                   </div>
-                  
+
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">24h Vol:</span>
                     <span className="font-mono">

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
@@ -20,34 +20,37 @@ export const ProfileSection = ({ subscription }: ProfileSectionProps) => {
   const [totalTrades, setTotalTrades] = useState<number>(0);
   const [loading, setLoading] = useState(true);
 
+  const fetchProfitData = useCallback(async () => {
+    if (!user?.id) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('trade_history')
+        .select('actual_profit, status')
+        .eq('user_id', user.id)
+        .eq('status', 'completed');
+
+      if (error) throw error;
+
+      const profit = data?.reduce((sum, trade) => {
+        return sum + (Number(trade.actual_profit) || 0);
+      }, 0) || 0;
+
+      setTotalProfit(profit);
+      setTotalTrades(data?.length || 0);
+    } catch (error) {
+      console.error('Error fetching profit data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.id]);
+
   useEffect(() => {
-    const fetchProfitData = async () => {
-      if (!user) return;
-
-      try {
-        const { data, error } = await supabase
-          .from('trade_history')
-          .select('actual_profit, status')
-          .eq('user_id', user.id)
-          .eq('status', 'completed');
-
-        if (error) throw error;
-
-        const profit = data?.reduce((sum, trade) => {
-          return sum + (Number(trade.actual_profit) || 0);
-        }, 0) || 0;
-
-        setTotalProfit(profit);
-        setTotalTrades(data?.length || 0);
-      } catch (error) {
-        console.error('Error fetching profit data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchProfitData();
-  }, [user]);
+  }, [fetchProfitData]);
 
   return (
     <Card>

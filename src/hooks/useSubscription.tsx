@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
@@ -20,9 +20,11 @@ export const useSubscription = () => {
   const [loading, setLoading] = useState(true);
   const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
 
-  const checkSubscription = async () => {
-    if (!user) {
+  const checkSubscription = useCallback(async () => {
+    if (!user?.id) {
       setLoading(false);
+      setSubscription(null);
+      setHasActiveSubscription(false);
       return;
     }
 
@@ -30,21 +32,21 @@ export const useSubscription = () => {
       const { data, error } = await supabase
         .from('user_subscriptions')
         .select(`
-          *,
-          subscription_plans (
-            name,
-            price,
-            duration_type
-          )
-        `)
+  *,
+  subscription_plans(
+    name,
+    price,
+    duration_type
+  )
+    `)
         .eq('user_id', user.id)
         .eq('status', 'active')
         .gte('end_date', new Date().toISOString())
         .order('created_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
         console.error('Error checking subscription:', error);
         setSubscription(null);
         setHasActiveSubscription(false);
@@ -62,11 +64,11 @@ export const useSubscription = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id]);
 
   useEffect(() => {
     checkSubscription();
-  }, [user]);
+  }, [checkSubscription]);
 
   return {
     subscription,

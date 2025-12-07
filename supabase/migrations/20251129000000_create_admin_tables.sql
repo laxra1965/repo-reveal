@@ -53,7 +53,12 @@ CREATE POLICY "admin_settings_update" ON public.admin_settings
   TO authenticated
   USING (false); -- Only service role can update
 
--- Insert initial admin settings (replace with your actual USDT address)
-INSERT INTO public.admin_settings (key, value) 
-VALUES ('usdt_address', 'TQzjbHBa9ckat52PtVn7m2SSEM7dJXQ2uP')
-ON CONFLICT (key) DO NOTHING;
+-- NOTE: USDT address should be inserted via environment variable
+-- After deployment, run the following with your ADMIN_USDT_ADDRESS:
+-- INSERT INTO public.admin_settings (key, value) 
+-- VALUES ('usdt_address', '<YOUR_USDT_ADDRESS_FROM_ENV>')
+-- ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+
+COMMENT ON TABLE public.admin_settings IS 
+'System-wide configuration. USDT address should be set via environment variable after deployment.';
+

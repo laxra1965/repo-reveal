@@ -1,14 +1,8 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-// Get allowed origins from environment or use secure defaults
-const getAllowedOrigins = (): string[] => {
-  const env = Deno.env.get('ALLOWED_ORIGINS') || '';
-  return env.split(',').filter(o => o.trim()) || ['http://localhost:3000', 'http://localhost:5173'];
-};
-
 const corsHeaders = {
-  'Access-Control-Allow-Origin': getAllowedOrigins()[0], // Use first allowed origin
+  'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Max-Age': '86400',
@@ -169,7 +163,8 @@ async function fetchExchangeData(exchangeName: string, config: ExchangeConfig): 
     throw new Error(`Unsupported exchange type: ${config.type} for ${exchangeName}`);
   } catch (error) {
     console.error(`Error fetching ${exchangeName}:`, error);
-    return { exchangeName, error: error.message };
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return { exchangeName, error: errorMessage };
   }
 }
 
@@ -316,7 +311,8 @@ async function fetchAllExchangeData(enabledExchanges: string[]): Promise<Record<
       return { name, data: result.data, fetchTime };
     } catch (error) {
       console.error(`Failed to fetch ${name}:`, error);
-      return { name, error: error.message };
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      return { name, error: errorMessage };
     }
   });
 
@@ -352,11 +348,43 @@ async function fetchAllExchangeData(enabledExchanges: string[]): Promise<Record<
 // Usage example in your handler:
 // const exchangeData = await fetchAllExchangeData(['binance', 'bybit', 'okx']);" 
 
+// Fetch top gainers/losers from Binance for dynamic pair discovery
+async function fetchTopMovers(): Promise<string[]> {
+  try {
+    const response = await fetch('https://api.binance.com/api/v3/ticker/24hr', {
+      headers: { 'User-Agent': 'ArbitrageScanner/2.0' },
+      signal: AbortSignal.timeout(5000)
+    });
+    
+    if (!response.ok) return [];
+    
+    const data = await response.json();
+    
+    // Filter USDT pairs and sort by absolute price change - EXPANDED coverage
+    const usdtPairs = data
+      .filter((t: any) => t.symbol.endsWith('USDT') && parseFloat(t.quoteVolume) > 50000) // Lowered from 1M to 50K for more pairs
+      .map((t: any) => ({
+        symbol: t.symbol.replace('USDT', ''),
+        change: Math.abs(parseFloat(t.priceChangePercent)),
+        volume: parseFloat(t.quoteVolume)
+      }))
+      .sort((a: any, b: any) => b.change - a.change);
+    
+    // Get top 150 movers for maximum scanning coverage
+    const topMovers = usdtPairs.slice(0, 150).map((t: any) => t.symbol);
+    console.log(`Fetched ${topMovers.length} top movers for scanning`);
+    return topMovers;
+  } catch (error) {
+    console.error('Failed to fetch top movers:', error);
+    return [];
+  }
+}
+
 // Enhanced triangular arbitrage finder with volume analysis and short signal detection
-function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: string, tradeAmount: number, minProfitPercent: number = 0.001, filterProfitable: boolean = true, customPairs: string[] = [], detectShortSignals: boolean = false): any[] {
+async function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: string, tradeAmount: number, minProfitPercent: number = 0.0005, filterProfitable: boolean = true, customPairs: string[] = [], detectShortSignals: boolean = false): Promise<any[]> {
   const opportunities: any[] = [];
 
-  // Expanded base currencies for more arbitrage opportunities - focus on high-liquidity pairs
+  // MASSIVELY expanded base currencies for maximum arbitrage detection
   let commonBases = [
     // Major cryptocurrencies (Tier 1 - Highest liquidity)
     'BTC', 'ETH', 'BNB', 'XRP', 'ADA', 'SOL', 'DOGE', 'MATIC', 'DOT', 'AVAX',
@@ -370,10 +398,37 @@ function findTriangularArbitrage(priceMap: Record<string, any>, quoteCurrency: s
     'KAVA', 'ZIL', 'ENJ', 'BAT', 'ZRX', 'REN', 'KNC', 'BAND', 'SXP', 'RSR',
     'OGN', 'DENT', 'WIN', 'HOT', 'ANKR', 'COTI', 'CHR', 'MDT', 'STMX', 'DF',
 
-    // Additional high-volume pairs
+    // High-volume pairs
     'ARB', 'OP', 'IMX', 'APE', 'LDO', 'RNDR', 'INJ', 'PEPE', 'WLD', 'SEI',
-    'TIA', 'ORDI', 'STX', 'PYTH', 'JUP', 'BLUR', 'WIF', 'BONK', 'FLOKI', 'GALA'
+    'TIA', 'ORDI', 'STX', 'PYTH', 'JUP', 'BLUR', 'WIF', 'BONK', 'FLOKI', 'GALA',
+    
+    // Tier 4 - Volatile pairs
+    'DYDX', 'GMX', 'SUI', 'APT', 'FET', 'AGIX', 'CFX', 'MASK', 'LRC',
+    'ENS', 'SSV', 'RPL', 'FXS', 'MAGIC', 'HOOK', 'HIGH', 'EDU', 'ID', 'ARKM',
+
+    // Tier 5 - Additional altcoins for broader coverage
+    'JASMY', 'OCEAN', 'STORJ', 'CELR', 'ONE', 'HBAR', 'EGLD', 'FLOW', 'ROSE', 'QTUM',
+    'ICX', 'ONT', 'ZEN', 'SC', 'RVN', 'WAVES', 'DASH', 'DCR', 'KSM', 'IOST',
+    'LOOM', 'PERL', 'TROY', 'VIDT', 'IRIS', 'COS', 'MBL', 'DREP', 'WAN', 'FUN',
+    'CTK', 'HARD', 'STRAX', 'SFP', 'POND', 'ALICE', 'DEGO', 'BAKE', 'BURGER', 'SLP',
+
+    // Tier 6 - Meme and trending coins
+    'TURBO', 'LADYS', 'AIDOGE', 'ARB', 'RDNT', 'PENDLE', 'LEVER', 'LQTY', 'USDP',
+    'TUSD', 'CVX', 'SPELL', 'ALCX', 'BADGER', 'TRIBE', 'RARE', 'SUPER', 'TVK', 'RAD',
+    'FORTH', 'BOND', 'MLN', 'MIR', 'PERP', 'ALPHA', 'ORN', 'AUCTION', 'PHA', 'VOXEL',
+    
+    // Tier 7 - DeFi and newer tokens
+    'LINA', 'REEF', 'SUN', 'PUNDIX', 'OG', 'KEY', 'DOCK', 'TOMO', 'NKN', 'ARPA',
+    'CTSI', 'AUDIO', 'BICO', 'CLV', 'MOVR', 'MBOX', 'REQ', 'AERGO', 'FIRO', 'BEAM'
   ];
+
+  // Fetch and add top movers (gainers/losers) dynamically
+  const topMovers = await fetchTopMovers();
+  if (topMovers.length > 0) {
+    const newMovers = topMovers.filter(m => !commonBases.includes(m));
+    commonBases = [...commonBases, ...newMovers];
+    console.log(`Added ${newMovers.length} top gainers/losers to scanning list`);
+  }
 
   // Add custom pairs from user settings
   if (customPairs && customPairs.length > 0) {
@@ -1060,14 +1115,16 @@ function processOpportunitiesPipeline( // Renamed to avoid clash with existing f
     };
   });
   
-  // Step 4: Filter by minimum profit
+  // Step 4: Filter by minimum profit AND maximum realistic profit (filter out bad data)
+  const MAX_REALISTIC_PROFIT = 50; // 50% max - anything higher is likely bad data
   const filteredOpportunities = scoredOpportunities.filter(opp => 
-    Math.abs(opp.profit_percent) >= minProfitPercent
+    Math.abs(opp.profit_percent) >= minProfitPercent && 
+    Math.abs(opp.profit_percent) <= MAX_REALISTIC_PROFIT
   );
   
   const lowQualityRemoved = scoredOpportunities.length - filteredOpportunities.length;
   
-  console.log(`After profit filtering (>=${minProfitPercent}%): ${filteredOpportunities.length} (removed ${lowQualityRemoved})`);
+  console.log(`After profit filtering (>=${minProfitPercent}%, <=${MAX_REALISTIC_PROFIT}%): ${filteredOpportunities.length} (removed ${lowQualityRemoved})`);
   
   // Step 5: Sort by quality score, then profit
   const sortedOpportunities = filteredOpportunities.sort((a, b) => {
@@ -1150,6 +1207,58 @@ function calculateQualityScore(
 // ============================================================================
 
 /**
+ * Sanitize numeric values to prevent database overflow
+ * Database columns have precision 8, scale 4 (max value < 10^4)
+ */
+function sanitizeNumericValue(value: number, maxValue: number = 9999.9999): number {
+  if (!isFinite(value) || isNaN(value)) return 0;
+  // Clamp value to valid range and round to 4 decimal places
+  const clamped = Math.max(-maxValue, Math.min(maxValue, value));
+  return Math.round(clamped * 10000) / 10000;
+}
+
+/**
+ * Sanitize large numeric values (for prices that can be larger)
+ */
+function sanitizeLargeNumeric(value: number): number {
+  if (!isFinite(value) || isNaN(value)) return 0;
+  // For larger numbers, round to reasonable precision
+  return Math.round(value * 100000000) / 100000000;
+}
+
+/**
+ * Sanitize opportunity data before database insert
+ */
+function sanitizeOpportunityForDB(opp: any): any {
+  return {
+    ...opp,
+    // Prices can be large (like BTC price), use large numeric sanitizer
+    step1_price: sanitizeLargeNumeric(opp.step1_price),
+    step2_price: sanitizeLargeNumeric(opp.step2_price),
+    step3_price: sanitizeLargeNumeric(opp.step3_price),
+    // Amounts should be bounded
+    step1_amount: sanitizeLargeNumeric(opp.step1_amount),
+    step2_amount: sanitizeLargeNumeric(opp.step2_amount),
+    step3_amount: sanitizeLargeNumeric(opp.step3_amount),
+    start_amount: sanitizeLargeNumeric(opp.start_amount),
+    end_amount: sanitizeLargeNumeric(opp.end_amount),
+    profit_amount: sanitizeLargeNumeric(opp.profit_amount),
+    // Percentages should be bounded
+    profit_percent: sanitizeNumericValue(opp.profit_percent, 999.9999),
+    // Volumes can be large
+    step1_volume: sanitizeLargeNumeric(opp.step1_volume || 0),
+    step2_volume: sanitizeLargeNumeric(opp.step2_volume || 0),
+    step3_volume: sanitizeLargeNumeric(opp.step3_volume || 0),
+    // Other numeric fields
+    estimated_slippage: sanitizeNumericValue(opp.estimated_slippage || 0),
+    liquidity_score: Math.min(100, Math.max(0, Math.round(opp.liquidity_score || 0))),
+    quality_score: sanitizeNumericValue(opp.quality_score || 0),
+    arb_factor: sanitizeNumericValue(opp.arb_factor || 1, 99.9999),
+    price_deviation: opp.price_deviation ? sanitizeNumericValue(opp.price_deviation, 999.9999) : null
+  };
+}
+
+/**
  * Efficient database upsert that prevents duplicates
  */
 async function upsertOpportunities(
@@ -1162,49 +1271,71 @@ async function upsertOpportunities(
   
   console.log(`Upserting ${opportunities.length} opportunities to database...`);
   
-  // Batch operations for better performance
-  const BATCH_SIZE = 50;
-  
-  for (let i = 0; i < opportunities.length; i += BATCH_SIZE) {
-    const batch = opportunities.slice(i, i + BATCH_SIZE);
+  // Process each opportunity individually to handle conflicts properly
+  for (const opp of opportunities) {
+    const sanitizedOpp = sanitizeOpportunityForDB(opp);
     
     try {
-      // Delete existing opportunities with same path to prevent duplicates
-      // This logic will need to be adjusted if 'user_id' is also part of the unique key
-      // For now, it matches the original deduplication intent based on the path.
-      const deletePromises = batch.map(opp => {
-        const { pathKey } = generateOpportunityKey(opp);
-        
-        return supabase
-          .from('arbitrage_opportunities')
-          .delete()
-          .eq('base_symbol', opp.base_symbol)
-          .eq('quote_symbol', opp.quote_symbol)
-          .eq('intermediate_symbol', opp.intermediate_symbol)
-          .eq('exchange1', opp.exchange1)
-          .eq('exchange2', opp.exchange2)
-          .eq('exchange3', opp.exchange3)
-          .eq('type', opp.type)
-          .eq('user_id', opp.user_id); // Assuming user_id is now part of the opportunity object for upsert
-      });
+      // First try to delete any existing matching opportunity
+      await supabase
+        .from('arbitrage_opportunities')
+        .delete()
+        .eq('base_symbol', sanitizedOpp.base_symbol)
+        .eq('quote_symbol', sanitizedOpp.quote_symbol)
+        .eq('intermediate_symbol', sanitizedOpp.intermediate_symbol)
+        .eq('exchange1', sanitizedOpp.exchange1)
+        .eq('exchange2', sanitizedOpp.exchange2)
+        .eq('exchange3', sanitizedOpp.exchange3)
+        .eq('type', sanitizedOpp.type)
+        .eq('user_id', sanitizedOpp.user_id);
       
-      await Promise.all(deletePromises);
-      
-      // Insert new opportunities
+      // Then insert the new one
       const { data, error } = await supabase
         .from('arbitrage_opportunities')
-        .insert(batch)
-        .select();
+        .insert(sanitizedOpp)
+        .select()
+        .single();
       
       if (error) {
-        console.error('Batch insert error:', error);
-        errors += batch.length;
+        // If it's a duplicate error, try update instead
+        if (error.code === '23505') {
+          const { error: updateError } = await supabase
+            .from('arbitrage_opportunities')
+            .update({
+              profit_percent: sanitizedOpp.profit_percent,
+              profit_amount: sanitizedOpp.profit_amount,
+              quality_score: sanitizedOpp.quality_score,
+              expires_at: sanitizedOpp.expires_at,
+              detected_at: new Date().toISOString(),
+              step1_price: sanitizedOpp.step1_price,
+              step2_price: sanitizedOpp.step2_price,
+              step3_price: sanitizedOpp.step3_price,
+            })
+            .eq('base_symbol', sanitizedOpp.base_symbol)
+            .eq('quote_symbol', sanitizedOpp.quote_symbol)
+            .eq('intermediate_symbol', sanitizedOpp.intermediate_symbol)
+            .eq('exchange1', sanitizedOpp.exchange1)
+            .eq('exchange2', sanitizedOpp.exchange2)
+            .eq('exchange3', sanitizedOpp.exchange3)
+            .eq('type', sanitizedOpp.type)
+            .eq('user_id', sanitizedOpp.user_id);
+          
+          if (updateError) {
+            console.error('Update fallback error:', updateError);
+            errors++;
+          } else {
+            updated++;
+          }
+        } else {
+          console.error('Insert error:', error);
+          errors++;
+        }
       } else {
-        inserted += data.length;
+        inserted++;
       }
     } catch (error) {
-      console.error('Batch processing error:', error);
-      errors += batch.length;
+      console.error('Processing error:', error);
+      errors++;
     }
   }
   
@@ -1329,12 +1460,10 @@ serve(async (req) => {
       const arbitrageTypes = settings?.arbitrage_types || ['triangular', 'cross_exchange'];
       const customPairs = settings?.custom_pairs || [];
 
-      // Clear expired opportunities in background
-      EdgeRuntime.waitUntil(
-        supabase.rpc('cleanup_expired_opportunities').then(
-          () => console.log('Background cleanup completed'),
-          (error: any) => console.error('Background cleanup failed:', error)
-        )
+      // Clear expired opportunities in background (non-blocking)
+      supabase.rpc('cleanup_expired_opportunities').then(
+        () => console.log('Background cleanup completed'),
+        (error: any) => console.error('Background cleanup failed:', error)
       );
 
       // Fetch exchange data
@@ -1347,7 +1476,7 @@ serve(async (req) => {
 
       for (const quoteCurrency of quoteCurrencies) {
         if (arbitrageTypes.includes('triangular')) {
-          const foundOpps = findTriangularArbitrage(exchangeData, quoteCurrency, tradeAmount, minProfitPercent, filterProfitable, customPairs, detectShortSignals);
+          const foundOpps = await findTriangularArbitrage(exchangeData, quoteCurrency, tradeAmount, minProfitPercent, filterProfitable, customPairs, detectShortSignals);
           foundOpps.forEach(opp => opp.type = 'triangular');
           triangularOpps.push(...foundOpps);
         }
@@ -1491,7 +1620,7 @@ serve(async (req) => {
 
           for (const quoteCurrency of quoteCurrencies) {
             if ((userSettings.arbitrage_types || []).includes('triangular')) {
-              const foundOpps = findTriangularArbitrage(
+              const foundOpps = await findTriangularArbitrage(
                 exchangeData,
                 quoteCurrency, // Pass quoteCurrency directly
                 actualTradeAmount,
@@ -1549,15 +1678,15 @@ serve(async (req) => {
         }
       }
 
-      // Cleanup expired opportunities in background
-      EdgeRuntime.waitUntil((async () => {
+      // Cleanup expired opportunities in background (non-blocking)
+      (async () => {
         try {
           await supabase.rpc('cleanup_expired_opportunities');
           console.log('Background cleanup completed');
         } catch (error) {
           console.error('Background cleanup failed:', error);
         }
-      })());
+      })();
 
       return new Response(JSON.stringify({
         success: true,
@@ -1588,15 +1717,15 @@ serve(async (req) => {
       });
     }
 
-    // Cleanup expired opportunities in background
-    EdgeRuntime.waitUntil((async () => {
+    // Cleanup expired opportunities in background (non-blocking)
+    (async () => {
       try {
         await supabase.rpc('cleanup_expired_opportunities');
         console.log('Background cleanup completed');
       } catch (error) {
         console.error('Background cleanup failed:', error);
       }
-    })());
+    })();
 
     // Fetch user settings
     const { data: userSettings, error: settingsError } = await supabase
@@ -1632,7 +1761,7 @@ serve(async (req) => {
 
     for (const quoteCurrency of quoteCurrencies) {
       if (arbitrageTypes.includes('triangular')) {
-        const foundOpps = findTriangularArbitrage(
+        const foundOpps = await findTriangularArbitrage(
           exchangeData,
           quoteCurrency, // Pass quoteCurrency directly
           tradeAmount,
@@ -1692,7 +1821,8 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error('Error in arbitrage scanner:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });

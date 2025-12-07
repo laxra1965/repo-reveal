@@ -1,16 +1,19 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { ArbitrageSettings } from './ArbitrageSettings';
 import { ArbitrageOpportunityCard } from './ArbitrageOpportunityCard';
 import { ArbitrageLogPanel } from './ArbitrageLogPanel';
+import { PaperTradeHistory } from './PaperTradeHistory';
 import { PlansSection } from '@/components/plans/PlansSection';
-import { Play, Pause, Settings, TrendingUp, Lock, Crown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Play, Pause, Settings, TrendingUp, Lock, ChevronLeft, ChevronRight, TestTube } from 'lucide-react';
 
 interface Opportunity {
   id: string;
@@ -41,38 +44,46 @@ interface Opportunity {
 
 const OPPORTUNITIES_PER_PAGE = 10;
 
+// Memoized opportunity card to prevent unnecessary re-renders
+const MemoizedOpportunityCard = memo(ArbitrageOpportunityCard);
+
 export const ArbitrageScanner = () => {
   const { user } = useAuth();
-  const { hasActiveSubscription, subscription, loading: subscriptionLoading } = useSubscription();
+  const { hasActiveSubscription, loading: subscriptionLoading } = useSubscription();
   const { toast } = useToast();
   
   const [isScanning, setIsScanning] = useState(false);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [showSettings, setShowSettings] = useState(false);
-  const [scanInterval, setScanInterval] = useState<NodeJS.Timeout | null>(null);
   const [lastScanTime, setLastScanTime] = useState<Date | null>(null);
   const [scanCount, setScanCount] = useState(0);
   const [isInitializing, setIsInitializing] = useState(false);
+  const [autoPaperTrade, setAutoPaperTrade] = useState(false);
+  const [autoPaperTradeCount, setAutoPaperTradeCount] = useState(0);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
+  // Track which opportunities have been auto-traded
+  const autoTradedIdsRef = useRef<Set<string>>(new Set());
   const isScanningRef = useRef(false);
   const mountedRef = useRef(true);
+  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      if (scanInterval) {
-        clearInterval(scanInterval);
+      if (scanIntervalRef.current) {
+        clearInterval(scanIntervalRef.current);
       }
     };
-  }, [scanInterval]);
+  }, []);
 
-  // Load opportunities from database
-  const loadOpportunitiesFromDB = async () => {
-    if (!user) return;
+  // Load opportunities from database - memoized to prevent recreation
+  const loadOpportunitiesFromDB = useCallback(async () => {
+    if (!user || !mountedRef.current) return;
     
     try {
       const { data, error } = await supabase
@@ -84,21 +95,30 @@ export const ArbitrageScanner = () => {
 
       if (error) throw error;
 
-      if (data) {
-        setOpportunities(data);
+      if (data && mountedRef.current) {
+        // Only update if data actually changed
+        setOpportunities(prev => {
+          const prevIds = new Set(prev.map(o => o.id));
+          const newIds = new Set(data.map(o => o.id));
+          const hasChanged = prev.length !== data.length || 
+            data.some(o => !prevIds.has(o.id)) ||
+            prev.some(o => !newIds.has(o.id));
+          return hasChanged ? data : prev;
+        });
         setLastScanTime(new Date());
       }
     } catch (error) {
       console.error('Error loading opportunities:', error);
     }
-  };
+  }, [user]);
 
   // Initial load and real-time subscription
   useEffect(() => {
     if (user && hasActiveSubscription) {
       loadOpportunitiesFromDB();
 
-      // Set up real-time subscription
+      // Set up real-time subscription with debounce
+      let debounceTimer: NodeJS.Timeout;
       const channel = supabase
         .channel('arbitrage-opportunities')
         .on(
@@ -109,19 +129,26 @@ export const ArbitrageScanner = () => {
             table: 'arbitrage_opportunities'
           },
           () => {
-            loadOpportunitiesFromDB();
+            // Debounce rapid updates
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+              if (mountedRef.current) {
+                loadOpportunitiesFromDB();
+              }
+            }, 500);
           }
         )
         .subscribe();
 
       return () => {
+        clearTimeout(debounceTimer);
         supabase.removeChannel(channel);
       };
     }
-  }, [user, hasActiveSubscription]);
+  }, [user, hasActiveSubscription, loadOpportunitiesFromDB]);
 
   // Perform scan
-  const performScan = async () => {
+  const performScan = useCallback(async () => {
     if (isScanningRef.current || !user) return;
     
     isScanningRef.current = true;
@@ -147,30 +174,96 @@ export const ArbitrageScanner = () => {
         throw response.error;
       }
 
-      setScanCount(prev => prev + 1);
-      setLastScanTime(new Date());
+      if (mountedRef.current) {
+        setScanCount(prev => prev + 1);
+        setLastScanTime(new Date());
+      }
       
       // Load updated opportunities from database
       await loadOpportunitiesFromDB();
 
-      toast({
-        title: "Scan Complete",
-        description: `Found ${response.data?.opportunities_count || 0} opportunities`,
-      });
+      if (mountedRef.current) {
+        toast({
+          title: "Scan Complete",
+          description: `Found ${response.data?.opportunities_count || 0} opportunities`,
+        });
+      }
     } catch (error: any) {
       console.error('Scan error:', error);
-      toast({
-        title: "Scan Error",
-        description: error.message || "Failed to scan for opportunities",
-        variant: "destructive",
-      });
+      if (mountedRef.current) {
+        toast({
+          title: "Scan Error",
+          description: error.message || "Failed to scan for opportunities",
+          variant: "destructive",
+        });
+      }
     } finally {
       isScanningRef.current = false;
     }
-  };
+  }, [user, loadOpportunitiesFromDB, toast]);
+
+  // Auto paper trade function
+  const executeAutoPaperTrade = useCallback(async (opportunity: Opportunity) => {
+    if (!user || autoTradedIdsRef.current.has(opportunity.id)) return;
+    
+    // Mark as traded to prevent duplicates
+    autoTradedIdsRef.current.add(opportunity.id);
+    
+    try {
+      const slippage = (Math.random() - 0.5) * 0.002;
+      const simulatedProfit = opportunity.profit_amount * (1 + slippage);
+      const simulatedFinalAmount = opportunity.start_amount + simulatedProfit;
+
+      await supabase.from('trade_history').insert({
+        user_id: user.id,
+        opportunity_id: opportunity.id,
+        base_symbol: opportunity.base_symbol,
+        quote_symbol: opportunity.quote_symbol,
+        intermediate_symbol: opportunity.intermediate_symbol,
+        start_amount: opportunity.start_amount,
+        expected_profit: opportunity.profit_amount,
+        actual_profit: simulatedProfit,
+        final_amount: simulatedFinalAmount,
+        status: 'completed',
+        total_steps: 3,
+        completed_steps: 3,
+        execution_details: {
+          is_paper_trade: true,
+          auto_executed: true,
+          log: [
+            { step: 1, success: true, isPaperTrade: true, orderId: `PAPER_AUTO_${Date.now()}_1`, timestamp: new Date().toISOString() },
+            { step: 2, success: true, isPaperTrade: true, orderId: `PAPER_AUTO_${Date.now()}_2`, timestamp: new Date().toISOString() },
+            { step: 3, success: true, isPaperTrade: true, orderId: `PAPER_AUTO_${Date.now()}_3`, timestamp: new Date().toISOString() }
+          ]
+        }
+      });
+
+      setAutoPaperTradeCount(prev => prev + 1);
+    } catch (error) {
+      console.error('Auto paper trade error:', error);
+      autoTradedIdsRef.current.delete(opportunity.id); // Allow retry on error
+    }
+  }, [user]);
+
+  // Auto paper trade effect - execute on new profitable opportunities
+  useEffect(() => {
+    if (!autoPaperTrade || !isScanning || opportunities.length === 0) return;
+
+    // Find new opportunities that haven't been auto-traded yet
+    const newOpportunities = opportunities.filter(opp => 
+      !autoTradedIdsRef.current.has(opp.id) && 
+      opp.profit_percent > 0 &&
+      new Date(opp.expires_at) > new Date()
+    );
+
+    // Execute paper trades for top 3 new opportunities
+    newOpportunities.slice(0, 3).forEach(opp => {
+      executeAutoPaperTrade(opp);
+    });
+  }, [opportunities, autoPaperTrade, isScanning, executeAutoPaperTrade]);
 
   // Start scanning
-  const startScanning = async () => {
+  const startScanning = useCallback(async () => {
     if (!user || !hasActiveSubscription) {
       toast({
         title: "Subscription Required",
@@ -185,23 +278,24 @@ export const ArbitrageScanner = () => {
     // Perform initial scan
     await performScan();
     
-    setIsInitializing(false);
-    setIsScanning(true);
+    if (mountedRef.current) {
+      setIsInitializing(false);
+      setIsScanning(true);
 
-    // Set up periodic scanning
-    const interval = setInterval(performScan, 30000); // Scan every 30 seconds
-    setScanInterval(interval);
-  };
+      // Set up periodic scanning
+      scanIntervalRef.current = setInterval(performScan, 30000);
+    }
+  }, [user, hasActiveSubscription, toast, performScan]);
 
   // Stop scanning
-  const stopScanning = () => {
-    if (scanInterval) {
-      clearInterval(scanInterval);
-      setScanInterval(null);
+  const stopScanning = useCallback(() => {
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
     }
     setIsScanning(false);
     isScanningRef.current = false;
-  };
+  }, []);
 
   // Optimized sorted opportunities with pagination
   const paginatedOpportunities = useMemo(() => {
@@ -299,17 +393,36 @@ export const ArbitrageScanner = () => {
         </CardHeader>
         <CardContent>
           <div className="flex justify-between items-center text-sm text-muted-foreground">
-            <div className="flex gap-4">
+            <div className="flex gap-4 flex-wrap items-center">
               <span>Status: <Badge variant={isScanning ? "default" : "secondary"}>
                 {isScanning ? "Scanning" : "Stopped"}
               </Badge></span>
               <span>Scans: {scanCount}</span>
               <span>Total: {opportunities.length}</span>
               <span>Showing: {paginatedOpportunities.length}</span>
+              {autoPaperTrade && (
+                <span className="flex items-center gap-1">
+                  <TestTube className="h-3 w-3" />
+                  Auto Trades: {autoPaperTradeCount}
+                </span>
+              )}
             </div>
-            {lastScanTime && (
-              <span>Last update: {lastScanTime.toLocaleTimeString()}</span>
-            )}
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="auto-paper"
+                  checked={autoPaperTrade}
+                  onCheckedChange={setAutoPaperTrade}
+                />
+                <Label htmlFor="auto-paper" className="text-xs flex items-center gap-1 cursor-pointer">
+                  <TestTube className="h-3 w-3" />
+                  Auto Paper Trade
+                </Label>
+              </div>
+              {lastScanTime && (
+                <span>Last update: {lastScanTime.toLocaleTimeString()}</span>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -337,7 +450,7 @@ export const ArbitrageScanner = () => {
         )}
 
         {paginatedOpportunities.map((opportunity, index) => (
-          <ArbitrageOpportunityCard 
+          <MemoizedOpportunityCard 
             key={opportunity.id} 
             opportunity={opportunity}
             rank={(currentPage - 1) * OPPORTUNITIES_PER_PAGE + index + 1}
@@ -382,6 +495,9 @@ export const ArbitrageScanner = () => {
           </Card>
         )}
       </div>
+
+      {/* Paper Trade History */}
+      <PaperTradeHistory />
 
       {/* Log Panel */}
       <ArbitrageLogPanel />
