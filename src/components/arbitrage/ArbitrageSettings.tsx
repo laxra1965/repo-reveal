@@ -37,6 +37,7 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
     enabled_exchanges: ['binance', 'bybit', 'okx'] as ExchangeName[],
     arbitrage_types: ['triangular', 'cross_exchange'] as string[],
     custom_pairs: '' as string,
+    enable_ml_filtering: false,
     // API Keys storage
     apiKeys: {} as Record<string, { key: string; secret: string; passphrase?: string; testMode: boolean; isExisting?: boolean }>
   });
@@ -114,7 +115,8 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
           auto_trade: data.auto_trade,
           enabled_exchanges: data.enabled_exchanges || (['binance', 'bybit', 'okx'] as ExchangeName[]),
           arbitrage_types: data.arbitrage_types || ['triangular', 'cross_exchange'],
-          custom_pairs: (data.custom_pairs || []).join(', ')
+          custom_pairs: (data.custom_pairs || []).join(', '),
+          enable_ml_filtering: data.enable_ml_filtering || false,
         }));
       }
 
@@ -164,7 +166,8 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
         custom_pairs: settings.custom_pairs
           .split(',')
           .map(p => p.trim())
-          .filter(p => p.length > 0)
+          .filter(p => p.length > 0),
+        enable_ml_filtering: settings.enable_ml_filtering
       };
 
       await supabase
@@ -339,6 +342,22 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
                     }))}
                   />
                   <Label>Auto-trade (requires API keys)</Label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    checked={settings.enable_ml_filtering}
+                    onCheckedChange={(checked) => setSettings(prev => ({
+                      ...prev,
+                      enable_ml_filtering: checked as boolean
+                    }))}
+                  />
+                  <Label className="flex items-center gap-2">
+                    <span className="bg-gradient-to-r from-purple-400 to-pink-600 bg-clip-text text-transparent font-bold">
+                      AI Enhanced Filtering
+                    </span>
+                    <Badge variant="outline" className="text-[10px] h-5 px-1 border-purple-500/50 text-purple-500">BETA</Badge>
+                  </Label>
                 </div>
               </div>
             </CardContent>

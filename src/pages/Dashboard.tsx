@@ -1,5 +1,6 @@
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { ArbitrageScanner } from '@/components/arbitrage/ArbitrageScanner';
@@ -12,6 +13,7 @@ import { Crown, History, Bot } from 'lucide-react';
 const Dashboard = () => {
   const { user, loading: authLoading, signOut } = useAuth();
   const { hasActiveSubscription, subscription, loading: subscriptionLoading } = useSubscription();
+  const { isAdmin, loading: adminLoading } = useIsAdmin();
   const navigate = useNavigate();
 
   // Redirect to /auth if not authenticated
@@ -22,7 +24,7 @@ const Dashboard = () => {
   }, [user, authLoading, navigate]);
 
   // Determine the overall loading state
-  const isLoading = authLoading || subscriptionLoading;
+  const isLoading = authLoading || subscriptionLoading || adminLoading;
 
   // If still loading authentication or subscription, show loading indicator
   if (isLoading) {
@@ -44,7 +46,8 @@ const Dashboard = () => {
 
   // Conditional rendering based on subscription status
   // This part is inspired by the second component's logic:
-  if (!hasActiveSubscription) {
+  // Admin users bypass subscription check
+  if (!hasActiveSubscription && !isAdmin) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
         <div className="absolute top-4 right-4">
@@ -85,8 +88,8 @@ const Dashboard = () => {
                 Expires: {new Date(subscription.end_date).toLocaleDateString()}
               </span>
             )}
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               size="sm"
               onClick={() => navigate('/auto-trade')}
               className="flex items-center gap-2"
@@ -94,8 +97,8 @@ const Dashboard = () => {
               <Bot className="h-4 w-4" />
               Auto Trade
             </Button>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               size="sm"
               onClick={() => navigate('/trade-history')}
               className="flex items-center gap-2"
@@ -103,8 +106,8 @@ const Dashboard = () => {
               <History className="h-4 w-4" />
               Trade History
             </Button>
-            <Avatar 
-              className="h-10 w-10 cursor-pointer hover:opacity-80 transition-opacity" 
+            <Avatar
+              className="h-10 w-10 cursor-pointer hover:opacity-80 transition-opacity"
               onClick={() => navigate('/profile')}
             >
               <AvatarImage src="" alt={user.email} />
@@ -116,7 +119,7 @@ const Dashboard = () => {
           </div>
         </div>
       </header>
-      
+
       <main className="container mx-auto px-4 py-8 space-y-6">
         <StatisticsDashboard />
         <ArbitrageScanner />

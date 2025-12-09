@@ -67,7 +67,7 @@ export class CircuitBreaker {
 
             if (this.successCount >= this.config.successThreshold) {
                 console.log(`[CircuitBreaker:${this.name}] CLOSING circuit after ${this.successCount} successes`);
-                this.state = Circuit State.CLOSED;
+                this.state = CircuitState.CLOSED;
                 this.failureCount = 0;
                 this.successCount = 0;
                 this.lastStateChange = Date.now();

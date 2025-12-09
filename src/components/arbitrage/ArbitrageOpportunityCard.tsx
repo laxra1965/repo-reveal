@@ -55,7 +55,7 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
   useEffect(() => {
     const checkCredentials = async () => {
       if (!user) return;
-      
+
       const requiredExchanges = [
         opportunity.exchange1.toLowerCase(),
         opportunity.exchange2.toLowerCase(),
@@ -68,7 +68,7 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
         .select('exchange')
         .eq('user_id', user.id);
 
-      const hasAll = uniqueExchanges.every(ex => 
+      const hasAll = uniqueExchanges.every(ex =>
         credentials?.some(c => c.exchange === ex)
       );
       setHasCredentials(hasAll);
@@ -121,7 +121,7 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
 
       // Call execute-trade edge function
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       const response = await supabase.functions.invoke('execute-trade', {
         body: {
           action: 'execute_single',
@@ -137,7 +137,7 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
 
       toast({
         title: "Trade Executed",
-        description: response.data?.success 
+        description: response.data?.success
           ? `Trade completed! Profit: ${response.data.actualProfit?.toFixed(4) || 'N/A'}`
           : "Trade submitted for execution",
       });
@@ -298,7 +298,7 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
               </Badge>
               {rank === 1 && <Badge variant="default" className="bg-yellow-500 text-black">TOP</Badge>}
               {getSignalBadge()}
-              
+
               {/* Quality Score Badge */}
               {opportunity.quality_score && opportunity.quality_score >= 50 && (
                 <Badge variant="default" className="bg-purple-500 text-white">
@@ -311,7 +311,7 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
                 </Badge>
               )}
             </div>
-            
+
             <CardTitle className="text-lg flex items-center gap-2">
               <span className="font-mono text-base">
                 {opportunity.base_symbol} → {opportunity.intermediate_symbol} → {opportunity.quote_symbol}
@@ -320,7 +320,7 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
                 {opportunity.type === 'cross_exchange' ? 'Cross-Exchange Arbitrage' : 'Triangular Arbitrage'}
               </Badge>
             </CardTitle>
-            
+
             {/* Clear Trading Path */}
             <div className="mt-2 p-2 bg-muted/30 rounded text-sm">
               <div className="font-medium text-muted-foreground mb-1">Trading Path:</div>
@@ -334,7 +334,7 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
                 3. {opportunity.quote_symbol} → {opportunity.base_symbol} ({opportunity.step3_action})
               </div>
             </div>
-            
+
             {/* Exchange Path */}
             <div className="flex items-center gap-2 mt-2 flex-wrap">
               <Badge variant="outline" className="text-xs">
@@ -355,12 +355,11 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
               )}
             </div>
           </div>
-          
+
           {/* Profit Display */}
           <div className="text-right">
-            <div className={`text-2xl font-bold ${
-              opportunity.profit_percent > 0 ? 'text-green-500' : 'text-red-500'
-            }`}>
+            <div className={`text-2xl font-bold ${opportunity.profit_percent > 0 ? 'text-green-500' : 'text-red-500'
+              }`}>
               {opportunity.profit_percent > 0 ? '+' : ''}{opportunity.profit_percent.toFixed(4)}%
             </div>
             <div className="text-sm text-muted-foreground">
@@ -377,7 +376,7 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
           </div>
         </div>
       </CardHeader>
-      
+
       <CardContent className="space-y-4">
         {/* Quick Summary */}
         <div className="grid grid-cols-3 gap-4 p-3 bg-muted/50 rounded-lg">
@@ -403,7 +402,7 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
             </div>
           </div>
         </div>
-        
+
         {/* Short Signal Details */}
         {signalType === 'short' && opportunity.overpriced_leg && (
           <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
@@ -434,7 +433,7 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
               <Zap className="h-4 w-4" />
               Execution Steps
             </h4>
-            
+
             <div className="space-y-3">
               {/* Step 1 */}
               <div className="flex items-center justify-between p-3 bg-background rounded border">
@@ -525,10 +524,10 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
             <div className="p-3 bg-muted/30 rounded border border-dashed">
               <h5 className="text-xs font-semibold mb-2 text-muted-foreground">RISK ASSESSMENT</h5>
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div>Complexity: <span className="font-semibold">Medium</span></div>
+                <div>Complexity: <span className="font-semibold">{opportunity.quality_score && opportunity.quality_score > 70 ? 'Low' : opportunity.quality_score && opportunity.quality_score > 40 ? 'Medium' : 'High'}</span></div>
                 <div>Speed Required: <span className="font-semibold">High</span></div>
-                <div>Market Impact: <span className="font-semibold">Low</span></div>
-                <div>Success Rate: <span className="font-semibold">~75%</span></div>
+                <div>Market Impact: <span className="font-semibold">{opportunity.start_amount > 1000 ? 'Medium' : 'Low'}</span></div>
+                <div>Success Rate: <span className="font-semibold text-green-500">~{opportunity.quality_score ? Math.min(99, Math.round(opportunity.quality_score * 0.9 + 10)) : 75}%</span></div>
               </div>
             </div>
           </div>
@@ -545,7 +544,7 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
             {isExpanded ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             {isExpanded ? 'Hide Details' : 'Show Details'}
           </Button>
-          
+
           <div className="flex gap-2 items-center flex-wrap">
             {hasCredentials === false && (
               <Badge variant="outline" className="text-yellow-600 border-yellow-500">
@@ -554,7 +553,7 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
               </Badge>
             )}
             {/* Paper Trade Button */}
-            <Button 
+            <Button
               onClick={handlePaperTrade}
               disabled={isPaperExecuting}
               variant="outline"
@@ -570,7 +569,7 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
             </Button>
             {/* Live Trade Buttons */}
             {rank === 1 && (
-              <Button 
+              <Button
                 onClick={handleTrade}
                 disabled={isExecuting || isPaperExecuting}
                 className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-black font-semibold"
@@ -584,7 +583,7 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
               </Button>
             )}
             {rank !== 1 && (
-              <Button 
+              <Button
                 onClick={handleTrade}
                 disabled={isExecuting || isPaperExecuting}
                 className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800"

@@ -1,5 +1,6 @@
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -9,14 +10,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Crown, ArrowLeft, Bot, BarChart3, Activity } from 'lucide-react';
 import { AutoTradeMonitor } from '@/components/autotrade/AutoTradeMonitor';
 import { AutoTradeAnalytics } from '@/components/autotrade/AutoTradeAnalytics';
-<<<<<<< HEAD
 import { TradeRecoveryPanel } from '@/components/autotrade/TradeRecoveryPanel';
-=======
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
 
 const AutoTrade = () => {
   const { user, loading: authLoading, signOut } = useAuth();
   const { hasActiveSubscription, subscription, loading: subscriptionLoading } = useSubscription();
+  const { isAdmin, loading: adminLoading } = useIsAdmin();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -25,7 +24,7 @@ const AutoTrade = () => {
     }
   }, [user, authLoading, navigate]);
 
-  const isLoading = authLoading || subscriptionLoading;
+  const isLoading = authLoading || subscriptionLoading || adminLoading;
 
   if (isLoading) {
     return (
@@ -41,7 +40,7 @@ const AutoTrade = () => {
     return null;
   }
 
-  if (!hasActiveSubscription) {
+  if (!hasActiveSubscription && !isAdmin) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
         <div className="absolute top-4 right-4">
@@ -69,13 +68,8 @@ const AutoTrade = () => {
       <header className="border-b">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center gap-4">
-<<<<<<< HEAD
             <Button
               variant="ghost"
-=======
-            <Button 
-              variant="ghost" 
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
               size="sm"
               onClick={() => navigate('/dashboard')}
             >
@@ -99,13 +93,8 @@ const AutoTrade = () => {
                 Expires: {new Date(subscription.end_date).toLocaleDateString()}
               </span>
             )}
-<<<<<<< HEAD
             <Avatar
               className="h-10 w-10 cursor-pointer hover:opacity-80 transition-opacity"
-=======
-            <Avatar 
-              className="h-10 w-10 cursor-pointer hover:opacity-80 transition-opacity" 
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
               onClick={() => navigate('/profile')}
             >
               <AvatarImage src="" alt={user.email} />
@@ -117,11 +106,7 @@ const AutoTrade = () => {
           </div>
         </div>
       </header>
-<<<<<<< HEAD
 
-=======
-      
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
       <main className="container mx-auto px-4 py-8">
         <Tabs defaultValue="monitor" className="space-y-6">
           <TabsList className="grid w-full max-w-md grid-cols-2">
@@ -136,10 +121,7 @@ const AutoTrade = () => {
           </TabsList>
 
           <TabsContent value="monitor">
-<<<<<<< HEAD
             <TradeRecoveryPanel />
-=======
->>>>>>> 37b03f09dcdd3580d258afde6f3b1c287b209565
             <AutoTradeMonitor />
           </TabsContent>
 

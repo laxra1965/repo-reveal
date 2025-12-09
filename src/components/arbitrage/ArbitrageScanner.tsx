@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,7 +14,7 @@ import { ArbitrageOpportunityCard } from './ArbitrageOpportunityCard';
 import { ArbitrageLogPanel } from './ArbitrageLogPanel';
 import { PaperTradeHistory } from './PaperTradeHistory';
 import { PlansSection } from '@/components/plans/PlansSection';
-import { Play, Pause, Settings, TrendingUp, Lock, ChevronLeft, ChevronRight, TestTube } from 'lucide-react';
+import { Play, Pause, Settings, TrendingUp, Lock, ChevronLeft, ChevronRight, TestTube, Shield } from 'lucide-react';
 
 interface Opportunity {
   id: string;
@@ -50,8 +51,9 @@ const MemoizedOpportunityCard = memo(ArbitrageOpportunityCard);
 export const ArbitrageScanner = () => {
   const { user } = useAuth();
   const { hasActiveSubscription, loading: subscriptionLoading } = useSubscription();
+  const { isAdmin, loading: adminLoading } = useIsAdmin();
   const { toast } = useToast();
-  
+
   const [isScanning, setIsScanning] = useState(false);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [showSettings, setShowSettings] = useState(false);
@@ -60,7 +62,7 @@ export const ArbitrageScanner = () => {
   const [isInitializing, setIsInitializing] = useState(false);
   const [autoPaperTrade, setAutoPaperTrade] = useState(false);
   const [autoPaperTradeCount, setAutoPaperTradeCount] = useState(0);
-  
+
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -84,7 +86,7 @@ export const ArbitrageScanner = () => {
   // Load opportunities from database - memoized to prevent recreation
   const loadOpportunitiesFromDB = useCallback(async () => {
     if (!user || !mountedRef.current) return;
-    
+
     try {
       const { data, error } = await supabase
         .from('arbitrage_opportunities')
@@ -100,7 +102,7 @@ export const ArbitrageScanner = () => {
         setOpportunities(prev => {
           const prevIds = new Set(prev.map(o => o.id));
           const newIds = new Set(data.map(o => o.id));
-          const hasChanged = prev.length !== data.length || 
+          const hasChanged = prev.length !== data.length ||
             data.some(o => !prevIds.has(o.id)) ||
             prev.some(o => !newIds.has(o.id));
           return hasChanged ? data : prev;
@@ -114,7 +116,7 @@ export const ArbitrageScanner = () => {
 
   // Initial load and real-time subscription
   useEffect(() => {
-    if (user && hasActiveSubscription) {
+    if (user && (hasActiveSubscription || isAdmin)) {
       loadOpportunitiesFromDB();
 
       // Set up real-time subscription with debounce
@@ -145,25 +147,25 @@ export const ArbitrageScanner = () => {
         supabase.removeChannel(channel);
       };
     }
-  }, [user, hasActiveSubscription, loadOpportunitiesFromDB]);
+  }, [user, hasActiveSubscription, isAdmin, loadOpportunitiesFromDB]);
 
   // Perform scan
   const performScan = useCallback(async () => {
     if (isScanningRef.current || !user) return;
-    
+
     isScanningRef.current = true;
-    
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       if (!session) {
         throw new Error('No active session');
       }
 
       const response = await supabase.functions.invoke('arbitrage-scanner', {
-        body: { 
+        body: {
           action: 'scan',
-          userId: user.id 
+          userId: user.id
         },
         headers: {
           Authorization: `Bearer ${session.access_token}`
@@ -178,7 +180,7 @@ export const ArbitrageScanner = () => {
         setScanCount(prev => prev + 1);
         setLastScanTime(new Date());
       }
-      
+
       // Load updated opportunities from database
       await loadOpportunitiesFromDB();
 
@@ -205,10 +207,10 @@ export const ArbitrageScanner = () => {
   // Auto paper trade function
   const executeAutoPaperTrade = useCallback(async (opportunity: Opportunity) => {
     if (!user || autoTradedIdsRef.current.has(opportunity.id)) return;
-    
+
     // Mark as traded to prevent duplicates
     autoTradedIdsRef.current.add(opportunity.id);
-    
+
     try {
       const slippage = (Math.random() - 0.5) * 0.002;
       const simulatedProfit = opportunity.profit_amount * (1 + slippage);
@@ -250,8 +252,8 @@ export const ArbitrageScanner = () => {
     if (!autoPaperTrade || !isScanning || opportunities.length === 0) return;
 
     // Find new opportunities that haven't been auto-traded yet
-    const newOpportunities = opportunities.filter(opp => 
-      !autoTradedIdsRef.current.has(opp.id) && 
+    const newOpportunities = opportunities.filter(opp =>
+      !autoTradedIdsRef.current.has(opp.id) &&
       opp.profit_percent > 0 &&
       new Date(opp.expires_at) > new Date()
     );
@@ -264,7 +266,7 @@ export const ArbitrageScanner = () => {
 
   // Start scanning
   const startScanning = useCallback(async () => {
-    if (!user || !hasActiveSubscription) {
+    if (!user || (!hasActiveSubscription && !isAdmin)) {
       toast({
         title: "Subscription Required",
         description: "Please subscribe to use the scanner",
@@ -274,10 +276,10 @@ export const ArbitrageScanner = () => {
     }
 
     setIsInitializing(true);
-    
+
     // Perform initial scan
     await performScan();
-    
+
     if (mountedRef.current) {
       setIsInitializing(false);
       setIsScanning(true);
@@ -308,12 +310,12 @@ export const ArbitrageScanner = () => {
         }
         return Math.abs(b.profit_percent) - Math.abs(a.profit_percent);
       });
-    
+
     setTotalPages(Math.ceil(filtered.length / OPPORTUNITIES_PER_PAGE));
-    
+
     const start = (currentPage - 1) * OPPORTUNITIES_PER_PAGE;
     const end = start + OPPORTUNITIES_PER_PAGE;
-    
+
     return filtered.slice(start, end);
   }, [opportunities, currentPage]);
 
@@ -323,7 +325,7 @@ export const ArbitrageScanner = () => {
   }, [opportunities.length]);
 
   // Show subscription requirement if not subscribed
-  if (subscriptionLoading) {
+  if (subscriptionLoading || adminLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <p className="text-muted-foreground">Loading subscription...</p>
@@ -331,7 +333,7 @@ export const ArbitrageScanner = () => {
     );
   }
 
-  if (!hasActiveSubscription) {
+  if (!hasActiveSubscription && !isAdmin) {
     return (
       <div className="space-y-6">
         <Card className="border-yellow-500">
@@ -419,6 +421,15 @@ export const ArbitrageScanner = () => {
                   Auto Paper Trade
                 </Label>
               </div>
+
+              {/* AI Shield Badge - Visual Indicator */}
+              <div className="hidden md:flex items-center">
+                <Badge variant="outline" className="text-[10px] h-5 px-2 gap-1 border-purple-500/30 text-purple-500 bg-purple-500/5">
+                  <Shield className="h-3 w-3" />
+                  AI Enhanced
+                </Badge>
+              </div>
+
               {lastScanTime && (
                 <span>Last update: {lastScanTime.toLocaleTimeString()}</span>
               )}
@@ -450,8 +461,8 @@ export const ArbitrageScanner = () => {
         )}
 
         {paginatedOpportunities.map((opportunity, index) => (
-          <MemoizedOpportunityCard 
-            key={opportunity.id} 
+          <MemoizedOpportunityCard
+            key={opportunity.id}
             opportunity={opportunity}
             rank={(currentPage - 1) * OPPORTUNITIES_PER_PAGE + index + 1}
           />
@@ -471,7 +482,7 @@ export const ArbitrageScanner = () => {
                   <ChevronLeft className="h-4 w-4 mr-2" />
                   Previous
                 </Button>
-                
+
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-muted-foreground">
                     Page {currentPage} of {totalPages}
@@ -480,7 +491,7 @@ export const ArbitrageScanner = () => {
                     {opportunities.length} total opportunities
                   </Badge>
                 </div>
-                
+
                 <Button
                   variant="outline"
                   size="sm"
@@ -504,7 +515,7 @@ export const ArbitrageScanner = () => {
 
       {/* Settings Modal */}
       {showSettings && (
-        <ArbitrageSettings 
+        <ArbitrageSettings
           isOpen={showSettings}
           onClose={() => setShowSettings(false)}
         />

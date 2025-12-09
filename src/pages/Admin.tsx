@@ -8,13 +8,14 @@ import { AdminTransactionList } from '@/components/admin/AdminTransactionList';
 import { AdminSubscriptionList } from '@/components/admin/AdminSubscriptionList';
 import { AdminUsersList } from '@/components/admin/AdminUsersList';
 import { AdminSystemMaintenance } from '@/components/admin/AdminSystemMaintenance';
-import { ArrowLeft, Settings, CreditCard, Users, Shield, UserCog, Wrench } from 'lucide-react';
+import { AdminPlanManagement } from '@/components/admin/AdminPlanManagement';
+import { ArrowLeft, Settings, CreditCard, Users, Shield, UserCog, Wrench, Package } from 'lucide-react';
 
 const Admin = () => {
   const { user, loading: authLoading, signOut } = useAuth();
   const { isAdmin, loading: adminLoading } = useIsAdmin();
   const navigate = useNavigate();
-  
+
   const loading = authLoading || adminLoading;
 
   useEffect(() => {
@@ -80,10 +81,10 @@ const Admin = () => {
           </div>
         </div>
       </header>
-      
+
       <main className="container mx-auto px-4 py-8">
         <Tabs defaultValue="users" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="users" className="flex items-center gap-2">
               <UserCog className="h-4 w-4" />
               All Users
@@ -91,6 +92,10 @@ const Admin = () => {
             <TabsTrigger value="subscriptions" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
               Subscription Requests
+            </TabsTrigger>
+            <TabsTrigger value="plans" className="flex items-center gap-2">
+              <Package className="h-4 w-4" />
+              Plan Management
             </TabsTrigger>
             <TabsTrigger value="transactions" className="flex items-center gap-2">
               <CreditCard className="h-4 w-4" />
@@ -101,19 +106,23 @@ const Admin = () => {
               Maintenance
             </TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="users">
             <AdminUsersList />
           </TabsContent>
-          
+
           <TabsContent value="subscriptions">
             <AdminSubscriptionList />
           </TabsContent>
-          
+
+          <TabsContent value="plans">
+            <AdminPlanManagement />
+          </TabsContent>
+
           <TabsContent value="transactions">
             <AdminTransactionList />
           </TabsContent>
-          
+
           <TabsContent value="maintenance">
             <AdminSystemMaintenance />
           </TabsContent>

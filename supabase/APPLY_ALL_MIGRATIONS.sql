@@ -195,10 +195,10 @@ FOR SELECT TO authenticated USING (auth.uid() = user_id);
 -- ============================================
 -- POST-MIGRATION: Set Admin USDT Address
 -- ============================================
--- IMPORTANT: Replace 'TYourActualUSDTAddressHere' with your real USDT TRC20 address
+-- USDT TRC20 Address for receiving payments
 
 INSERT INTO public.admin_settings (key, value) 
-VALUES ('usdt_address', 'TYourActualUSDTAddressHere')
+VALUES ('usdt_address', 'TQzjbHBa9ckat52PtVn7m2SSEM7dJXQ2uP')
 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
 -- ============================================
