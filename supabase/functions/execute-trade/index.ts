@@ -1,6 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { getExchangeCircuitBreaker } from './utils/circuit-breaker.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -235,16 +234,12 @@ async function executeBinanceOrder(
     const endpoint = testMode ? '/api/v3/order/test' : '/api/v3/order';
     const url = `${EXCHANGE_APIS.binance.baseUrl}${endpoint}?${queryString}&signature=${signature}`;
 
-    const response = await getExchangeCircuitBreaker('binance').execute(async () => {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'X-MBX-APIKEY': credentials.api_key,
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
-      });
-      if (res.status >= 500) throw new Error(`Binance Server Error: ${res.status}`);
-      return res;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-MBX-APIKEY': credentials.api_key,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
     });
 
     const data = await response.json();
@@ -319,20 +314,16 @@ async function executeBybitOrder(
 
     const url = `${EXCHANGE_APIS.bybit.baseUrl}${EXCHANGE_APIS.bybit.orderEndpoint}`;
 
-    const response = await getExchangeCircuitBreaker('bybit').execute(async () => {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'X-BAPI-API-KEY': credentials.api_key,
-          'X-BAPI-SIGN': signature,
-          'X-BAPI-TIMESTAMP': timestamp.toString(),
-          'X-BAPI-RECV-WINDOW': recvWindow.toString(),
-          'Content-Type': 'application/json'
-        },
-        body
-      });
-      if (res.status >= 500) throw new Error(`Bybit Server Error: ${res.status}`);
-      return res;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-BAPI-API-KEY': credentials.api_key,
+        'X-BAPI-SIGN': signature,
+        'X-BAPI-TIMESTAMP': timestamp.toString(),
+        'X-BAPI-RECV-WINDOW': recvWindow.toString(),
+        'Content-Type': 'application/json'
+      },
+      body
     });
 
     const data = await response.json();
@@ -391,20 +382,16 @@ async function executeOKXOrder(
 
     const url = `${EXCHANGE_APIS.okx.baseUrl}${EXCHANGE_APIS.okx.orderEndpoint}`;
 
-    const response = await getExchangeCircuitBreaker('okx').execute(async () => {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'OK-ACCESS-KEY': credentials.api_key,
-          'OK-ACCESS-SIGN': signature,
-          'OK-ACCESS-TIMESTAMP': timestamp,
-          'OK-ACCESS-PASSPHRASE': '', // User needs to set this
-          'Content-Type': 'application/json'
-        },
-        body
-      });
-      if (res.status >= 500) throw new Error(`OKX Server Error: ${res.status}`);
-      return res;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'OK-ACCESS-KEY': credentials.api_key,
+        'OK-ACCESS-SIGN': signature,
+        'OK-ACCESS-TIMESTAMP': timestamp,
+        'OK-ACCESS-PASSPHRASE': '', // User needs to set this
+        'Content-Type': 'application/json'
+      },
+      body
     });
 
     const data = await response.json();
@@ -486,19 +473,15 @@ async function executeGateOrder(
       .map(b => b.toString(16).padStart(2, '0'))
       .join('');
 
-    const response = await getExchangeCircuitBreaker('gate').execute(async () => {
-      const res = await fetch(`${EXCHANGE_APIS.gate.baseUrl}${EXCHANGE_APIS.gate.orderEndpoint}`, {
-        method: 'POST',
-        headers: {
-          'KEY': credentials.api_key,
-          'SIGN': signature,
-          'Timestamp': timestamp,
-          'Content-Type': 'application/json'
-        },
-        body
-      });
-      if (res.status >= 500) throw new Error(`Gate Server Error: ${res.status}`);
-      return res;
+    const response = await fetch(`${EXCHANGE_APIS.gate.baseUrl}${EXCHANGE_APIS.gate.orderEndpoint}`, {
+      method: 'POST',
+      headers: {
+        'KEY': credentials.api_key,
+        'SIGN': signature,
+        'Timestamp': timestamp,
+        'Content-Type': 'application/json'
+      },
+      body
     });
 
     const data = await response.json();
@@ -818,38 +801,7 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { action, tradeId, userId, exchange } = await req.json();
-
-    if (action === 'test_circuit_breaker') {
-      const targetExchange = exchange || 'binance';
-      const breaker = getExchangeCircuitBreaker(targetExchange);
-      const results = [];
-
-      // Attempt 7 failures (simulating 500 errors)
-      for (let i = 0; i < 7; i++) {
-        try {
-          await breaker.execute(async () => {
-            throw new Error('Simulated 500 Error');
-          });
-          results.push({ attempt: i + 1, result: 'success' });
-        } catch (e: any) {
-          results.push({
-            attempt: i + 1,
-            result: 'failed',
-            error: e.message,
-            circuitState: breaker.getState()
-          });
-        }
-      }
-
-      return new Response(JSON.stringify({
-        exchange: targetExchange,
-        finalState: breaker.getState(),
-        results
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
+    const { action, tradeId, userId } = await req.json();
 
     if (action === 'execute_single') {
       // Execute a single trade from the queue
