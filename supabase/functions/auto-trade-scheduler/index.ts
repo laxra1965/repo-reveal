@@ -33,7 +33,7 @@ serve(async (req) => {
 
     const usersProcessed = queueResult?.[0]?.users_processed || 0;
     const tradesQueued = queueResult?.[0]?.trades_queued || 0;
-    
+
     console.log(`Queued ${tradesQueued} trades for ${usersProcessed} users`);
 
     // Step 2: Process pending auto trades
@@ -70,11 +70,11 @@ serve(async (req) => {
     // Step 4: Execute pending trades via the execute-trade function
     if (pendingExecutions && pendingExecutions.length > 0) {
       console.log(`Step 4: Executing ${pendingExecutions.length} pending trades...`);
-      
+
       for (const trade of pendingExecutions) {
         try {
           const { data: execResult, error: execError } = await supabase.functions.invoke('execute-trade', {
-            body: { 
+            body: {
               action: 'execute_single',
               tradeId: trade.id,
               userId: trade.user_id
@@ -115,13 +115,21 @@ serve(async (req) => {
 
     const executionTime = Date.now() - startTime;
 
-    // Log the scheduler run
-    await supabase.from('scanner_health_metrics').insert([
-      { metric_name: 'scheduler_run_time_ms', metric_value: executionTime },
-      { metric_name: 'trades_queued', metric_value: tradesQueued },
-      { metric_name: 'trades_processed', metric_value: processed },
-      { metric_name: 'trades_executed', metric_value: executedCount },
-      { metric_name: 'trades_failed', metric_value: failed + executionErrors.length }
+    // Log the scheduler run to scanner_logs instead of the view
+    await supabase.from('scanner_logs').insert([
+      {
+        user_id: '00000000-0000-0000-0000-000000000000', // System level ID
+        log_type: 'scheduler_summary',
+        message: `Scheduler completed: Queued ${tradesQueued}, Processed ${processed}, Executed ${executedCount}, Failed ${failed + executionErrors.length}`,
+        details: {
+          execution_time_ms: executionTime,
+          trades_queued: tradesQueued,
+          trades_processed: processed,
+          trades_executed: executedCount,
+          trades_failed: failed + executionErrors.length,
+          errors: executionErrors
+        }
+      }
     ]);
 
     console.log('=== Auto Trade Scheduler Completed ===');
@@ -158,9 +166,9 @@ serve(async (req) => {
   } catch (error) {
     const executionTime = Date.now() - startTime;
     console.error('Scheduler error:', error);
-    
+
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
         execution_time_ms: executionTime,

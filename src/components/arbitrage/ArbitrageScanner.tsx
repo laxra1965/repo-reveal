@@ -62,6 +62,8 @@ export const ArbitrageScanner = () => {
   const [isInitializing, setIsInitializing] = useState(false);
   const [autoPaperTrade, setAutoPaperTrade] = useState(false);
   const [autoPaperTradeCount, setAutoPaperTradeCount] = useState(0);
+  const [scanDebug, setScanDebug] = useState<any[] | null>(null);
+  const [activeArbTypes, setActiveArbTypes] = useState<string[]>(['triangular', 'cross_exchange']);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -91,6 +93,7 @@ export const ArbitrageScanner = () => {
       const { data, error } = await supabase
         .from('arbitrage_opportunities')
         .select('*')
+        .eq('user_id', user.id)
         .gt('expires_at', new Date().toISOString())
         .order('profit_percent', { ascending: false })
         .limit(100);
@@ -113,6 +116,20 @@ export const ArbitrageScanner = () => {
       console.error('Error loading opportunities:', error);
     }
   }, [user]);
+
+  const loadUserSettings = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { data } = await supabase.from('user_settings').select('arbitrage_types').eq('user_id', user.id).maybeSingle();
+      if (data?.arbitrage_types) {
+        setActiveArbTypes(data.arbitrage_types);
+      }
+    } catch (e) { }
+  }, [user]);
+
+  useEffect(() => {
+    loadUserSettings();
+  }, [loadUserSettings]);
 
   // Initial load and real-time subscription
   useEffect(() => {
@@ -173,12 +190,17 @@ export const ArbitrageScanner = () => {
       });
 
       if (response.error) {
-        throw response.error;
+        console.error('Supabase Edge Function `arbitrage-scanner` returned non-2xx:', response);
+        const respErr = response.error;
+        const errMessage = (respErr && (respErr.message || respErr.error || String(respErr))) || 'Edge function returned a non-2xx status code';
+        const statusPart = respErr && (respErr.status || respErr.statusCode) ? ` (status: ${respErr.status || respErr.statusCode})` : '';
+        throw new Error(errMessage + statusPart);
       }
 
       if (mountedRef.current) {
         setScanCount(prev => prev + 1);
         setLastScanTime(new Date());
+        setScanDebug(response.data?.exchange_debug || null);
       }
 
       // Load updated opportunities from database
@@ -299,25 +321,32 @@ export const ArbitrageScanner = () => {
     isScanningRef.current = false;
   }, []);
 
-  // Optimized sorted opportunities with pagination
-  const paginatedOpportunities = useMemo(() => {
-    const filtered = opportunities
-      .filter(opp => new Date(opp.expires_at) > new Date())
+  // Filter and sort opportunities
+  const filteredOpportunities = useMemo(() => {
+    return opportunities
+      .filter(opp =>
+        new Date(opp.expires_at) > new Date() &&
+        (!opp.type || activeArbTypes.includes(opp.type))
+      )
       .sort((a, b) => {
-        // Sort by quality score first (if available), then by profit
         if (a.quality_score && b.quality_score && a.quality_score !== b.quality_score) {
           return b.quality_score - a.quality_score;
         }
-        return Math.abs(b.profit_percent) - Math.abs(a.profit_percent);
+        return b.profit_percent - a.profit_percent;
       });
+  }, [opportunities, activeArbTypes]);
 
-    setTotalPages(Math.ceil(filtered.length / OPPORTUNITIES_PER_PAGE));
+  // Update total pages whenever filtered opportunities change
+  useEffect(() => {
+    setTotalPages(Math.ceil(filteredOpportunities.length / OPPORTUNITIES_PER_PAGE));
+  }, [filteredOpportunities.length]);
 
+  // Optimized paginated results
+  const paginatedOpportunities = useMemo(() => {
     const start = (currentPage - 1) * OPPORTUNITIES_PER_PAGE;
     const end = start + OPPORTUNITIES_PER_PAGE;
-
-    return filtered.slice(start, end);
-  }, [opportunities, currentPage]);
+    return filteredOpportunities.slice(start, end);
+  }, [filteredOpportunities, currentPage]);
 
   // Reset to page 1 when opportunities change significantly
   useEffect(() => {
@@ -453,9 +482,28 @@ export const ArbitrageScanner = () => {
         {paginatedOpportunities.length === 0 && !isScanning && (
           <Card>
             <CardContent className="pt-6 text-center">
-              <p className="text-muted-foreground">
+              <p className="text-muted-foreground mb-4">
                 No opportunities found. Click "Start" to begin scanning.
               </p>
+
+              {/* Debug Info Display */}
+              {scanDebug && (
+                <div className="mt-4 text-left max-w-md mx-auto border rounded p-3 bg-card/50">
+                  <p className="text-xs font-semibold mb-2 text-muted-foreground">Exchange Connectivity Status:</p>
+                  <div className="grid gap-2">
+                    {scanDebug.map((d: any, i: number) => (
+                      <div key={i} className={`text-xs p-2 rounded flex justify-between items-center border ${d.success ? 'border-green-500/20 bg-green-500/5 text-green-600 dark:text-green-400' : 'border-red-500/20 bg-red-500/5 text-red-600 dark:text-red-400'}`}>
+                        <span className="flex items-center gap-2">
+                          <span className={`w-2 h-2 rounded-full ${d.success ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                          {d.exchange}
+                        </span>
+                        <span>{d.ticker_count} pairs</span>
+                        {!d.success && <span className="ml-2">Err: {d.error}</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -517,7 +565,11 @@ export const ArbitrageScanner = () => {
       {showSettings && (
         <ArbitrageSettings
           isOpen={showSettings}
-          onClose={() => setShowSettings(false)}
+          onClose={() => {
+            setShowSettings(false);
+            loadUserSettings();
+            loadOpportunitiesFromDB();
+          }}
         />
       )}
     </div>

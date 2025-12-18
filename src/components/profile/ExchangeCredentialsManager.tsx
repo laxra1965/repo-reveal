@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Eye, EyeOff, Plus, Trash2, CheckCircle, XCircle, TestTube, Loader2, ShieldCheck } from 'lucide-react';
+import { Eye, EyeOff, Plus, Trash2, CheckCircle, XCircle, TestTube, Loader2, ShieldCheck, Key } from 'lucide-react';
+import { invokeFunction } from '@/lib/functionsInvoke';
 import {
   Dialog,
   DialogContent,
@@ -37,6 +38,8 @@ interface ExchangeCredential {
   created_at: string | null;
   encrypted_api_key?: string | null;
   encrypted_api_secret?: string | null;
+  encrypted_api_passphrase?: string | null;
+  api_passphrase?: string | null;
 }
 
 const SUPPORTED_EXCHANGES: { value: ExchangeName; label: string; logo: string }[] = [
@@ -57,6 +60,7 @@ export function ExchangeCredentialsManager() {
     exchange: '' as ExchangeName | '',
     api_key: '',
     api_secret: '',
+    api_passphrase: '',
     test_mode: true,
   });
   const [saving, setSaving] = useState(false);
@@ -96,18 +100,16 @@ export function ExchangeCredentialsManager() {
     try {
       // Step 1: Encrypt credentials via Edge Function
       console.log('Encrypting API credentials...');
-      const { data: encryptedData, error: encryptError } = await supabase.functions.invoke('encrypt-api-keys', {
+      const encryptResponse = await invokeFunction('encrypt-api-keys', {
         body: {
           action: 'encrypt',
           apiKey: newCredential.api_key,
-          apiSecret: newCredential.api_secret
+          apiSecret: newCredential.api_secret,
+          apiPassphrase: newCredential.api_passphrase
         }
       });
 
-      if (encryptError) {
-        console.error('Encryption error:', encryptError);
-        throw new Error('Failed to encrypt credentials: ' + (encryptError.message || 'Unknown error'));
-      }
+      const encryptedData = encryptResponse?.data;
 
       if (!encryptedData || !encryptedData.encryptedKey || !encryptedData.encryptedSecret) {
         throw new Error('Encryption failed: Invalid response from encryption service');
@@ -121,8 +123,10 @@ export function ExchangeCredentialsManager() {
         exchange: newCredential.exchange,
         api_key: '',  // Clear plaintext for security
         api_secret: '',  // Clear plaintext for security
+        api_passphrase: '', // Clear plaintext for security
         encrypted_api_key: encryptedData.encryptedKey,
         encrypted_api_secret: encryptedData.encryptedSecret,
+        encrypted_api_passphrase: encryptedData.encryptedPassphrase,
         encryption_version: 1,
         migration_status: 'completed',
         test_mode: newCredential.test_mode,
@@ -133,7 +137,7 @@ export function ExchangeCredentialsManager() {
 
       toast.success(`${newCredential.exchange.toUpperCase()} API keys added and encrypted successfully`);
       setDialogOpen(false);
-      setNewCredential({ exchange: '', api_key: '', api_secret: '', test_mode: true });
+      setNewCredential({ exchange: '', api_key: '', api_secret: '', api_passphrase: '', test_mode: true });
       fetchCredentials();
     } catch (error: any) {
       console.error('Error adding credential:', error);
@@ -194,16 +198,19 @@ export function ExchangeCredentialsManager() {
       if (credential.encrypted_api_key && credential.encrypted_api_secret) {
         console.log('Decrypting credentials for validation...');
 
-        const { data: decryptedData, error: decryptError } = await supabase.functions.invoke('encrypt-api-keys', {
+        const decryptResponse = await invokeFunction('encrypt-api-keys', {
           body: {
             action: 'decrypt',
             encryptedKey: credential.encrypted_api_key,
-            encryptedSecret: credential.encrypted_api_secret
+            encryptedSecret: credential.encrypted_api_secret,
+            encryptedPassphrase: credential.encrypted_api_passphrase
           }
         });
 
-        if (decryptError || !decryptedData) {
-          throw new Error('Failed to decrypt credentials: ' + (decryptError?.message || 'Unknown error'));
+        const decryptedData = decryptResponse?.data;
+
+        if (!decryptedData) {
+          throw new Error('Failed to decrypt credentials: Invalid response');
         }
 
         apiKey = decryptedData.apiKey;
@@ -211,7 +218,7 @@ export function ExchangeCredentialsManager() {
         console.log('Credentials decrypted successfully');
       }
 
-      const { data, error } = await supabase.functions.invoke('validate-api-keys', {
+      const validateResponse = await invokeFunction('validate-api-keys', {
         body: {
           exchange: credential.exchange,
           apiKey: apiKey,
@@ -219,12 +226,9 @@ export function ExchangeCredentialsManager() {
         }
       });
 
-      console.log('Validation response:', { data, error });
+      const data = validateResponse?.data;
 
-      if (error) {
-        console.error('Edge function error:', error);
-        throw new Error(error.message || 'Edge function invocation failed');
-      }
+      console.log('Validation response:', { data });
 
       if (!data) {
         throw new Error('No response from validation service');
@@ -370,6 +374,20 @@ export function ExchangeCredentialsManager() {
                     onChange={(e) => setNewCredential(prev => ({ ...prev, api_secret: e.target.value }))}
                   />
                 </div>
+                {newCredential.exchange === 'okx' && (
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      API Passphrase
+                      <Badge variant="outline" className="text-[10px] h-4">Mandatory for OKX</Badge>
+                    </Label>
+                    <Input
+                      type="password"
+                      placeholder="Enter your API passphrase"
+                      value={newCredential.api_passphrase}
+                      onChange={(e) => setNewCredential(prev => ({ ...prev, api_passphrase: e.target.value }))}
+                    />
+                  </div>
+                )}
                 <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
                   <div className="flex items-center gap-2">
                     <TestTube className="h-4 w-4 text-amber-500" />

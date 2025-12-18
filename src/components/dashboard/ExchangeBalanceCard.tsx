@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Wallet, RefreshCw, ChevronDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { invokeFunction } from '@/lib/functionsInvoke';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 
@@ -35,16 +36,13 @@ export const ExchangeBalanceCard = () => {
         throw new Error('No active session');
       }
 
-      const response = await supabase.functions.invoke('fetch-exchange-balances', {
+      const response = await invokeFunction('fetch-exchange-balances', {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
       });
 
-      if (response.error) {
-        throw response.error;
-      }
-
+      // invokeFunction throws on non-2xx; response is supabase invoke response
       setBalanceData(response.data);
     } catch (error) {
       console.error('Error fetching balances:', error);

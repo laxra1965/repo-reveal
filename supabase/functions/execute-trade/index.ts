@@ -10,6 +10,7 @@ const corsHeaders = {
 interface ExchangeCredentials {
   api_key: string;
   api_secret: string;
+  api_passphrase?: string;
   exchange: string;
   test_mode: boolean;
 }
@@ -79,7 +80,7 @@ function getHumanReadableError(error: string, exchange: string): string {
 }
 
 // Helper function to decrypt credentials if needed
-async function decryptCredentials(supabaseUrl: string, supabaseServiceKey: string, credential: any): Promise<{ api_key: string; api_secret: string }> {
+async function decryptCredentials(supabaseUrl: string, supabaseServiceKey: string, credential: any): Promise<{ api_key: string; api_secret: string; api_passphrase?: string }> {
   if (credential.encrypted_api_key && credential.encrypted_api_secret) {
     console.log(`Decrypting credentials for ${credential.exchange}...`);
 
@@ -92,20 +93,23 @@ async function decryptCredentials(supabaseUrl: string, supabaseServiceKey: strin
       body: JSON.stringify({
         action: 'decrypt',
         encryptedKey: credential.encrypted_api_key,
-        encryptedSecret: credential.encrypted_api_secret
+        encryptedSecret: credential.encrypted_api_secret,
+        encryptedPassphrase: credential.encrypted_api_passphrase
       })
     });
 
     const data = await response.json();
     return {
       api_key: data.apiKey,
-      api_secret: data.apiSecret
+      api_secret: data.apiSecret,
+      api_passphrase: data.apiPassphrase
     };
   }
 
   return {
     api_key: credential.api_key,
-    api_secret: credential.api_secret
+    api_secret: credential.api_secret,
+    api_passphrase: credential.api_passphrase
   };
 }
 
@@ -388,7 +392,7 @@ async function executeOKXOrder(
         'OK-ACCESS-KEY': credentials.api_key,
         'OK-ACCESS-SIGN': signature,
         'OK-ACCESS-TIMESTAMP': timestamp,
-        'OK-ACCESS-PASSPHRASE': '', // User needs to set this
+        'OK-ACCESS-PASSPHRASE': credentials.api_passphrase || '',
         'Content-Type': 'application/json'
       },
       body
@@ -556,17 +560,21 @@ async function executeArbitrageTrade(
 
     let step1Result;
     const exchange1 = opportunity.exchange1.toLowerCase();
-    const step1Symbol = `${opportunity.base_symbol}${opportunity.quote_symbol}`;
     const step1Side = opportunity.step1_action.includes('BUY') ? 'BUY' : 'SELL';
 
+    // Auto-detect correct symbol format per exchange
+    let step1Symbol = `${opportunity.base_symbol}${opportunity.quote_symbol}`;
+    if (exchange1 === 'okx') step1Symbol = `${opportunity.base_symbol}-${opportunity.quote_symbol}`;
+    if (exchange1 === 'gate') step1Symbol = `${opportunity.base_symbol}_${opportunity.quote_symbol}`;
+
     if (exchange1 === 'binance') {
-      step1Result = await executeBinanceOrder(step1Creds, step1Symbol, step1Side as 'BUY' | 'SELL', currentAmount / opportunity.step1_price, step1Creds.test_mode);
+      step1Result = await executeBinanceOrder(step1Creds, step1Symbol, step1Side as 'BUY' | 'SELL', step1Side === 'BUY' ? currentAmount / opportunity.step1_price : currentAmount, step1Creds.test_mode);
     } else if (exchange1 === 'bybit') {
-      step1Result = await executeBybitOrder(step1Creds, step1Symbol, step1Side === 'BUY' ? 'Buy' : 'Sell', currentAmount / opportunity.step1_price, step1Creds.test_mode);
+      step1Result = await executeBybitOrder(step1Creds, step1Symbol, step1Side === 'BUY' ? 'Buy' : 'Sell', step1Side === 'BUY' ? currentAmount / opportunity.step1_price : currentAmount, step1Creds.test_mode);
     } else if (exchange1 === 'okx') {
-      step1Result = await executeOKXOrder(step1Creds, step1Symbol, step1Side === 'BUY' ? 'buy' : 'sell', currentAmount / opportunity.step1_price, step1Creds.test_mode);
+      step1Result = await executeOKXOrder(step1Creds, step1Symbol, step1Side === 'BUY' ? 'buy' : 'sell', step1Side === 'BUY' ? currentAmount / opportunity.step1_price : currentAmount, step1Creds.test_mode);
     } else if (exchange1 === 'gate') {
-      step1Result = await executeGateOrder(step1Creds, step1Symbol, step1Side === 'BUY' ? 'buy' : 'sell', currentAmount / opportunity.step1_price, step1Creds.test_mode);
+      step1Result = await executeGateOrder(step1Creds, step1Symbol, step1Side === 'BUY' ? 'buy' : 'sell', step1Side === 'BUY' ? currentAmount / opportunity.step1_price : currentAmount, step1Creds.test_mode);
     } else {
       throw new Error(`Unsupported exchange: ${opportunity.exchange1}`);
     }
@@ -576,7 +584,8 @@ async function executeArbitrageTrade(
     }
 
     executionLog.push({ step: 1, ...step1Result, timestamp: new Date().toISOString() });
-    currentAmount = (step1Result.filledQty || opportunity.step1_amount);
+    // If we bought, currentAmount is now base currency. If we sold, it's quote currency.
+    currentAmount = step1Result.filledQty || (step1Side === 'BUY' ? currentAmount / opportunity.step1_price : currentAmount * opportunity.step1_price);
     completedSteps = 1;
 
     // Update progress
@@ -596,17 +605,21 @@ async function executeArbitrageTrade(
 
     let step2Result;
     const exchange2 = opportunity.exchange2.toLowerCase();
-    const step2Symbol = `${opportunity.base_symbol}${opportunity.intermediate_symbol}`;
     const step2Side = opportunity.step2_action.includes('BUY') ? 'BUY' : 'SELL';
 
+    // Auto-detect correct symbol format per exchange
+    let step2Symbol = `${opportunity.base_symbol}${opportunity.intermediate_symbol}`;
+    if (exchange2 === 'okx') step2Symbol = `${opportunity.base_symbol}-${opportunity.intermediate_symbol}`;
+    if (exchange2 === 'gate') step2Symbol = `${opportunity.base_symbol}_${opportunity.intermediate_symbol}`;
+
     if (exchange2 === 'binance') {
-      step2Result = await executeBinanceOrder(step2Creds, step2Symbol, step2Side as 'BUY' | 'SELL', currentAmount, step2Creds.test_mode);
+      step2Result = await executeBinanceOrder(step2Creds, step2Symbol, step2Side as 'BUY' | 'SELL', step2Side === 'BUY' ? currentAmount / opportunity.step2_price : currentAmount, step2Creds.test_mode);
     } else if (exchange2 === 'bybit') {
-      step2Result = await executeBybitOrder(step2Creds, step2Symbol, step2Side === 'BUY' ? 'Buy' : 'Sell', currentAmount, step2Creds.test_mode);
+      step2Result = await executeBybitOrder(step2Creds, step2Symbol, step2Side === 'BUY' ? 'Buy' : 'Sell', step2Side === 'BUY' ? currentAmount / opportunity.step2_price : currentAmount, step2Creds.test_mode);
     } else if (exchange2 === 'okx') {
-      step2Result = await executeOKXOrder(step2Creds, step2Symbol, step2Side === 'BUY' ? 'buy' : 'sell', currentAmount, step2Creds.test_mode);
+      step2Result = await executeOKXOrder(step2Creds, step2Symbol, step2Side === 'BUY' ? 'buy' : 'sell', step2Side === 'BUY' ? currentAmount / opportunity.step2_price : currentAmount, step2Creds.test_mode);
     } else if (exchange2 === 'gate') {
-      step2Result = await executeGateOrder(step2Creds, step2Symbol, step2Side === 'BUY' ? 'buy' : 'sell', currentAmount, step2Creds.test_mode);
+      step2Result = await executeGateOrder(step2Creds, step2Symbol, step2Side === 'BUY' ? 'buy' : 'sell', step2Side === 'BUY' ? currentAmount / opportunity.step2_price : currentAmount, step2Creds.test_mode);
     } else {
       throw new Error(`Unsupported exchange: ${opportunity.exchange2}`);
     }
@@ -616,7 +629,7 @@ async function executeArbitrageTrade(
     }
 
     executionLog.push({ step: 2, ...step2Result, timestamp: new Date().toISOString() });
-    currentAmount = (step2Result.filledQty || opportunity.step2_amount);
+    currentAmount = step2Result.filledQty || (step2Side === 'BUY' ? currentAmount / opportunity.step2_price : currentAmount * opportunity.step2_price);
     completedSteps = 2;
 
     await supabase
@@ -635,17 +648,21 @@ async function executeArbitrageTrade(
 
     let step3Result;
     const exchange3 = opportunity.exchange3.toLowerCase();
-    const step3Symbol = `${opportunity.intermediate_symbol}${opportunity.quote_symbol}`;
     const step3Side = opportunity.step3_action.includes('BUY') ? 'BUY' : 'SELL';
 
+    // Auto-detect correct symbol format per exchange
+    let step3Symbol = `${opportunity.intermediate_symbol}${opportunity.quote_symbol}`;
+    if (exchange3 === 'okx') step3Symbol = `${opportunity.intermediate_symbol}-${opportunity.quote_symbol}`;
+    if (exchange3 === 'gate') step3Symbol = `${opportunity.intermediate_symbol}_${opportunity.quote_symbol}`;
+
     if (exchange3 === 'binance') {
-      step3Result = await executeBinanceOrder(step3Creds, step3Symbol, step3Side as 'BUY' | 'SELL', currentAmount, step3Creds.test_mode);
+      step3Result = await executeBinanceOrder(step3Creds, step3Symbol, step3Side as 'BUY' | 'SELL', step3Side === 'BUY' ? currentAmount / opportunity.step3_price : currentAmount, step3Creds.test_mode);
     } else if (exchange3 === 'bybit') {
-      step3Result = await executeBybitOrder(step3Creds, step3Symbol, step3Side === 'BUY' ? 'Buy' : 'Sell', currentAmount, step3Creds.test_mode);
+      step3Result = await executeBybitOrder(step3Creds, step3Symbol, step3Side === 'BUY' ? 'Buy' : 'Sell', step3Side === 'BUY' ? currentAmount / opportunity.step3_price : currentAmount, step3Creds.test_mode);
     } else if (exchange3 === 'okx') {
-      step3Result = await executeOKXOrder(step3Creds, step3Symbol, step3Side === 'BUY' ? 'buy' : 'sell', currentAmount, step3Creds.test_mode);
+      step3Result = await executeOKXOrder(step3Creds, step3Symbol, step3Side === 'BUY' ? 'buy' : 'sell', step3Side === 'BUY' ? currentAmount / opportunity.step3_price : currentAmount, step3Creds.test_mode);
     } else if (exchange3 === 'gate') {
-      step3Result = await executeGateOrder(step3Creds, step3Symbol, step3Side === 'BUY' ? 'buy' : 'sell', currentAmount, step3Creds.test_mode);
+      step3Result = await executeGateOrder(step3Creds, step3Symbol, step3Side === 'BUY' ? 'buy' : 'sell', step3Side === 'BUY' ? currentAmount / opportunity.step3_price : currentAmount, step3Creds.test_mode);
     } else {
       throw new Error(`Unsupported exchange: ${opportunity.exchange3}`);
     }

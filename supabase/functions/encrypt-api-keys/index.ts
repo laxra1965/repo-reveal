@@ -22,6 +22,12 @@ const corsHeaders = {
 interface EncryptRequest {
     action: 'encrypt' | 'decrypt' | 'migrate' | 'test_encryption';
     data?: string;
+    apiKey?: string;
+    apiSecret?: string;
+    apiPassphrase?: string;
+    encryptedKey?: string;
+    encryptedSecret?: string;
+    encryptedPassphrase?: string;
     credentialId?: string;
     userId?: string;
 }
@@ -40,17 +46,28 @@ serve(async (req) => {
 
         switch (action) {
             case 'encrypt': {
-                if (!data) {
-                    throw new Error('Data is required for encryption');
+                if (data) {
+                    const encryptedData = await encryptWithVault(supabase, data);
+                    return new Response(JSON.stringify({ success: true, encrypted: encryptedData }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                 }
 
-                // Use Supabase Vault for encryption
-                const encryptedData = await encryptWithVault(supabase, data);
+                if (!apiKey || !apiSecret) {
+                    throw new Error('API Key and Secret are required for encryption');
+                }
+
+                const encryptedKey = await encryptWithVault(supabase, apiKey);
+                const encryptedSecret = await encryptWithVault(supabase, apiSecret);
+                let encryptedPassphrase = undefined;
+                if (apiPassphrase) {
+                    encryptedPassphrase = await encryptWithVault(supabase, apiPassphrase);
+                }
 
                 return new Response(
                     JSON.stringify({
                         success: true,
-                        encrypted: encryptedData,
+                        encryptedKey,
+                        encryptedSecret,
+                        encryptedPassphrase,
                         version: 1
                     }),
                     { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -58,17 +75,28 @@ serve(async (req) => {
             }
 
             case 'decrypt': {
-                if (!data) {
-                    throw new Error('Data is required for decryption');
+                if (data) {
+                    const decryptedData = await decryptWithVault(supabase, data);
+                    return new Response(JSON.stringify({ success: true, decrypted: decryptedData }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                 }
 
-                // Use Supabase Vault for decryption
-                const decryptedData = await decryptWithVault(supabase, data);
+                if (!encryptedKey || !encryptedSecret) {
+                    throw new Error('Encrypted Key and Secret are required for decryption');
+                }
+
+                const decryptedKey = await decryptWithVault(supabase, encryptedKey);
+                const decryptedSecret = await decryptWithVault(supabase, encryptedSecret);
+                let decryptedPassphrase = undefined;
+                if (encryptedPassphrase) {
+                    decryptedPassphrase = await decryptWithVault(supabase, encryptedPassphrase);
+                }
 
                 return new Response(
                     JSON.stringify({
                         success: true,
-                        decrypted: decryptedData
+                        apiKey: decryptedKey,
+                        apiSecret: decryptedSecret,
+                        apiPassphrase: decryptedPassphrase
                     }),
                     { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
                 );

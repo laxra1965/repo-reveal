@@ -19,6 +19,49 @@
 
   <body>
     <div id="root"></div>
+    <script>
+/* ===============================
+   BINANCE FUTURES PRICE FEED
+   =============================== */
+
+const FUTURES_PRICES = {};
+let futuresSocket = null;
+
+/* REST fallback (initial price) */
+async function fetchFuturesPrice(symbol) {
+  try {
+    const r = await fetch(
+      `https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`
+    );
+    const d = await r.json();
+    FUTURES_PRICES[symbol] = parseFloat(d.price);
+    return FUTURES_PRICES[symbol];
+  } catch {
+    return null;
+  }
+}
+
+/* WebSocket live mark price */
+function startFuturesWebSocket(symbols) {
+  if (futuresSocket) futuresSocket.close();
+
+  const streams = symbols
+    .map(s => `${s.toLowerCase()}@markPrice@1s`)
+    .join('/');
+
+  futuresSocket = new WebSocket(
+    `wss://fstream.binance.com/stream?streams=${streams}`
+  );
+
+  futuresSocket.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    const d = msg.data;
+    if (d?.s && d?.p) {
+      FUTURES_PRICES[d.s] = parseFloat(d.p);
+    }
+  };
+}
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

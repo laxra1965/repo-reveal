@@ -8,10 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Key, Shield } from 'lucide-react';
 
 interface ArbitrageSettingsProps {
   isOpen: boolean;
@@ -38,51 +36,9 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
     arbitrage_types: ['triangular', 'cross_exchange'] as string[],
     custom_pairs: '' as string,
     enable_ml_filtering: false,
-    // API Keys storage
     apiKeys: {} as Record<string, { key: string; secret: string; passphrase?: string; testMode: boolean; isExisting?: boolean }>
   });
   const [loading, setLoading] = useState(false);
-
-  // Helper functions for API key management
-  const getApiKeyStatus = (exchange: string): boolean => {
-    const keys = settings.apiKeys[exchange];
-    return !!(keys?.key && keys?.secret);
-  };
-
-  const getApiKeyValue = (exchange: string, field: 'key' | 'secret' | 'passphrase'): string => {
-    return settings.apiKeys[exchange]?.[field] || '';
-  };
-
-  const getTestModeStatus = (exchange: string): boolean => {
-    return settings.apiKeys[exchange]?.testMode || true;
-  };
-
-  const handleApiKeyChange = (exchange: string, field: 'key' | 'secret' | 'passphrase', value: string) => {
-    setSettings(prev => ({
-      ...prev,
-      apiKeys: {
-        ...prev.apiKeys,
-        [exchange]: {
-          ...prev.apiKeys[exchange],
-          [field]: value,
-          isExisting: false // Mark as modified
-        }
-      }
-    }));
-  };
-
-  const handleTestModeChange = (exchange: string, testMode: boolean) => {
-    setSettings(prev => ({
-      ...prev,
-      apiKeys: {
-        ...prev.apiKeys,
-        [exchange]: {
-          ...prev.apiKeys[exchange],
-          testMode
-        }
-      }
-    }));
-  };
 
   useEffect(() => {
     if (user && isOpen) {
@@ -120,7 +76,6 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
         }));
       }
 
-      // Load existing API credentials
       const { data: credentials, error: credError } = await supabase
         .from('exchange_credentials')
         .select('exchange, api_key, api_secret, test_mode, is_connected')
@@ -131,13 +86,12 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
       } else if (credentials) {
         const apiKeys: Record<string, { key: string; secret: string; passphrase?: string; testMode: boolean; isExisting?: boolean }> = {};
         credentials.forEach((cred) => {
-          // Only show credentials that have keys
           if (cred.api_key && cred.api_secret && cred.is_connected) {
             apiKeys[cred.exchange] = {
-              key: '', // Don't show existing keys for security
+              key: '',
               secret: '',
               testMode: cred.test_mode || false,
-              isExisting: true // Mark as existing so we know not to update if empty
+              isExisting: true
             };
           }
         });
@@ -174,30 +128,21 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
         .from('user_settings')
         .upsert(settingsData, { onConflict: 'user_id' });
 
-      // Save API keys to exchange_credentials table
       for (const exchange of settings.enabled_exchanges) {
         const apiKey = settings.apiKeys[exchange];
+        if (!apiKey || (apiKey.isExisting && !apiKey.key && !apiKey.secret)) continue;
 
-        // Skip if no keys entered OR if existing credential with no changes
-        if (!apiKey || (apiKey.isExisting && !apiKey.key && !apiKey.secret)) {
-          console.log(`Skipping ${exchange} - no changes`);
-          continue;
-        }
-
-        // Only save if user actually entered new credentials
         if (apiKey.key && apiKey.secret) {
-          console.log(`Saving credentials for ${exchange}...`);
-
           const credentialData = {
             user_id: user.id,
             exchange: exchange as any,
             api_key: apiKey.key,
             api_secret: apiKey.secret,
+            api_passphrase: apiKey.passphrase,
             test_mode: apiKey.testMode !== undefined ? apiKey.testMode : false,
             is_connected: true
           };
 
-          // First try to find existing credential
           const { data: existing } = await supabase
             .from('exchange_credentials')
             .select('id')
@@ -205,31 +150,10 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
             .eq('exchange', exchange)
             .single();
 
-          let credError;
           if (existing) {
-            // Update existing
-            const { error } = await supabase
-              .from('exchange_credentials')
-              .update(credentialData)
-              .eq('id', existing.id);
-            credError = error;
+            await supabase.from('exchange_credentials').update(credentialData).eq('id', existing.id);
           } else {
-            // Insert new
-            const { error } = await supabase
-              .from('exchange_credentials')
-              .insert(credentialData);
-            credError = error;
-          }
-
-          if (credError) {
-            console.error(`Error saving ${exchange} credentials:`, credError);
-            toast({
-              title: "Error",
-              description: `Failed to save ${exchange} credentials: ${credError.message}`,
-              variant: "destructive",
-            });
-          } else {
-            console.log(`Successfully saved ${exchange} credentials`);
+            await supabase.from('exchange_credentials').insert(credentialData);
           }
         }
       }
@@ -259,7 +183,35 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* General Settings */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Enabled Exchanges</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                {AVAILABLE_EXCHANGES.map((exchange) => (
+                  <div key={exchange} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`exchange-${exchange}`}
+                      checked={settings.enabled_exchanges.includes(exchange)}
+                      onCheckedChange={(checked) => {
+                        const current = settings.enabled_exchanges;
+                        const updated = checked
+                          ? [...current, exchange]
+                          : current.filter(e => e !== exchange);
+
+                        setSettings(prev => ({ ...prev, enabled_exchanges: updated }));
+                      }}
+                    />
+                    <Label htmlFor={`exchange-${exchange}`} className="capitalize font-medium text-sm">
+                      {exchange}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle className="text-base">General Settings</CardTitle>
@@ -267,7 +219,7 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Refresh Rate (sec)</Label>
+                  <Label className="text-sm">Refresh Rate (sec)</Label>
                   <Input
                     type="number"
                     min="2"
@@ -280,7 +232,7 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
                   />
                 </div>
                 <div>
-                  <Label>Trade Amount (USDT)</Label>
+                  <Label className="text-sm">Trade Amount (USDT)</Label>
                   <Input
                     type="number"
                     min="1"
@@ -295,7 +247,7 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Min Profit (%)</Label>
+                  <Label className="text-sm">Min Profit (%)</Label>
                   <Input
                     type="number"
                     min="0"
@@ -308,7 +260,7 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
                   />
                 </div>
                 <div>
-                  <Label>Max Profit (%)</Label>
+                  <Label className="text-sm">Max Profit (%)</Label>
                   <Input
                     type="number"
                     min="0.1"
@@ -321,44 +273,107 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    checked={settings.filter_profitable}
-                    onCheckedChange={(checked) => setSettings(prev => ({
-                      ...prev,
-                      filter_profitable: checked as boolean
-                    }))}
-                  />
-                  <Label>Show only profitable</Label>
+              <div className="space-y-3 pt-2">
+                <Label className="text-sm font-medium">Arbitrage Types</Label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="type-triangular"
+                      checked={settings.arbitrage_types.includes('triangular')}
+                      onCheckedChange={(checked) => {
+                        const current = settings.arbitrage_types;
+                        const updated = checked ? [...current, 'triangular'] : current.filter(t => t !== 'triangular');
+                        setSettings(prev => ({ ...prev, arbitrage_types: updated }));
+                      }}
+                    />
+                    <Label htmlFor="type-triangular" className="text-xs">Triangular</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="type-cross-exchange"
+                      checked={settings.arbitrage_types.includes('cross_exchange')}
+                      onCheckedChange={(checked) => {
+                        const current = settings.arbitrage_types;
+                        const updated = checked ? [...current, 'cross_exchange'] : current.filter(t => t !== 'cross_exchange');
+                        setSettings(prev => ({ ...prev, arbitrage_types: updated }));
+                      }}
+                    />
+                    <Label htmlFor="type-cross-exchange" className="text-xs">Cross Exchange</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="type-short"
+                      checked={settings.arbitrage_types.includes('short')}
+                      onCheckedChange={(checked) => {
+                        const current = settings.arbitrage_types;
+                        const updated = checked ? [...current, 'short'] : current.filter(t => t !== 'short');
+                        setSettings(prev => ({ ...prev, arbitrage_types: updated }));
+                      }}
+                    />
+                    <Label htmlFor="type-short" className="text-xs">Short Signals</Label>
+                  </div>
                 </div>
+              </div>
 
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    checked={settings.auto_trade}
-                    onCheckedChange={(checked) => setSettings(prev => ({
-                      ...prev,
-                      auto_trade: checked as boolean
-                    }))}
-                  />
-                  <Label>Auto-trade (requires API keys)</Label>
+              <div className="space-y-2 pt-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="custom-pairs" className="text-sm font-medium">Custom Pairs (Direct Search)</Label>
+                  <Badge variant="secondary" className="text-[10px] h-5 opacity-70">Optional</Badge>
                 </div>
+                <Input
+                  id="custom-pairs"
+                  placeholder="e.g. BTC, ETH, PEPE, SOL"
+                  value={settings.custom_pairs}
+                  onChange={(e) => setSettings(prev => ({
+                    ...prev,
+                    custom_pairs: e.target.value
+                  }))}
+                  className="h-9"
+                />
+                <p className="text-[10px] text-muted-foreground italic">
+                  Focus scan on specific assets (comma separated). Ideal for exotic triangles.
+                </p>
+              </div>
 
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    checked={settings.enable_ml_filtering}
-                    onCheckedChange={(checked) => setSettings(prev => ({
-                      ...prev,
-                      enable_ml_filtering: checked as boolean
-                    }))}
-                  />
-                  <Label className="flex items-center gap-2">
-                    <span className="bg-gradient-to-r from-purple-400 to-pink-600 bg-clip-text text-transparent font-bold">
-                      AI Enhanced Filtering
-                    </span>
-                    <Badge variant="outline" className="text-[10px] h-5 px-1 border-purple-500/50 text-purple-500">BETA</Badge>
-                  </Label>
-                </div>
+              <div className="flex items-center space-x-2 pt-2">
+                <Checkbox
+                  id="show-only-profitable"
+                  checked={settings.filter_profitable}
+                  onCheckedChange={(checked) => setSettings(prev => ({
+                    ...prev,
+                    filter_profitable: checked as boolean
+                  }))}
+                />
+                <Label htmlFor="show-only-profitable" className="text-sm">Show only profitable</Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="auto-trade-enable"
+                  checked={settings.auto_trade}
+                  onCheckedChange={(checked) => setSettings(prev => ({
+                    ...prev,
+                    auto_trade: checked as boolean
+                  }))}
+                />
+                <Label htmlFor="auto-trade-enable" className="text-sm">Auto-trade (requires API keys)</Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="ml-enable"
+                  checked={settings.enable_ml_filtering}
+                  onCheckedChange={(checked) => setSettings(prev => ({
+                    ...prev,
+                    enable_ml_filtering: checked as boolean
+                  }))}
+                />
+                <Label htmlFor="ml-enable" className="flex items-center gap-2 text-sm">
+                  <span className="bg-gradient-to-r from-purple-400 to-pink-600 bg-clip-text text-transparent font-bold">
+                    AI Enhanced Filtering
+                  </span>
+                  <Badge variant="outline" className="text-[10px] h-5 px-1 border-purple-500/50 text-purple-500">BETA</Badge>
+                </Label>
               </div>
             </CardContent>
           </Card>
@@ -371,6 +386,6 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
           </Button>
         </div>
       </DialogContent>
-    </Dialog>
+    </Dialog >
   );
 };

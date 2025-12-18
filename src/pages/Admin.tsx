@@ -9,7 +9,8 @@ import { AdminSubscriptionList } from '@/components/admin/AdminSubscriptionList'
 import { AdminUsersList } from '@/components/admin/AdminUsersList';
 import { AdminSystemMaintenance } from '@/components/admin/AdminSystemMaintenance';
 import { AdminPlanManagement } from '@/components/admin/AdminPlanManagement';
-import { ArrowLeft, Settings, CreditCard, Users, Shield, UserCog, Wrench, Package } from 'lucide-react';
+import { AdminSystemConfig } from '@/components/admin/AdminSystemConfig';
+import { ArrowLeft, Settings, CreditCard, Users, Shield, UserCog, Wrench, Package, Cpu } from 'lucide-react';
 
 const Admin = () => {
   const { user, loading: authLoading, signOut } = useAuth();
@@ -84,7 +85,7 @@ const Admin = () => {
 
       <main className="container mx-auto px-4 py-8">
         <Tabs defaultValue="users" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="users" className="flex items-center gap-2">
               <UserCog className="h-4 w-4" />
               All Users
@@ -104,6 +105,10 @@ const Admin = () => {
             <TabsTrigger value="maintenance" className="flex items-center gap-2">
               <Wrench className="h-4 w-4" />
               Maintenance
+            </TabsTrigger>
+            <TabsTrigger value="config" className="flex items-center gap-2">
+              <Cpu className="h-4 w-4" />
+              System Config
             </TabsTrigger>
           </TabsList>
 
@@ -125,6 +130,10 @@ const Admin = () => {
 
           <TabsContent value="maintenance">
             <AdminSystemMaintenance />
+          </TabsContent>
+
+          <TabsContent value="config">
+            <AdminSystemConfig />
           </TabsContent>
         </Tabs>
       </main>
