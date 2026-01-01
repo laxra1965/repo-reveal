@@ -108,26 +108,33 @@ export function EnabledExchangesManager() {
     }
 
     return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Enabled Exchanges</CardTitle>
+        <Card className="glass-card border-primary/10">
+            <CardHeader className="border-b border-primary/5">
+                <CardTitle className="text-sm font-black uppercase tracking-widest">Exchange Network</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                    Select which exchanges to monitor for arbitrage opportunities
+            <CardContent className="space-y-6 pt-6">
+                <p className="text-[11px] text-muted-foreground opacity-70 font-medium">
+                    Configure active surveillance nodes
                 </p>
 
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 gap-3">
                     {AVAILABLE_EXCHANGES.map((exchange) => (
-                        <div key={exchange.value} className="flex items-center space-x-2">
+                        <div
+                            key={exchange.value}
+                            className={`flex items-center space-x-3 p-3 rounded-lg border transition-all ${enabledExchanges.includes(exchange.value)
+                                    ? 'border-primary/30 bg-primary/5'
+                                    : 'border-primary/10 bg-muted/20'
+                                }`}
+                        >
                             <Checkbox
                                 id={`exchange-${exchange.value}`}
                                 checked={enabledExchanges.includes(exchange.value)}
                                 onCheckedChange={() => handleToggleExchange(exchange.value)}
+                                className="data-[state=checked]:bg-primary"
                             />
                             <Label
                                 htmlFor={`exchange-${exchange.value}`}
-                                className="text-sm font-normal cursor-pointer"
+                                className="text-xs font-bold cursor-pointer uppercase tracking-wider"
                             >
                                 {exchange.label}
                             </Label>
@@ -136,9 +143,13 @@ export function EnabledExchangesManager() {
                 </div>
 
                 <div className="flex justify-end pt-2">
-                    <Button onClick={handleSave} disabled={saving}>
-                        <Save className="h-4 w-4 mr-2" />
-                        {saving ? 'Saving...' : 'Save Changes'}
+                    <Button
+                        onClick={handleSave}
+                        disabled={saving}
+                        className="premium-gradient text-black font-bold text-[10px] uppercase tracking-wider shadow-lg shadow-primary/20"
+                    >
+                        <Save className="h-3 w-3 mr-2" />
+                        {saving ? 'Syncing...' : 'Apply Config'}
                     </Button>
                 </div>
             </CardContent>

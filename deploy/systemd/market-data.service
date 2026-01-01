@@ -1,0 +1,18 @@
+[Unit]
+Description=Market Data Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/repo-reveal/services/market-data
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=10
+StandardOutput=append:/var/log/repo-reveal/market-data.log
+StandardError=append:/var/log/repo-reveal/market-data.error.log
+Environment=NODE_ENV=production
+Environment=RUNTIME=vps
+
+[Install]
+WantedBy=multi-user.target

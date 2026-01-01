@@ -100,6 +100,33 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    background-image: 
+      radial-gradient(at 0% 0%, hsla(222, 47%, 11%, 0.05) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, hsla(222, 47%, 11%, 0.05) 0px, transparent 50%);
+    min-height: 100vh;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-card/60 backdrop-blur-lg border border-white/10 shadow-xl;
+  }
+
+  .premium-gradient {
+    @apply bg-gradient-to-br from-primary via-primary/90 to-primary/80;
+  }
+
+  .text-glow {
+    text-shadow: 0 0 10px rgba(var(--primary), 0.5);
+  }
+
+  .animate-in {
+    animation: fadeIn 0.5s ease-out forwards;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 }

@@ -286,93 +286,64 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
   };
 
   return (
-    <Card className={`border-l-4 ${rank === 1 ? 'border-l-yellow-500 bg-gradient-to-r from-yellow-50/30 to-transparent dark:from-yellow-900/10' : rank <= 3 ? 'border-l-green-500' : 'border-l-primary'} transition-all duration-300 hover:shadow-lg`}>
-      <CardHeader className="pb-3">
-        <div className="flex justify-between items-start">
-          <div className="flex-1">
-            {/* Rank and Title */}
-            <div className="flex items-center gap-2 mb-2 flex-wrap">
-              <Badge variant={getRankBadgeVariant()} className="flex items-center gap-1">
-                {getRankIcon()}
-                #{rank}
-              </Badge>
-              {rank === 1 && <Badge variant="default" className="bg-yellow-500 text-black">TOP</Badge>}
-              {getSignalBadge()}
+    <Card className={`glass-card relative overflow-hidden transition-all duration-300 hover:shadow-2xl hover:scale-[1.01] ${rank === 1 ? 'border-primary/40 ring-1 ring-primary/20' : 'border-primary/10'
+      }`}>
+      {rank === 1 && (
+        <div className="absolute top-0 right-0">
+          <Badge className="rounded-none rounded-bl-lg premium-gradient text-black font-black uppercase text-[10px] tracking-tighter px-3 h-6">
+            Elite Loop
+          </Badge>
+        </div>
+      )}
 
-              {/* Quality Score Badge */}
-              {opportunity.quality_score && opportunity.quality_score >= 50 && (
-                <Badge variant="default" className="bg-purple-500 text-white">
-                  ⭐ Premium Quality
-                </Badge>
-              )}
-              {opportunity.quality_score && opportunity.quality_score >= 35 && opportunity.quality_score < 50 && (
-                <Badge variant="outline" className="text-purple-600 border-purple-300">
-                  ✨ High Quality
-                </Badge>
-              )}
+      <CardHeader className="pb-3 border-b border-primary/5">
+        <div className="flex justify-between items-start gap-4">
+          <div className="space-y-3 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="flex items-center justify-center w-6 h-6 rounded bg-primary text-black font-black text-[10px]">
+                {rank}
+              </span>
+              <div className="flex gap-2">
+                {getSignalBadge()}
+                {opportunity.quality_score && (
+                  <Badge variant="outline" className="border-purple-500/30 text-purple-400 bg-purple-500/5 text-[10px] uppercase font-bold px-2 h-5">
+                    Score: {opportunity.quality_score.toFixed(0)}
+                  </Badge>
+                )}
+              </div>
             </div>
 
-            <CardTitle className="text-lg flex items-center gap-2">
-              <span className="font-mono text-base">
-                {opportunity.base_symbol} → {opportunity.intermediate_symbol} → {opportunity.quote_symbol}
-              </span>
-              <Badge variant="outline" className="text-xs font-normal">
-                {opportunity.type === 'cross_exchange' ? 'Cross-Exchange Arbitrage' : 'Triangular Arbitrage'}
-              </Badge>
+            <CardTitle className="text-2xl font-black tracking-tighter flex items-center gap-3">
+              <span className="text-primary">{opportunity.base_symbol}</span>
+              <ArrowRight className="h-5 w-5 text-muted-foreground opacity-50" />
+              <span>{opportunity.intermediate_symbol}</span>
+              <ArrowRight className="h-5 w-5 text-muted-foreground opacity-50" />
+              <span className="text-primary">{opportunity.quote_symbol}</span>
             </CardTitle>
 
-            {/* Clear Trading Path */}
-            <div className="mt-2 p-2 bg-muted/30 rounded text-sm">
-              <div className="font-medium text-muted-foreground mb-1">Trading Path:</div>
-              <div className="font-mono text-sm">
-                1. {opportunity.base_symbol} → {opportunity.intermediate_symbol} ({opportunity.step1_action})
+            <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-muted/50 border border-primary/5">
+                <span className="opacity-50">Primary:</span>
+                <span className="text-foreground">{formatExchange(opportunity.exchange1)}</span>
               </div>
-              <div className="font-mono text-sm">
-                2. {opportunity.intermediate_symbol} → {opportunity.quote_symbol} ({opportunity.step2_action})
+              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-muted/50 border border-primary/5">
+                <span className="opacity-50">Bridge:</span>
+                <span className="text-foreground">{formatExchange(opportunity.exchange2)}</span>
               </div>
-              <div className="font-mono text-sm">
-                3. {opportunity.quote_symbol} → {opportunity.base_symbol} ({opportunity.step3_action})
-              </div>
-            </div>
-
-            {/* Exchange Path */}
-            <div className="flex items-center gap-2 mt-2 flex-wrap">
-              <Badge variant="outline" className="text-xs">
-                {formatExchange(opportunity.exchange1)}
-              </Badge>
-              <ArrowRight className="h-3 w-3 text-muted-foreground" />
-              <Badge variant="outline" className="text-xs">
-                {formatExchange(opportunity.exchange2)}
-              </Badge>
-              <ArrowRight className="h-3 w-3 text-muted-foreground" />
-              <Badge variant="outline" className="text-xs">
-                {formatExchange(opportunity.exchange3)}
-              </Badge>
-              {opportunity.profit_percent > 1 && (
-                <Badge variant="destructive" className="ml-2 animate-pulse">
-                  HIGH PROFIT
-                </Badge>
-              )}
             </div>
           </div>
 
-          {/* Profit Display */}
-          <div className="text-right">
-            <div className={`text-2xl font-bold ${opportunity.profit_percent > 0 ? 'text-green-500' : 'text-red-500'
+          <div className="text-right flex flex-col items-end gap-1">
+            <div className={`text-4xl font-black tracking-tighter tabular-nums ${opportunity.profit_percent > 0 ? 'text-green-500 text-glow' : 'text-red-500'
               }`}>
-              {opportunity.profit_percent > 0 ? '+' : ''}{opportunity.profit_percent.toFixed(4)}%
+              {opportunity.profit_percent > 0 ? '+' : ''}{opportunity.profit_percent.toFixed(3)}%
             </div>
-            <div className="text-sm text-muted-foreground">
-              {opportunity.profit_percent > 0 ? '+' : ''}{formatCurrency(opportunity.profit_amount, 4)} {opportunity.quote_symbol}
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Expected Yield:</span>
+              <span className="text-sm font-mono font-bold text-foreground">
+                ${(opportunity.profit_amount * 1).toFixed(2)}
+              </span>
             </div>
-            <div className="text-xs text-muted-foreground mt-1">
-              ${Math.abs(opportunity.profit_amount * opportunity.start_amount).toFixed(2)} est.
-            </div>
-            {opportunity.profit_percent < 0 && (
-              <Badge variant="destructive" className="mt-1 text-xs">
-                NEGATIVE SPREAD
-              </Badge>
-            )}
           </div>
         </div>
       </CardHeader>

@@ -18,22 +18,31 @@ export const AdminSystemMaintenance = () => {
       // Calculate 24 hours ago
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-      // Delete old opportunities
-      const { error, count } = await supabase
+      // First count matches (RLS workaround)
+      const { count: existingCount, error: countError } = await supabase
         .from('arbitrage_opportunities')
-        .delete({ count: 'exact' })
+        .select('*', { count: 'exact', head: true })
+        .lt('detected_at', twentyFourHoursAgo);
+
+      if (countError) throw countError;
+
+      const recordsToDelete = existingCount || 0;
+
+      // Then delete old opportunities
+      const { error } = await supabase
+        .from('arbitrage_opportunities')
+        .delete()
         .lt('detected_at', twentyFourHoursAgo);
 
       if (error) {
         throw error;
       }
 
-      const deletedCount = count || 0;
-      setLastCleanup({ count: deletedCount, timestamp: new Date() });
+      setLastCleanup({ count: recordsToDelete, timestamp: new Date() });
 
       toast({
         title: "Cleanup Complete",
-        description: `Successfully deleted ${deletedCount} old arbitrage opportunities`,
+        description: `Successfully deleted ${recordsToDelete} old arbitrage opportunities`,
       });
     } catch (error: any) {
       console.error('Error cleaning up opportunities:', error);
@@ -100,7 +109,7 @@ export const AdminSystemMaintenance = () => {
         <div className="border rounded-lg p-4 bg-muted/30">
           <h4 className="font-medium text-sm mb-2">Automatic Cleanup</h4>
           <p className="text-sm text-muted-foreground">
-            The system automatically cleans up expired opportunities during scans. 
+            The system automatically cleans up expired opportunities during scans.
             This manual cleanup is useful for immediate maintenance needs.
           </p>
         </div>

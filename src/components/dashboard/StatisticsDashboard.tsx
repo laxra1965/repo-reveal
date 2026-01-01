@@ -1,9 +1,30 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, DollarSign, Activity, BarChart3, ChevronDown, ChevronUp } from "lucide-react";
+import { TrendingUp, DollarSign, Activity, BarChart3, ChevronDown, ChevronUp, Trash2, AlertTriangle, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { invokeFunction } from "@/lib/functionsInvoke";
 
 interface ExchangeStats {
   exchange: string;
@@ -17,6 +38,8 @@ interface ExchangeStats {
 
 export const StatisticsDashboard = () => {
   const { user } = useAuth();
+  const { isAdmin } = useIsAdmin();
+  const { toast } = useToast();
   const [stats, setStats] = useState<ExchangeStats[]>([]);
   const [totalStats, setTotalStats] = useState({
     totalOpportunities: 0,
@@ -27,128 +50,141 @@ export const StatisticsDashboard = () => {
   });
   const [loading, setLoading] = useState(true);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [clearDays, setClearDays] = useState(30);
+
+  // Fetch stats function (extracted for reuse)
+  const fetchStats = async () => {
+    if (!user) return;
+
+    try {
+      setLoading(true);
+
+      // Fetch all opportunities for the user
+      const { data: opportunities, error } = await supabase
+        .from('arbitrage_opportunities')
+        .select('*')
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      if (!opportunities || opportunities.length === 0) {
+        setStats([]);
+        setTotalStats({
+          totalOpportunities: 0,
+          avgProfit: 0,
+          totalVolume: 0,
+          successRate: 0,
+          maxProfit: 0
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Calculate statistics by exchange
+      const exchangeMap = new Map<string, {
+        count: number;
+        totalProfit: number;
+        totalVolume: number;
+        profitableCount: number;
+        totalQualityScore: number;
+        maxProfit: number;
+      }>();
+
+      let totalOpps = 0;
+      let totalProfitSum = 0;
+      let totalVolumeSum = 0;
+      let totalProfitable = 0;
+      let globalMaxProfit = 0;
+
+      opportunities.forEach(opp => {
+        const exchanges = [opp.exchange1, opp.exchange2, opp.exchange3]
+          .filter((val, idx, arr) => arr.indexOf(val) === idx);
+
+        const profit = Number(opp.profit_percent) || 0;
+        const volume = Number(opp.start_amount) || 0;
+        const isProfitable = profit > 0;
+        const qualityScore = Number(opp.quality_score ?? 0);
+
+        totalOpps++;
+        totalProfitSum += profit;
+        totalVolumeSum += volume;
+        if (isProfitable) totalProfitable++;
+
+        // Track global max profit
+        if (Math.abs(profit) > globalMaxProfit) {
+          globalMaxProfit = Math.abs(profit);
+        }
+
+        exchanges.forEach(exchange => {
+          if (!exchange) return;
+
+          if (!exchangeMap.has(exchange)) {
+            exchangeMap.set(exchange, {
+              count: 0,
+              totalProfit: 0,
+              totalVolume: 0,
+              profitableCount: 0,
+              totalQualityScore: 0,
+              maxProfit: 0
+            });
+          }
+
+          const stat = exchangeMap.get(exchange)!;
+          stat.count++;
+          stat.totalProfit += profit;
+          stat.totalVolume += volume;
+          if (isProfitable) stat.profitableCount++;
+          stat.totalQualityScore += qualityScore;
+
+          // Track exchange-specific max profit
+          if (Math.abs(profit) > stat.maxProfit) {
+            stat.maxProfit = Math.abs(profit);
+          }
+        });
+      });
+
+      // Convert to array and calculate averages
+      const exchangeStats: ExchangeStats[] = Array.from(exchangeMap.entries()).map(([exchange, data]) => ({
+        exchange: exchange.toUpperCase(),
+        totalOpportunities: data.count,
+        avgProfit: data.count > 0 ? data.totalProfit / data.count : 0,
+        totalVolume: data.totalVolume,
+        successRate: data.count > 0 ? (data.profitableCount / data.count) * 100 : 0,
+        avgQualityScore: data.count > 0 ? data.totalQualityScore / data.count : 0,
+        maxProfit: data.maxProfit
+      })).sort((a, b) => b.totalOpportunities - a.totalOpportunities);
+
+      setStats(exchangeStats);
+      setTotalStats({
+        totalOpportunities: totalOpps,
+        avgProfit: totalOpps > 0 ? totalProfitSum / totalOpps : 0,
+        totalVolume: totalVolumeSum,
+        successRate: totalOpps > 0 ? (totalProfitable / totalOpps) * 100 : 0,
+        maxProfit: globalMaxProfit
+      });
+    } catch (error) {
+      console.error('Error fetching statistics:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!user) return;
-    
-    const fetchStats = async () => {
-      try {
-        setLoading(true);
-        
-        // Fetch all opportunities for the user
-        const { data: opportunities, error } = await supabase
-          .from('arbitrage_opportunities')
-          .select('*')
-          .eq('user_id', user.id);
-
-        if (error) throw error;
-
-        if (!opportunities || opportunities.length === 0) {
-          setLoading(false);
-          return;
-        }
-
-        // Calculate statistics by exchange
-        const exchangeMap = new Map<string, {
-          count: number;
-          totalProfit: number;
-          totalVolume: number;
-          profitableCount: number;
-          totalQualityScore: number;
-          maxProfit: number;
-        }>();
-
-        let totalOpps = 0;
-        let totalProfitSum = 0;
-        let totalVolumeSum = 0;
-        let totalProfitable = 0;
-        let globalMaxProfit = 0;
-
-        opportunities.forEach(opp => {
-          const exchanges = [opp.exchange1, opp.exchange2, opp.exchange3]
-            .filter((val, idx, arr) => arr.indexOf(val) === idx);
-          
-          const profit = Number(opp.profit_percent) || 0;
-          const volume = Number(opp.start_amount) || 0;
-          const isProfitable = profit > 0;
-          const qualityScore = Number(opp.quality_score ?? 0);
-
-          totalOpps++;
-          totalProfitSum += profit;
-          totalVolumeSum += volume;
-          if (isProfitable) totalProfitable++;
-          
-          // Track global max profit
-          if (Math.abs(profit) > globalMaxProfit) {
-            globalMaxProfit = Math.abs(profit);
-          }
-
-          exchanges.forEach(exchange => {
-            if (!exchange) return;
-            
-            if (!exchangeMap.has(exchange)) {
-              exchangeMap.set(exchange, {
-                count: 0,
-                totalProfit: 0,
-                totalVolume: 0,
-                profitableCount: 0,
-                totalQualityScore: 0,
-                maxProfit: 0
-              });
-            }
-
-            const stat = exchangeMap.get(exchange)!;
-            stat.count++;
-            stat.totalProfit += profit;
-            stat.totalVolume += volume;
-            if (isProfitable) stat.profitableCount++;
-            stat.totalQualityScore += qualityScore;
-            
-            // Track exchange-specific max profit
-            if (Math.abs(profit) > stat.maxProfit) {
-              stat.maxProfit = Math.abs(profit);
-            }
-          });
-        });
-
-        // Convert to array and calculate averages
-        const exchangeStats: ExchangeStats[] = Array.from(exchangeMap.entries()).map(([exchange, data]) => ({
-          exchange: exchange.toUpperCase(),
-          totalOpportunities: data.count,
-          avgProfit: data.count > 0 ? data.totalProfit / data.count : 0,
-          totalVolume: data.totalVolume,
-          successRate: data.count > 0 ? (data.profitableCount / data.count) * 100 : 0,
-          avgQualityScore: data.count > 0 ? data.totalQualityScore / data.count : 0,
-          maxProfit: data.maxProfit
-        })).sort((a, b) => b.totalOpportunities - a.totalOpportunities);
-
-        setStats(exchangeStats);
-        setTotalStats({
-          totalOpportunities: totalOpps,
-          avgProfit: totalOpps > 0 ? totalProfitSum / totalOpps : 0,
-          totalVolume: totalVolumeSum,
-          successRate: totalOpps > 0 ? (totalProfitable / totalOpps) * 100 : 0,
-          maxProfit: globalMaxProfit
-        });
-      } catch (error) {
-        console.error('Error fetching statistics:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
 
     fetchStats();
-    
+
     // Set up real-time subscription
     const channel = supabase
       .channel('stats-updates')
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
+      .on('postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
           table: 'arbitrage_opportunities',
           filter: `user_id=eq.${user.id}`
-        }, 
+        },
         () => {
           fetchStats();
         }
@@ -159,6 +195,177 @@ export const StatisticsDashboard = () => {
       supabase.removeChannel(channel);
     };
   }, [user]);
+
+  // Clear data function - uses direct Supabase queries instead of Edge Function
+  const clearData = async (action: string, days?: number) => {
+    if (!user) return;
+
+    setClearing(true);
+    try {
+      let deletedCount = 0;
+      let details: Record<string, number> = {};
+
+      switch (action) {
+        case 'clear_opportunities_old': {
+          const cutoffDate = new Date();
+          cutoffDate.setDate(cutoffDate.getDate() - (days || clearDays));
+
+          const { count } = await supabase
+            .from('arbitrage_opportunities')
+            .delete()
+            .eq('user_id', user.id)
+            .lt('detected_at', cutoffDate.toISOString())
+            .select('*', { count: 'exact', head: true });
+
+          deletedCount = count || 0;
+          details.opportunities = deletedCount;
+          break;
+        }
+
+        case 'clear_opportunities_all': {
+          console.log(`Attempting to delete opportunities (Admin: ${isAdmin})`);
+
+          // First, check how many opportunities exist
+          let countQuery = supabase.from('arbitrage_opportunities').select('id');
+          // Only filter by user_id if NOT admin
+          if (!isAdmin) {
+            countQuery = countQuery.eq('user_id', user.id);
+          }
+          const { data: existingOpps, error: checkError } = await countQuery;
+
+          console.log('Existing opportunities:', existingOpps?.length);
+
+          if (checkError) {
+            console.error('Error checking opportunities:', checkError);
+            throw checkError;
+          }
+
+          const recordsToDelete = existingOpps?.length || 0;
+
+          // Then delete all
+          let deleteQuery = supabase.from('arbitrage_opportunities').delete();
+          if (!isAdmin) {
+            deleteQuery = deleteQuery.eq('user_id', user.id);
+          }
+          const { error } = await deleteQuery;
+
+          console.log('Delete completed, error:', error);
+
+          if (error) {
+            console.error('Delete error:', error);
+            throw error;
+          }
+
+          deletedCount = recordsToDelete;
+          details.opportunities = deletedCount;
+          break;
+        }
+
+
+        case 'clear_scan_logs_old': {
+          const cutoffDate = new Date();
+          cutoffDate.setDate(cutoffDate.getDate() - (days || clearDays));
+
+          const { count } = await supabase
+            .from('scanner_logs')
+            .delete()
+            .eq('user_id', user.id)
+            .lt('created_at', cutoffDate.toISOString())
+            .select('*', { count: 'exact', head: true });
+
+          deletedCount = count || 0;
+          details.scan_logs = deletedCount;
+          break;
+        }
+
+        case 'clear_scan_logs_all': {
+          let countQuery = supabase.from('scanner_logs').select('id');
+          if (!isAdmin) {
+            countQuery = countQuery.eq('user_id', user.id);
+          }
+          const { data: existingLogs } = await countQuery;
+
+          const recordsToDelete = existingLogs?.length || 0;
+
+          let deleteQuery = supabase.from('scanner_logs').delete();
+          if (!isAdmin) {
+            deleteQuery = deleteQuery.eq('user_id', user.id);
+          }
+          const { error } = await deleteQuery;
+
+          if (error) throw error;
+
+          deletedCount = recordsToDelete;
+          details.scan_logs = deletedCount;
+          break;
+        }
+
+        case 'clear_all': {
+          // Count opportunities
+          let oppCountQuery = supabase.from('arbitrage_opportunities').select('id');
+          if (!isAdmin) oppCountQuery = oppCountQuery.eq('user_id', user.id);
+          const { data: opps } = await oppCountQuery;
+          const oppCount = opps?.length || 0;
+
+          // Count logs
+          let logCountQuery = supabase.from('scanner_logs').select('id');
+          if (!isAdmin) logCountQuery = logCountQuery.eq('user_id', user.id);
+          const { data: logs } = await logCountQuery;
+          const logCount = logs?.length || 0;
+
+          // Delete opportunities
+          let delOppQuery = supabase.from('arbitrage_opportunities').delete();
+          if (!isAdmin) delOppQuery = delOppQuery.eq('user_id', user.id);
+          await delOppQuery;
+
+          // Delete logs
+          let delLogQuery = supabase.from('scanner_logs').delete();
+          if (!isAdmin) delLogQuery = delLogQuery.eq('user_id', user.id);
+          await delLogQuery;
+
+          deletedCount = oppCount + logCount;
+          details.opportunities = oppCount;
+          details.scan_logs = logCount;
+          break;
+        }
+
+        default:
+          throw new Error('Invalid action');
+      }
+
+      // Immediately reset stats to show cleared state
+      setStats([]);
+      setTotalStats({
+        totalOpportunities: 0,
+        avgProfit: 0,
+        totalVolume: 0,
+        successRate: 0,
+        maxProfit: 0
+      });
+
+      // Then refresh stats after clearing
+      await fetchStats();
+
+      toast({
+        title: "Data Cleared",
+        description: `Successfully deleted ${deletedCount} item(s). ${details.opportunities ? `Opportunities: ${details.opportunities}` : ''} ${details.scan_logs ? `Logs: ${details.scan_logs}` : ''} Page will reload...`,
+      });
+
+      // Reload page after a short delay to show the toast
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+    } catch (error: any) {
+      console.error('Clear data error:', error);
+      toast({
+        title: "Clear Data Error",
+        description: error.message || "Failed to clear data",
+        variant: "destructive",
+      });
+    } finally {
+      setClearing(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -181,69 +388,178 @@ export const StatisticsDashboard = () => {
 
   return (
     <div className="space-y-4">
+      {/* Clear Data Controls */}
+      <Card>
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Trash2 className="h-4 w-4" />
+              Data Management
+            </CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-2 items-center">
+            <span className="text-sm text-muted-foreground">Quick Actions:</span>
+
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm" disabled={clearing || totalStats.totalOpportunities === 0}>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Clear Opportunities
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Clear All Opportunities</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete ALL opportunities ({totalStats.totalOpportunities}).
+                    This action cannot be undone. Are you sure you want to continue?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => clearData('clear_opportunities_all')}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Clear All
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm" disabled={clearing}>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Clear Scan Logs
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Clear All Scan Logs</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete all scan logs.
+                    This action cannot be undone. Are you sure you want to continue?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => clearData('clear_scan_logs_all')}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Clear
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm" disabled={clearing || totalStats.totalOpportunities === 0}>
+                  <AlertTriangle className="h-4 w-4 mr-2" />
+                  Clear All Data
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+                    <AlertTriangle className="h-5 w-5" />
+                    Clear All Data
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    <div className="space-y-2">
+                      <p>This will permanently delete:</p>
+                      <ul className="list-disc list-inside space-y-1 ml-4">
+                        <li>All opportunities ({totalStats.totalOpportunities})</li>
+                        <li>All scan logs</li>
+                      </ul>
+                      <p className="font-semibold text-destructive mt-2">
+                        This action cannot be undone!
+                      </p>
+                    </div>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => clearData('clear_all')}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Clear All
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Overall Statistics - Always Visible */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        <Card>
+        <Card className="glass-card border-primary/10">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Opportunities</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Opportunities</CardTitle>
+            <Activity className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalStats.totalOpportunities}</div>
-            <p className="text-xs text-muted-foreground">
-              Detected arbitrage opportunities
+            <div className="text-3xl font-bold tracking-tighter">{totalStats.totalOpportunities}</div>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Live scan depth
             </p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="glass-card border-primary/10">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Success Rate</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalStats.successRate.toFixed(2)}%</div>
-            <p className="text-xs text-muted-foreground">
-              Profitable opportunities
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Average Profit</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalStats.avgProfit.toFixed(4)}%</div>
-            <p className="text-xs text-muted-foreground">
-              Per opportunity
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Max Profit</CardTitle>
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Success Rate</CardTitle>
             <TrendingUp className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-500">{totalStats.maxProfit.toFixed(4)}%</div>
-            <p className="text-xs text-muted-foreground">
-              Highest detected profit
+            <div className="text-3xl font-bold tracking-tighter text-green-500">{totalStats.successRate.toFixed(1)}%</div>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Profitable hit rate
             </p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="glass-card border-primary/10">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Volume</CardTitle>
-            <BarChart3 className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Avg Profit</CardTitle>
+            <Zap className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${totalStats.totalVolume.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">
-              Scanned trading volume
+            <div className="text-3xl font-bold tracking-tighter text-blue-500">{totalStats.avgProfit.toFixed(3)}%</div>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Mean yield per loop
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="glass-card border-primary/10">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Max Profit</CardTitle>
+            <DollarSign className="h-4 w-4 text-purple-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold tracking-tighter text-purple-600">{totalStats.maxProfit.toFixed(3)}%</div>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Peak arbitrage spread
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="glass-card border-primary/10 overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Market Volume</CardTitle>
+            <BarChart3 className="h-4 w-4 text-orange-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold tracking-tighter">${totalStats.totalVolume > 1000 ? (totalStats.totalVolume / 1000).toFixed(1) + 'k' : totalStats.totalVolume.toFixed(0)}</div>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Total scanned liquidity
             </p>
           </CardContent>
         </Card>
@@ -318,7 +634,7 @@ export const StatisticsDashboard = () => {
                         {stat.successRate.toFixed(1)}% success
                       </span>
                     </div>
-                    
+
                     <div className="grid grid-cols-4 gap-4 text-sm">
                       <div>
                         <p className="text-muted-foreground text-xs">Avg Profit</p>
@@ -337,10 +653,10 @@ export const StatisticsDashboard = () => {
                         <p className="font-medium">{stat.totalOpportunities}</p>
                       </div>
                     </div>
-                    
+
                     <div className="w-full bg-secondary rounded-full h-2">
-                      <div 
-                        className="bg-primary h-2 rounded-full transition-all" 
+                      <div
+                        className="bg-primary h-2 rounded-full transition-all"
                         style={{ width: `${Math.min(stat.successRate, 100)}%` }}
                       />
                     </div>

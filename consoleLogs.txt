@@ -1,0 +1,184 @@
+chunk-TRNWTHID.js?v=2c30e7cb:21551 Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
+react-router-dom.js?v=2c30e7cb:4413 ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+warnOnce @ react-router-dom.js?v=2c30e7cb:4413
+react-router-dom.js?v=2c30e7cb:4413 ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+warnOnce @ react-router-dom.js?v=2c30e7cb:4413
+chunk-TRNWTHID.js?v=2c30e7cb:521 Warning: validateDOMNesting(...): <p> cannot appear as a descendant of <p>.
+    at p
+    at div
+    at p
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:230:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLB7SZKS.js?v=2c30e7cb:377:13
+    at http://localhost:8080/node_modules/.vite/deps/@radix-ui_react-alert-dialog.js?v=2c30e7cb:229:11
+    at _c7 (http://localhost:8080/src/components/ui/alert-dialog.tsx:94:72)
+    at div
+    at AlertDialogHeader (http://localhost:8080/src/components/ui/alert-dialog.tsx:63:30)
+    at Slottable22 (http://localhost:8080/node_modules/.vite/deps/@radix-ui_react-alert-dialog.js?v=2c30e7cb:89:26)
+    at div
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:230:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-YBZD3Y7V.js?v=2c30e7cb:61:7
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:140:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:117:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:230:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-Y4DSQVJ7.js?v=2c30e7cb:34:5
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLB7SZKS.js?v=2c30e7cb:329:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLB7SZKS.js?v=2c30e7cb:252:58
+    at Presence (http://localhost:8080/node_modules/.vite/deps/chunk-THLRNGUN.js?v=2c30e7cb:24:11)
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLB7SZKS.js?v=2c30e7cb:243:64
+    at Provider (http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:44:15)
+    at Provider (http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:23:13)
+    at http://localhost:8080/node_modules/.vite/deps/@radix-ui_react-alert-dialog.js?v=2c30e7cb:182:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:140:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:117:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:230:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-YBZD3Y7V.js?v=2c30e7cb:260:22
+    at Presence (http://localhost:8080/node_modules/.vite/deps/chunk-THLRNGUN.js?v=2c30e7cb:24:11)
+    at Provider (http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:44:15)
+    at DialogPortal (http://localhost:8080/node_modules/.vite/deps/chunk-PLB7SZKS.js?v=2c30e7cb:205:11)
+    at AlertDialogPortal (http://localhost:8080/node_modules/.vite/deps/@radix-ui_react-alert-dialog.js?v=2c30e7cb:163:11)
+    at _c1 (http://localhost:8080/src/components/ui/alert-dialog.tsx:39:68)
+    at Provider (http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:44:15)
+    at Dialog (http://localhost:8080/node_modules/.vite/deps/chunk-PLB7SZKS.js?v=2c30e7cb:145:5)
+    at AlertDialog (http://localhost:8080/node_modules/.vite/deps/@radix-ui_react-alert-dialog.js?v=2c30e7cb:147:11)
+    at div
+    at div
+    at _c8 (http://localhost:8080/src/components/ui/card.tsx:67:61)
+    at div
+    at _c (http://localhost:8080/src/components/ui/card.tsx:23:53)
+    at div
+    at StatisticsDashboard (http://localhost:8080/src/components/dashboard/StatisticsDashboard.tsx:32:22)
+    at main
+    at div
+    at Dashboard (http://localhost:8080/src/pages/Dashboard.tsx:36:53)
+    at RenderedRoute (http://localhost:8080/node_modules/.vite/deps/react-router-dom.js?v=2c30e7cb:4108:5)
+    at Routes (http://localhost:8080/node_modules/.vite/deps/react-router-dom.js?v=2c30e7cb:4578:5)
+    at Router (http://localhost:8080/node_modules/.vite/deps/react-router-dom.js?v=2c30e7cb:4521:15)
+    at BrowserRouter (http://localhost:8080/node_modules/.vite/deps/react-router-dom.js?v=2c30e7cb:5267:5)
+    at Provider (http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:44:15)
+    at TooltipProvider (http://localhost:8080/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=2c30e7cb:158:5)
+    at AuthProvider (http://localhost:8080/src/hooks/useAuth.tsx:34:32)
+    at ThemeProvider (http://localhost:8080/src/components/theme/ThemeProvider.tsx:28:33)
+    at QueryClientProvider (http://localhost:8080/node_modules/.vite/deps/@tanstack_react-query.js?v=2c30e7cb:3096:3)
+    at ErrorBoundary (http://localhost:8080/src/components/ErrorBoundary.tsx:133:9)
+    at App
+printWarning @ chunk-TRNWTHID.js?v=2c30e7cb:521
+chunk-TRNWTHID.js?v=2c30e7cb:521 Warning: validateDOMNesting(...): <ul> cannot appear as a descendant of <p>.
+    at ul
+    at div
+    at p
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:230:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLB7SZKS.js?v=2c30e7cb:377:13
+    at http://localhost:8080/node_modules/.vite/deps/@radix-ui_react-alert-dialog.js?v=2c30e7cb:229:11
+    at _c7 (http://localhost:8080/src/components/ui/alert-dialog.tsx:94:72)
+    at div
+    at AlertDialogHeader (http://localhost:8080/src/components/ui/alert-dialog.tsx:63:30)
+    at Slottable22 (http://localhost:8080/node_modules/.vite/deps/@radix-ui_react-alert-dialog.js?v=2c30e7cb:89:26)
+    at div
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:230:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-YBZD3Y7V.js?v=2c30e7cb:61:7
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:140:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:117:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:230:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-Y4DSQVJ7.js?v=2c30e7cb:34:5
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLB7SZKS.js?v=2c30e7cb:329:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLB7SZKS.js?v=2c30e7cb:252:58
+    at Presence (http://localhost:8080/node_modules/.vite/deps/chunk-THLRNGUN.js?v=2c30e7cb:24:11)
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLB7SZKS.js?v=2c30e7cb:243:64
+    at Provider (http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:44:15)
+    at Provider (http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:23:13)
+    at http://localhost:8080/node_modules/.vite/deps/@radix-ui_react-alert-dialog.js?v=2c30e7cb:182:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:140:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:117:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:230:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-YBZD3Y7V.js?v=2c30e7cb:260:22
+    at Presence (http://localhost:8080/node_modules/.vite/deps/chunk-THLRNGUN.js?v=2c30e7cb:24:11)
+    at Provider (http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:44:15)
+    at DialogPortal (http://localhost:8080/node_modules/.vite/deps/chunk-PLB7SZKS.js?v=2c30e7cb:205:11)
+    at AlertDialogPortal (http://localhost:8080/node_modules/.vite/deps/@radix-ui_react-alert-dialog.js?v=2c30e7cb:163:11)
+    at _c1 (http://localhost:8080/src/components/ui/alert-dialog.tsx:39:68)
+    at Provider (http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:44:15)
+    at Dialog (http://localhost:8080/node_modules/.vite/deps/chunk-PLB7SZKS.js?v=2c30e7cb:145:5)
+    at AlertDialog (http://localhost:8080/node_modules/.vite/deps/@radix-ui_react-alert-dialog.js?v=2c30e7cb:147:11)
+    at div
+    at div
+    at _c8 (http://localhost:8080/src/components/ui/card.tsx:67:61)
+    at div
+    at _c (http://localhost:8080/src/components/ui/card.tsx:23:53)
+    at div
+    at StatisticsDashboard (http://localhost:8080/src/components/dashboard/StatisticsDashboard.tsx:32:22)
+    at main
+    at div
+    at Dashboard (http://localhost:8080/src/pages/Dashboard.tsx:36:53)
+    at RenderedRoute (http://localhost:8080/node_modules/.vite/deps/react-router-dom.js?v=2c30e7cb:4108:5)
+    at Routes (http://localhost:8080/node_modules/.vite/deps/react-router-dom.js?v=2c30e7cb:4578:5)
+    at Router (http://localhost:8080/node_modules/.vite/deps/react-router-dom.js?v=2c30e7cb:4521:15)
+    at BrowserRouter (http://localhost:8080/node_modules/.vite/deps/react-router-dom.js?v=2c30e7cb:5267:5)
+    at Provider (http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:44:15)
+    at TooltipProvider (http://localhost:8080/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=2c30e7cb:158:5)
+    at AuthProvider (http://localhost:8080/src/hooks/useAuth.tsx:34:32)
+    at ThemeProvider (http://localhost:8080/src/components/theme/ThemeProvider.tsx:28:33)
+    at QueryClientProvider (http://localhost:8080/node_modules/.vite/deps/@tanstack_react-query.js?v=2c30e7cb:3096:3)
+    at ErrorBoundary (http://localhost:8080/src/components/ErrorBoundary.tsx:133:9)
+    at App
+printWarning @ chunk-TRNWTHID.js?v=2c30e7cb:521
+chunk-TRNWTHID.js?v=2c30e7cb:521 Warning: validateDOMNesting(...): <div> cannot appear as a descendant of <p>.
+    at div
+    at p
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:230:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLB7SZKS.js?v=2c30e7cb:377:13
+    at http://localhost:8080/node_modules/.vite/deps/@radix-ui_react-alert-dialog.js?v=2c30e7cb:229:11
+    at _c7 (http://localhost:8080/src/components/ui/alert-dialog.tsx:94:72)
+    at div
+    at AlertDialogHeader (http://localhost:8080/src/components/ui/alert-dialog.tsx:63:30)
+    at Slottable22 (http://localhost:8080/node_modules/.vite/deps/@radix-ui_react-alert-dialog.js?v=2c30e7cb:89:26)
+    at div
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:230:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-YBZD3Y7V.js?v=2c30e7cb:61:7
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:140:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:117:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:230:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-Y4DSQVJ7.js?v=2c30e7cb:34:5
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLB7SZKS.js?v=2c30e7cb:329:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLB7SZKS.js?v=2c30e7cb:252:58
+    at Presence (http://localhost:8080/node_modules/.vite/deps/chunk-THLRNGUN.js?v=2c30e7cb:24:11)
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLB7SZKS.js?v=2c30e7cb:243:64
+    at Provider (http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:44:15)
+    at Provider (http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:23:13)
+    at http://localhost:8080/node_modules/.vite/deps/@radix-ui_react-alert-dialog.js?v=2c30e7cb:182:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:140:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:117:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:230:13
+    at http://localhost:8080/node_modules/.vite/deps/chunk-YBZD3Y7V.js?v=2c30e7cb:260:22
+    at Presence (http://localhost:8080/node_modules/.vite/deps/chunk-THLRNGUN.js?v=2c30e7cb:24:11)
+    at Provider (http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:44:15)
+    at DialogPortal (http://localhost:8080/node_modules/.vite/deps/chunk-PLB7SZKS.js?v=2c30e7cb:205:11)
+    at AlertDialogPortal (http://localhost:8080/node_modules/.vite/deps/@radix-ui_react-alert-dialog.js?v=2c30e7cb:163:11)
+    at _c1 (http://localhost:8080/src/components/ui/alert-dialog.tsx:39:68)
+    at Provider (http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:44:15)
+    at Dialog (http://localhost:8080/node_modules/.vite/deps/chunk-PLB7SZKS.js?v=2c30e7cb:145:5)
+    at AlertDialog (http://localhost:8080/node_modules/.vite/deps/@radix-ui_react-alert-dialog.js?v=2c30e7cb:147:11)
+    at div
+    at div
+    at _c8 (http://localhost:8080/src/components/ui/card.tsx:67:61)
+    at div
+    at _c (http://localhost:8080/src/components/ui/card.tsx:23:53)
+    at div
+    at StatisticsDashboard (http://localhost:8080/src/components/dashboard/StatisticsDashboard.tsx:32:22)
+    at main
+    at div
+    at Dashboard (http://localhost:8080/src/pages/Dashboard.tsx:36:53)
+    at RenderedRoute (http://localhost:8080/node_modules/.vite/deps/react-router-dom.js?v=2c30e7cb:4108:5)
+    at Routes (http://localhost:8080/node_modules/.vite/deps/react-router-dom.js?v=2c30e7cb:4578:5)
+    at Router (http://localhost:8080/node_modules/.vite/deps/react-router-dom.js?v=2c30e7cb:4521:15)
+    at BrowserRouter (http://localhost:8080/node_modules/.vite/deps/react-router-dom.js?v=2c30e7cb:5267:5)
+    at Provider (http://localhost:8080/node_modules/.vite/deps/chunk-PLFUHG7M.js?v=2c30e7cb:44:15)
+    at TooltipProvider (http://localhost:8080/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=2c30e7cb:158:5)
+    at AuthProvider (http://localhost:8080/src/hooks/useAuth.tsx:34:32)
+    at ThemeProvider (http://localhost:8080/src/components/theme/ThemeProvider.tsx:28:33)
+    at QueryClientProvider (http://localhost:8080/node_modules/.vite/deps/@tanstack_react-query.js?v=2c30e7cb:3096:3)
+    at ErrorBoundary (http://localhost:8080/src/components/ErrorBoundary.tsx:133:9)
+    at App
+printWarning @ chunk-TRNWTHID.js?v=2c30e7cb:521
+StatisticsDashboard.tsx:224 Attempting to delete all opportunities for user: 5a75f909-7745-4be6-b562-811f9a28b52b
+StatisticsDashboard.tsx:232 Existing opportunities: 336
+StatisticsDashboard.tsx:247 Delete completed, error: null

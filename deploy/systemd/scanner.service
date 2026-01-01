@@ -1,0 +1,18 @@
+[Unit]
+Description=Scanner Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/repo-reveal/services/scanner
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=10
+StandardOutput=append:/var/log/repo-reveal/scanner.log
+StandardError=append:/var/log/repo-reveal/scanner.error.log
+Environment=NODE_ENV=production
+Environment=RUNTIME=vps
+
+[Install]
+WantedBy=multi-user.target

@@ -15,7 +15,11 @@ AND a.exchange2 = b.exchange2
 AND a.exchange3 = b.exchange3
 AND a.type = b.type;
 
--- Now add the unique constraint
+-- Drop the old unique constraint if it exists (from migration 20251103063904)
+ALTER TABLE public.arbitrage_opportunities
+DROP CONSTRAINT IF EXISTS arbitrage_opportunities_unique;
+
+-- Now add the new unique constraint
 ALTER TABLE public.arbitrage_opportunities
 ADD CONSTRAINT arbitrage_opportunities_unique_path 
 UNIQUE (user_id, base_symbol, quote_symbol, intermediate_symbol, exchange1, exchange2, exchange3, type);

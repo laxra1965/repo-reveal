@@ -32,7 +32,7 @@ interface EncryptRequest {
     userId?: string;
 }
 
-serve(async (req) => {
+async function handler(req: Request): Promise<Response> {
     if (req.method === 'OPTIONS') {
         return new Response(null, { headers: corsHeaders });
     }
@@ -42,7 +42,18 @@ serve(async (req) => {
         const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
         const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-        const { action, data, credentialId, userId }: EncryptRequest = await req.json();
+        const {
+            action,
+            data,
+            credentialId,
+            userId,
+            apiKey,
+            apiSecret,
+            apiPassphrase,
+            encryptedKey,
+            encryptedSecret,
+            encryptedPassphrase
+        }: EncryptRequest = await req.json();
 
         switch (action) {
             case 'encrypt': {
@@ -151,7 +162,15 @@ serve(async (req) => {
             }
         );
     }
-});
+}
+
+// Export default handler for unified server
+export default handler;
+
+// For Supabase Edge Functions compatibility
+if (typeof Deno !== 'undefined' && Deno.serve) {
+    serve(handler);
+}
 
 /**
  * Encrypt data using Supabase Vault

@@ -6,20 +6,29 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import Index from "./pages/Index";
-import Dashboard from "./pages/Dashboard";
-import Auth from "./pages/Auth";
-import AdminAuth from "./pages/AdminAuth";
-import Payment from "./pages/Payment";
-import Admin from "./pages/Admin";
-import NotFound from "./pages/NotFound";
-import Pricing from "./pages/Pricing";
-import AdminApprove from "./pages/AdminApprove";
-import Profile from "./pages/Profile";
-import TradeHistory from "./pages/TradeHistory";
-import AutoTrade from "./pages/AutoTrade";
+import { Suspense, lazy } from "react";
+
+// Lazy Load Pages for Performance
+const Index = lazy(() => import("./pages/Index"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Auth = lazy(() => import("./pages/Auth"));
+const AdminAuth = lazy(() => import("./pages/AdminAuth"));
+const Payment = lazy(() => import("./pages/Payment"));
+const Admin = lazy(() => import("./pages/Admin"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const Pricing = lazy(() => import("./pages/Pricing"));
+const AdminApprove = lazy(() => import("./pages/AdminApprove"));
+const Profile = lazy(() => import("./pages/Profile"));
+const TradeHistory = lazy(() => import("./pages/TradeHistory"));
+const AutoTrade = lazy(() => import("./pages/AutoTrade"));
 
 const queryClient = new QueryClient();
+
+const Loading = () => (
+  <div className="flex items-center justify-center min-h-screen bg-background">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+  </div>
+);
 
 const App = () => (
   <ErrorBoundary>
@@ -30,21 +39,23 @@ const App = () => (
             <Toaster />
             <Sonner />
             <BrowserRouter>
-              <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/trade-history" element={<TradeHistory />} />
-            <Route path="/auto-trade" element={<AutoTrade />} />
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/admin-login" element={<AdminAuth />} />
-            <Route path="/payment/:transactionId" element={<Payment />} />
-            <Route path="/admin" element={<Admin />} />
-            <Route path="/admin-approve" element={<AdminApprove />} />
-            <Route path="/pricing" element={<Pricing />} />
-                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
+              <Suspense fallback={<Loading />}>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/profile" element={<Profile />} />
+                  <Route path="/trade-history" element={<TradeHistory />} />
+                  <Route path="/auto-trade" element={<AutoTrade />} />
+                  <Route path="/auth" element={<Auth />} />
+                  <Route path="/admin-login" element={<AdminAuth />} />
+                  <Route path="/payment/:transactionId" element={<Payment />} />
+                  <Route path="/admin" element={<Admin />} />
+                  <Route path="/admin-approve" element={<AdminApprove />} />
+                  <Route path="/pricing" element={<Pricing />} />
+                  {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Suspense>
             </BrowserRouter>
           </TooltipProvider>
         </AuthProvider>

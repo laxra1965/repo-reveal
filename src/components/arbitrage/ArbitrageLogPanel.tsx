@@ -21,7 +21,7 @@ export const ArbitrageLogPanel = () => {
 
   const loadLogs = async () => {
     if (!user) return;
-    
+
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -110,36 +110,42 @@ export const ArbitrageLogPanel = () => {
   const latestLog = logs.length > 0 ? logs[0] : null;
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="glass-card border-primary/20 bg-black/40">
+      <CardHeader className="border-b border-primary/10">
         <div className="flex justify-between items-center">
-          <CardTitle>Scanner Logs</CardTitle>
+          <div className="flex items-center gap-3">
+            <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+            <CardTitle className="text-sm font-black uppercase tracking-widest opacity-80">Real-time Terminal</CardTitle>
+          </div>
           <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={loadLogs}
               disabled={loading}
+              className="h-7 text-[10px] font-bold uppercase tracking-wider"
             >
-              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
+              <RefreshCw className={`h-3 w-3 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Sync
             </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={downloadLogs}
               disabled={logs.length === 0}
+              className="h-7 text-[10px] font-bold uppercase tracking-wider"
             >
-              <Download className="h-4 w-4 mr-2" />
-              Download
+              <Download className="h-3 w-3 mr-2" />
+              Export
             </Button>
             {logs.length > 1 && (
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setIsExpanded(!isExpanded)}
+                className="h-7 text-[10px] font-bold uppercase tracking-wider"
               >
-                {isExpanded ? 'Show Less' : `Show All (${logs.length})`}
+                {isExpanded ? 'Minimize' : `Expand (${logs.length})`}
               </Button>
             )}
           </div>
@@ -154,34 +160,34 @@ export const ArbitrageLogPanel = () => {
           <div className="space-y-2">
             {/* Latest log always visible */}
             {latestLog && (
-              <div className="flex justify-between items-start p-3 bg-muted rounded-lg border-l-4 border-l-primary">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Badge variant={getLogBadgeVariant(latestLog.log_type)}>
+              <div className="flex justify-between items-start p-4 bg-primary/5 rounded border border-primary/10">
+                <div className="flex-1 font-mono">
+                  <div className="flex items-center gap-3 mb-2">
+                    <Badge variant={getLogBadgeVariant(latestLog.log_type)} className="text-[9px] font-bold h-4">
                       {latestLog.log_type.toUpperCase()}
                     </Badge>
-                    <span className="text-sm text-muted-foreground">
-                      {formatTime(latestLog.created_at)}
+                    <span className="text-[10px] text-muted-foreground opacity-50">
+                      [{formatTime(latestLog.created_at)}]
                     </span>
-                    <Badge variant="outline" className="text-xs">LATEST</Badge>
+                    <span className="text-[9px] font-black text-primary px-1.5 border border-primary/30 rounded">STDOUT</span>
                   </div>
-                  <p className="text-sm font-medium">{latestLog.message}</p>
+                  <p className="text-xs font-bold tracking-tight text-foreground/90">{latestLog.message}</p>
                   {latestLog.details && Object.keys(latestLog.details).length > 0 && (
-                    <pre className="text-xs text-muted-foreground mt-1 bg-background p-2 rounded">
-                      {JSON.stringify(latestLog.details, null, 2)}
-                    </pre>
+                    <div className="mt-3 bg-black/40 p-3 rounded border border-white/5 text-[10px] text-primary/70 overflow-x-auto">
+                      <pre>{JSON.stringify(latestLog.details, null, 2)}</pre>
+                    </div>
                   )}
                 </div>
               </div>
             )}
-            
+
             {/* Expandable older logs */}
             {isExpanded && logs.length > 1 && (
               <div className="space-y-2 max-h-60 overflow-y-auto border-t pt-2">
                 <h4 className="text-sm font-medium text-muted-foreground">Previous Logs</h4>
                 {logs.slice(1).map((log) => (
-                  <div 
-                    key={log.id} 
+                  <div
+                    key={log.id}
                     className="flex justify-between items-start p-2 bg-muted/50 rounded text-sm"
                   >
                     <div className="flex-1">

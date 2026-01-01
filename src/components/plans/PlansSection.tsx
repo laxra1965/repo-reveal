@@ -4,6 +4,7 @@ import { PlanCard } from './PlanCard';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
+import { isNetworkError, getErrorMessage } from '@/utils/networkUtils';
 
 interface Plan {
   id: string;
@@ -34,12 +35,23 @@ export const PlansSection = () => {
         .eq('active', true)
         .order('price', { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        if (isNetworkError(error)) {
+          toast({
+            title: "Connection Error",
+            description: getErrorMessage(error, 'Failed to load subscription plans'),
+            variant: "destructive",
+          });
+        } else {
+          throw error;
+        }
+        return;
+      }
       setPlans(data || []);
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to load subscription plans",
+        description: getErrorMessage(error, 'Failed to load subscription plans'),
         variant: "destructive",
       });
     } finally {

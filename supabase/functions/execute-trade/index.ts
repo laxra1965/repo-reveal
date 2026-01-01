@@ -84,7 +84,13 @@ async function decryptCredentials(supabaseUrl: string, supabaseServiceKey: strin
   if (credential.encrypted_api_key && credential.encrypted_api_secret) {
     console.log(`Decrypting credentials for ${credential.exchange}...`);
 
-    const response = await fetch(`${supabaseUrl}/functions/v1/encrypt-api-keys`, {
+    // Use FUNCTIONS_URL if set (Hetzner), otherwise use Supabase URL
+    const functionsUrl = Deno.env.get('FUNCTIONS_URL') || `${supabaseUrl}/functions/v1`;
+    const encryptUrl = functionsUrl.includes('/functions/v1')
+      ? `${functionsUrl}/encrypt-api-keys`
+      : `${functionsUrl}/functions/encrypt-api-keys`;
+
+    const response = await fetch(encryptUrl, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${supabaseServiceKey}`,
@@ -546,6 +552,18 @@ async function executeArbitrageTrade(
       }
     }
 
+    // Check opportunity staleness - reject if older than 5 seconds
+    if (opportunity.detected_at) {
+      const ageMs = Date.now() - new Date(opportunity.detected_at).getTime();
+      const maxAgeMs = 5000; // 5 seconds max
+
+      if (ageMs > maxAgeMs) {
+        throw new Error(`Opportunity too stale (${(ageMs / 1000).toFixed(1)}s old). Prices likely changed. Skipping trade for safety.`);
+      }
+
+      console.log(`✓ Opportunity freshness OK (${(ageMs / 1000).toFixed(1)}s old)`);
+    }
+
     // Update trade status to executing
     await supabase
       .from('trade_history')
@@ -808,7 +826,12 @@ async function executeArbitrageTrade(
   }
 }
 
-serve(async (req) => {
+async function handler(req: Request): Promise<Response> {
+  // PHASE 0 Safety Lock
+  if (Deno.env.get('RUNTIME') !== 'vps') {
+    throw new Error('Execution outside VPS is disabled.');
+  }
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -957,4 +980,12 @@ serve(async (req) => {
       }
     );
   }
-});
+}
+
+// Export default handler for unified server
+export default handler;
+
+// For Supabase Edge Functions compatibility
+if (typeof Deno !== 'undefined' && Deno.serve) {
+  serve(handler);
+}

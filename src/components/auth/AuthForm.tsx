@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
+import { getErrorMessage } from '@/utils/networkUtils';
 
 export const AuthForm = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -19,7 +20,7 @@ export const AuthForm = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!email) {
       toast({
         title: "Error",
@@ -40,12 +41,12 @@ export const AuthForm = () => {
 
     try {
       setLoading(true);
-      
+
       if (isForgotPassword) {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: `${window.location.origin}/auth`,
         });
-        
+
         if (error) {
           toast({
             title: "Error",
@@ -60,15 +61,15 @@ export const AuthForm = () => {
           setIsForgotPassword(false);
         }
       } else if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
-        
+
         if (error) {
           toast({
             title: "Login Error",
-            description: error.message,
+            description: getErrorMessage(error, 'Failed to sign in. Please try again.'),
             variant: "destructive",
           });
         } else {
@@ -76,7 +77,14 @@ export const AuthForm = () => {
             title: "Success",
             description: "Successfully logged in",
           });
-          navigate('/dashboard');
+
+          // Check if admin
+          const ADMIN_EMAILS = ['laxracorp@gmail.com', 'admin@arbitrage.com'];
+          if (ADMIN_EMAILS.includes(email)) {
+            navigate('/admin');
+          } else {
+            navigate('/dashboard');
+          }
         }
       } else {
         const { error } = await supabase.auth.signUp({
@@ -86,7 +94,7 @@ export const AuthForm = () => {
             emailRedirectTo: `${window.location.origin}/`
           }
         });
-        
+
         if (error) {
           toast({
             title: "Sign Up Error",
@@ -100,10 +108,10 @@ export const AuthForm = () => {
           });
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "An unexpected error occurred",
+        description: getErrorMessage(error, 'An unexpected error occurred'),
         variant: "destructive",
       });
     } finally {
@@ -116,17 +124,17 @@ export const AuthForm = () => {
       <div className="absolute top-4 right-4">
         <ThemeToggle />
       </div>
-      
+
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">
             {isForgotPassword ? 'Reset Password' : (isLogin ? 'Welcome Back' : 'Create Account')}
           </CardTitle>
           <CardDescription>
-            {isForgotPassword 
+            {isForgotPassword
               ? 'Enter your email to receive a password reset link'
-              : (isLogin 
-                ? 'Sign in to your account to continue' 
+              : (isLogin
+                ? 'Sign in to your account to continue'
                 : 'Create a new account to get started'
               )
             }
@@ -164,13 +172,13 @@ export const AuthForm = () => {
               className="w-full"
               size="lg"
             >
-              {loading 
+              {loading
                 ? (isForgotPassword ? "Sending..." : (isLogin ? "Signing in..." : "Creating account..."))
                 : (isForgotPassword ? "Send Reset Link" : (isLogin ? "Sign In" : "Create Account"))
               }
             </Button>
           </form>
-          
+
           <div className="mt-4 text-center space-y-2">
             {!isForgotPassword && (
               <>
@@ -179,8 +187,8 @@ export const AuthForm = () => {
                   onClick={() => setIsLogin(!isLogin)}
                   className="text-sm text-primary hover:underline block"
                 >
-                  {isLogin 
-                    ? "Don't have an account? Sign up" 
+                  {isLogin
+                    ? "Don't have an account? Sign up"
                     : "Already have an account? Sign in"
                   }
                 </button>
@@ -205,8 +213,8 @@ export const AuthForm = () => {
               </button>
             )}
             <div>
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 onClick={() => navigate('/admin-login')}
                 className="text-sm"
               >

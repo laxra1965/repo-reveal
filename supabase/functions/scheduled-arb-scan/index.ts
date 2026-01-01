@@ -15,6 +15,11 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // PHASE 0 Safety Lock
+  if (Deno.env.get('RUNTIME') !== 'vps') {
+    throw new Error('Execution outside VPS is disabled.');
+  }
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -37,7 +42,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         success: true,
         deleted: cleanupResult || 0,
         timestamp: new Date().toISOString()

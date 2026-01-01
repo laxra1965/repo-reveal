@@ -14,7 +14,7 @@ import { ArbitrageOpportunityCard } from './ArbitrageOpportunityCard';
 import { ArbitrageLogPanel } from './ArbitrageLogPanel';
 import { PaperTradeHistory } from './PaperTradeHistory';
 import { PlansSection } from '@/components/plans/PlansSection';
-import { Play, Pause, Settings, TrendingUp, Lock, ChevronLeft, ChevronRight, TestTube, Shield } from 'lucide-react';
+import { Play, Pause, Settings, TrendingUp, Lock, ChevronLeft, ChevronRight, TestTube, Shield, Clock } from 'lucide-react';
 
 interface Opportunity {
   id: string;
@@ -386,81 +386,94 @@ export const ArbitrageScanner = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <Card>
-        <CardHeader>
+      <Card className="glass-card border-primary/20 overflow-hidden relative">
+        <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
+        <CardHeader className="pb-4">
           <div className="flex justify-between items-center">
             <div>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5" />
-                Triangular Arbitrage Scanner
+              <CardTitle className="text-xl font-bold flex items-center gap-2 tracking-tight">
+                <TrendingUp className="h-5 w-5 text-primary" />
+                Control Center
               </CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">
-                Real-time monitoring • Showing top {OPPORTUNITIES_PER_PAGE} opportunities per page
+              <p className="text-xs text-muted-foreground mt-1 font-medium opacity-70 italic">
+                Real-time Arbitrage Surveillance • Cycle detection active
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 onClick={() => setShowSettings(true)}
+                className="hover:bg-primary/10"
               >
                 <Settings className="h-4 w-4 mr-2" />
-                Settings
+                Config
               </Button>
 
               {isScanning ? (
-                <Button onClick={stopScanning} variant="destructive" size="sm">
+                <Button onClick={stopScanning} variant="destructive" size="sm" className="shadow-lg shadow-red-500/20">
                   <Pause className="h-4 w-4 mr-2" />
-                  Stop
+                  Halt Scan
                 </Button>
               ) : (
-                <Button onClick={startScanning} size="sm" disabled={isInitializing}>
+                <Button onClick={startScanning} size="sm" disabled={isInitializing} className="premium-gradient shadow-lg shadow-primary/20">
                   <Play className="h-4 w-4 mr-2" />
-                  {isInitializing ? 'Starting...' : 'Start'}
+                  {isInitializing ? 'Booting...' : 'Initiate Scan'}
                 </Button>
               )}
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex justify-between items-center text-sm text-muted-foreground">
-            <div className="flex gap-4 flex-wrap items-center">
-              <span>Status: <Badge variant={isScanning ? "default" : "secondary"}>
-                {isScanning ? "Scanning" : "Stopped"}
-              </Badge></span>
-              <span>Scans: {scanCount}</span>
-              <span>Total: {opportunities.length}</span>
-              <span>Showing: {paginatedOpportunities.length}</span>
+          <div className="flex justify-between items-center text-[11px] text-muted-foreground">
+            <div className="flex gap-6 flex-wrap items-center">
+              <div className="flex items-center gap-2 bg-muted/50 px-3 py-1.5 rounded-full border">
+                <span className="font-semibold uppercase text-[9px] opacity-70">Status:</span>
+                <Badge variant={isScanning ? "default" : "secondary"} className={`text-[9px] h-4 px-1.5 ${isScanning ? 'bg-green-500/80' : ''}`}>
+                  {isScanning ? "Active" : "Offline"}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold uppercase text-[9px] opacity-70">Loops:</span>
+                <span className="font-mono text-primary font-bold">{scanCount}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold uppercase text-[9px] opacity-70">Hot:</span>
+                <span className="font-mono text-primary font-bold">{opportunities.length}</span>
+              </div>
               {autoPaperTrade && (
-                <span className="flex items-center gap-1">
+                <div className="flex items-center gap-2 bg-purple-500/10 text-purple-500 px-3 py-1.5 rounded-full border border-purple-500/20">
                   <TestTube className="h-3 w-3" />
-                  Auto Trades: {autoPaperTradeCount}
-                </span>
+                  <span className="font-bold">LIVE SIM: {autoPaperTradeCount}</span>
+                </div>
               )}
             </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-3">
+                <Label htmlFor="auto-paper" className="text-[10px] font-bold uppercase cursor-pointer opacity-70">
+                  Auto-Simulate
+                </Label>
                 <Switch
                   id="auto-paper"
                   checked={autoPaperTrade}
                   onCheckedChange={setAutoPaperTrade}
+                  className="scale-75 data-[state=checked]:bg-purple-500"
                 />
-                <Label htmlFor="auto-paper" className="text-xs flex items-center gap-1 cursor-pointer">
-                  <TestTube className="h-3 w-3" />
-                  Auto Paper Trade
-                </Label>
               </div>
 
               {/* AI Shield Badge - Visual Indicator */}
               <div className="hidden md:flex items-center">
-                <Badge variant="outline" className="text-[10px] h-5 px-2 gap-1 border-purple-500/30 text-purple-500 bg-purple-500/5">
+                <Badge variant="outline" className="text-[9px] h-5 px-2 gap-1 border-primary/30 text-primary bg-primary/5 uppercase font-bold">
                   <Shield className="h-3 w-3" />
-                  AI Enhanced
+                  Secure Loop
                 </Badge>
               </div>
 
               {lastScanTime && (
-                <span>Last update: {lastScanTime.toLocaleTimeString()}</span>
+                <div className="flex items-center gap-1 opacity-70 font-mono">
+                  <Clock className="h-3 w-3" />
+                  {lastScanTime.toLocaleTimeString()}
+                </div>
               )}
             </div>
           </div>

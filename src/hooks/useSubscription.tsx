@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
+import { isNetworkError, getErrorMessage } from '@/utils/networkUtils';
 
 interface Subscription {
   id: string;
@@ -48,6 +49,9 @@ export const useSubscription = () => {
 
       if (error) {
         console.error('Error checking subscription:', error);
+        if (isNetworkError(error)) {
+          console.error('Network error when checking subscription. Please check your internet connection.');
+        }
         setSubscription(null);
         setHasActiveSubscription(false);
       } else if (data) {
@@ -57,8 +61,11 @@ export const useSubscription = () => {
         setSubscription(null);
         setHasActiveSubscription(false);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error checking subscription:', error);
+      if (isNetworkError(error)) {
+        console.error('Network error: Unable to connect to Supabase. Please check your internet connection and try again.');
+      }
       setSubscription(null);
       setHasActiveSubscription(false);
     } finally {

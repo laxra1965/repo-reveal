@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { invokeFunction } from '../utils/function-invoke.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,7 +8,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req) => {
+async function handler(req: Request): Promise<Response> {
+  // PHASE 0 Safety Lock
+  if (Deno.env.get('RUNTIME') !== 'vps') {
+    throw new Error('Execution outside VPS is disabled.');
+  }
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -73,16 +79,23 @@ serve(async (req) => {
 
       for (const trade of pendingExecutions) {
         try {
-          const { data: execResult, error: execError } = await supabase.functions.invoke('execute-trade', {
-            body: {
-              action: 'execute_single',
-              tradeId: trade.id,
-              userId: trade.user_id
-            }
-          });
+          const { data: execResult, error: execError } = await invokeFunction(
+            'execute-trade',
+            {
+              body: {
+                action: 'execute_single',
+                tradeId: trade.id,
+                userId: trade.user_id
+              },
+              headers: {
+                'Authorization': `Bearer ${supabaseServiceKey}`
+              }
+            },
+            supabase
+          );
 
           if (execError) {
-            executionErrors.push(`Trade ${trade.id}: ${execError.message}`);
+            executionErrors.push(`Trade ${trade.id}: ${execError.message || execError}`);
             console.error(`Execution error for trade ${trade.id}:`, execError);
           } else if (execResult?.success) {
             executedCount++;
@@ -180,4 +193,12 @@ serve(async (req) => {
       }
     );
   }
-});
+}
+
+// Export default handler for unified server
+export default handler;
+
+// For Supabase Edge Functions compatibility
+if (typeof Deno !== 'undefined' && Deno.serve) {
+  serve(handler);
+}
