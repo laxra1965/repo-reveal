@@ -1,5 +1,5 @@
-import { Opportunity, OrderBook } from '../../../shared/src/types';
-import { getTierConfig, TierLevel, TierConfig } from '../../../shared/src/tier.config';
+import { Opportunity, OrderBook } from '../../../shared/dist/types';
+import { getTierConfig, TierLevel, TierConfig } from '../../../shared/dist/tier.config';
 
 // Phase 15-17 Constants
 const RISK_LIMITS = {
@@ -143,7 +143,7 @@ export class ExecutionEngine {
             console.log(`[SAFETY] Execution disabled — live trading blocked for job ${job.id}`);
             throw new Error("Trading is disabled. Set TRADING_ENABLED=true to enable live trading.");
         }
-        
+
         // 17.3 System Pause Check
         if (this.systemPaused) {
             job.logs.push("JOB REJECTED: System Paused");

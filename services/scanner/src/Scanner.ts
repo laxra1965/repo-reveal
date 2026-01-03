@@ -1,5 +1,5 @@
 
-import { OrderBook, Opportunity } from '../../../shared/src/types';
+import { OrderBook, Opportunity } from '../../../shared/dist/types';
 
 export { OrderBook, Opportunity };
 

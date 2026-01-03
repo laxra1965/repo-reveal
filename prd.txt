@@ -1,0 +1,231 @@
+🏢 CORPORATE AGENT INSTRUCTION
+Feature: Top Gainers / Losers–Driven Triangular Arbitrage Scanner
+
+Applies to: Binance, Bybit, OKX, KuCoin, Gate, MEXC
+Phase: Market Intelligence Layer (Scanner Enhancement)
+
+1️⃣ OBJECTIVE
+
+Enhance the Scanner Service so that:
+
+Each exchange publishes Top Gainers & Losers
+
+Scanner dynamically prioritizes high-volatility symbols
+
+Triangular arbitrage paths are generated from:
+
+Core quote assets (USDT, BTC, ETH, etc.)
+
+PLUS top movers (gainers/losers)
+
+This works across all supported exchanges
+
+No increase in execution risk or system load
+
+2️⃣ WHY THIS IS IMPORTANT (FOR AGENT CONTEXT)
+
+Triangular arbitrage occurs most during volatility
+
+Scanning every symbol is wasteful and slow
+
+Top movers:
+
+Have higher spreads
+
+Have deeper order books
+
+Create temporary mispricing across pairs
+
+This feature increases hit-rate, not brute force.
+
+3️⃣ HIGH-LEVEL ARCHITECTURE
+[ Exchange REST ]
+       ↓
+Top Gainers/Losers Fetcher
+       ↓
+Redis: movers:<exchange>
+       ↓
+Scanner Service
+       ↓
+Dynamic Path Generator
+       ↓
+Liquidity-Aware Arbitrage Scan
+
+4️⃣ REDIS DATA CONTRACT (MANDATORY)
+📌 Channel
+movers:<exchange>
+
+📌 Payload
+{
+  "timestamp": 1703892000000,
+  "gainers": ["SOL", "AVAX", "LINK"],
+  "losers": ["ADA", "DOT"],
+  "source": "binance"
+}
+
+
+⚠️ Symbols MUST be base assets, not pairs.
+
+5️⃣ MARKET DATA SERVICE — MOVERS FETCHER
+📁 services/market-data/src/movers/binance.ts
+import axios from "axios";
+import Redis from "ioredis";
+
+const redis = new Redis();
+
+export async function publishBinanceMovers() {
+  const { data } = await axios.get(
+    "https://api.binance.com/api/v3/ticker/24hr"
+  );
+
+  const sorted = data
+    .filter(t => t.symbol.endsWith("USDT"))
+    .sort((a, b) => Math.abs(b.priceChangePercent) - Math.abs(a.priceChangePercent));
+
+  const gainers = sorted
+    .filter(t => Number(t.priceChangePercent) > 0)
+    .slice(0, 10)
+    .map(t => t.symbol.replace("USDT", ""));
+
+  const losers = sorted
+    .filter(t => Number(t.priceChangePercent) < 0)
+    .slice(0, 10)
+    .map(t => t.symbol.replace("USDT", ""));
+
+  await redis.publish(
+    "movers:binance",
+    JSON.stringify({
+      timestamp: Date.now(),
+      gainers,
+      losers,
+      source: "binance"
+    })
+  );
+}
+
+
+🕒 Run every 30–60 seconds
+🚫 Do NOT poll faster
+
+6️⃣ SCANNER — SUBSCRIBE TO MOVERS
+📁 scanner/src/movers.ts
+import Redis from "ioredis";
+
+const redis = new Redis();
+
+const moversByExchange = new Map<string, Set<string>>();
+
+export function initMoversSubscription() {
+  redis.psubscribe("movers:*");
+
+  redis.on("pmessage", (_, channel, message) => {
+    const exchange = channel.split(":")[1];
+    const payload = JSON.parse(message);
+
+    const assets = new Set([
+      ...payload.gainers,
+      ...payload.losers
+    ]);
+
+    moversByExchange.set(exchange, assets);
+  });
+}
+
+export function getPriorityAssets(exchange: string): string[] {
+  return Array.from(moversByExchange.get(exchange) || []);
+}
+
+7️⃣ DYNAMIC PATH GENERATION (CRITICAL FIX)
+❌ DO NOT pre-generate static paths only
+✅ Combine base quotes + movers
+📁 scanner/src/pathGenerator.ts
+import { getPriorityAssets } from "./movers";
+
+const BASE_QUOTES = ["USDT", "BTC", "ETH", "BNB"];
+
+export function generateDynamicPaths(
+  exchange: string,
+  availableSymbols: string[]
+) {
+  const dynamicAssets = new Set([
+    ...BASE_QUOTES,
+    ...getPriorityAssets(exchange)
+  ]);
+
+  const graph: Record<string, Set<string>> = {};
+
+  for (const symbol of availableSymbols) {
+    for (const quote of BASE_QUOTES) {
+      if (symbol.endsWith(quote)) {
+        const base = symbol.replace(quote, "");
+        graph[base] ??= new Set();
+        graph[quote] ??= new Set();
+        graph[base].add(quote);
+        graph[quote].add(base);
+      }
+    }
+  }
+
+  const paths: string[][] = [];
+
+  for (const a of dynamicAssets) {
+    for (const b of graph[a] || []) {
+      for (const c of graph[b] || []) {
+        if (c !== a && graph[c]?.has(a)) {
+          paths.push([a, b, c]);
+        }
+      }
+    }
+  }
+
+  return paths;
+}
+
+8️⃣ SCANNER LOOP UPDATE
+📁 scanner/src/index.ts
+const paths = generateDynamicPaths(exchange, symbols);
+
+for (const path of paths) {
+  const opportunity = simulateTriangle(exchange, orderBooks, ...path);
+  if (opportunity) emitOpportunity(opportunity);
+}
+
+
+🟢 Movers increase priority
+🟢 Static paths still supported
+🟢 No breaking change
+
+9️⃣ SAFETY & PERFORMANCE RULES
+HARD LIMITS (MANDATORY)
+Rule	Value
+Max movers per exchange	20
+Max paths per scan	500
+Max scan frequency	Event-driven only
+Fallback if movers missing	Base quotes only
+🔐 EXECUTION SAFETY GUARANTEE
+
+This feature:
+
+Does NOT place trades
+
+Does NOT increase risk
+
+Only increases signal quality
+
+Is exchange-agnostic
+
+🧠 STRATEGIC NOTE (IMPORTANT)
+
+This turns your system into a hybrid arbitrage + momentum-aware engine, which:
+
+Increases profitability
+
+Differentiates your SaaS
+
+Justifies higher subscription tiers
+
+🏁 FINAL DIRECTIVE FOR AGENT
+
+Implement this exactly as specified.
+Do not merge movers into execution logic.
+Scanner remains read-only.

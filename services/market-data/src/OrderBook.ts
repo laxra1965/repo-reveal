@@ -1,5 +1,5 @@
 
-import { OrderBook as SharedOrderBook, Level } from '../../../shared/src/types';
+import { OrderBook as SharedOrderBook, Level } from '../../../shared/dist/types';
 
 export class OrderBook extends SharedOrderBook {
     constructor(symbol: string) {

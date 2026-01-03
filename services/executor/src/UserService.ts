@@ -1,7 +1,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { UserContext } from './EligibilityFilter';
-import { TierLevel } from '../../../shared/src/index';
+import { TierLevel } from '../../../shared/dist/index';
 
 export class UserService {
     private supabase;

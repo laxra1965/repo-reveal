@@ -1,0 +1,106 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:alpine
+    container_name: arbitrage-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - arbitrage-network
+
+  # Port 3001: The Node.js API bridge for the frontend
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.node
+    container_name: arbitrage-api
+    command: node services/api/dist/index.js
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - RUNTIME=vps
+      - REDIS_URL=redis://redis:6379
+      - SUPABASE_URL=${VITE_SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - API_CONTROL_SECRET=${API_CONTROL_SECRET}
+      - API_PORT=3001
+    env_file: .env
+    depends_on:
+      - redis
+    networks:
+      - arbitrage-network
+
+  market-data:
+    build:
+      context: .
+      dockerfile: Dockerfile.node
+    container_name: arbitrage-market-data
+    command: node services/market-data/dist/index.js
+    restart: unless-stopped
+    environment:
+      - RUNTIME=vps
+      - REDIS_URL=redis://redis:6379
+    env_file: .env
+    depends_on:
+      - redis
+    networks:
+      - arbitrage-network
+
+  scanner:
+    build:
+      context: .
+      dockerfile: Dockerfile.node
+    container_name: arbitrage-scanner
+    command: node services/scanner/dist/index.js
+    restart: unless-stopped
+    environment:
+      - RUNTIME=vps
+      - REDIS_URL=redis://redis:6379
+    env_file: .env
+    depends_on:
+      - redis
+    networks:
+      - arbitrage-network
+
+  executor:
+    build:
+      context: .
+      dockerfile: Dockerfile.node
+    container_name: arbitrage-executor
+    command: node services/executor/dist/index.js
+    restart: unless-stopped
+    environment:
+      - RUNTIME=vps
+      - REDIS_URL=redis://redis:6379
+      - TRADING_ENABLED=true
+    env_file: .env
+    depends_on:
+      - redis
+    networks:
+      - arbitrage-network
+
+  # Port 8000: Legacy Deno Functions Bridge
+  functions:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: functions-bridge
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - SUPABASE_URL=${VITE_SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - SUPABASE_ANON_KEY=${VITE_SUPABASE_PUBLISHABLE_KEY}
+      - PORT=8000
+      - ALLOWED_ORIGINS=*
+    env_file: .env
+    networks:
+      - arbitrage-network
+
+networks:
+  arbitrage-network:
+    driver: bridge

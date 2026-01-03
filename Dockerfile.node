@@ -1,0 +1,38 @@
+FROM node:20-slim
+
+WORKDIR /app
+
+# Copy root config files
+COPY package.json ./
+COPY tsconfig.json ./
+
+# Copy shared source
+COPY shared/ ./shared/
+
+# Install dependencies for all services
+COPY services/api/package.json ./services/api/
+COPY services/market-data/package.json ./services/market-data/
+COPY services/scanner/package.json ./services/scanner/
+COPY services/executor/package.json ./services/executor/
+
+# Install across all (simplification for no workspaces)
+RUN npm install
+
+# Copy source code
+COPY services/ ./services/
+
+# Build all services
+RUN cd shared && npm install && npm run build
+RUN cd services/api && npm run build
+RUN cd services/market-data && npm run build
+RUN cd services/scanner && npm run build
+RUN cd services/executor && npm run build
+
+# Default environment
+ENV RUNTIME=vps
+ENV NODE_ENV=production
+
+EXPOSE 3001
+
+# Command is overridden in docker-compose
+CMD ["node", "services/api/dist/index.js"]

@@ -1,0 +1,123 @@
+PROJECT STRUCTURE
+====================
+
+repo-reveal-main/
+├── .cursor/
+├── .env
+├── .env.local.example
+├── .gitignore
+├── ARBITRAGE_FIXES_IMPLEMENTED.md
+├── ARBITRAGE_REVIEW.md
+├── DEPLOYMENT.md
+├── DEPLOYMENT_CHECKLIST.md
+├── FIX_SUMMARY.md
+├── HETZNER_MIGRATION_SUMMARY.md
+├── MIGRATION_GUIDE.md
+├── PROJECT_ANALYSIS.md
+├── README.md
+├── bun.lockb
+├── components.json
+├── config/
+├── consoleLogs.txt
+├── deploy/
+├── dist/
+├── docker/
+├── eslint.config.js
+├── export_function.js
+├── index.html
+├── node_modules/
+├── package.json
+├── postcss.config.js
+├── prd.txt
+├── pricing.txt
+├── prod.txt
+├── production_setup.sql
+├── production_setup_hetzner.sql
+├── public/
+├── scripts/
+├── services/
+│   ├── api/
+│   │   ├── src/
+│   │   │   ├── RequestVerifier.ts
+│   │   │   └── index.ts
+│   │   ├── package.json
+│   │   └── tsconfig.json
+│   ├── executor/
+│   │   ├── src/
+│   │   │   ├── AllocationEngine.ts
+│   │   │   ├── AsyncLogger.ts
+│   │   │   ├── BinanceExecutor.ts
+│   │   │   ├── BybitExecutor.ts
+│   │   │   ├── EligibilityFilter.ts
+│   │   │   ├── ExecutionEngine.ts
+│   │   │   ├── ExecutorService.ts
+│   │   │   ├── GateExecutor.ts
+│   │   │   ├── JobScheduler.ts
+│   │   │   ├── KeyManager.ts
+│   │   │   ├── MexcExecutor.ts
+│   │   │   ├── MultiExchangeExecutor.ts
+│   │   │   ├── OKXExecutor.ts
+│   │   │   ├── UserService.ts
+│   │   │   └── index.ts
+│   │   ├── package.json
+│   │   └── tsconfig.json
+│   ├── market-data/
+│   │   ├── src/
+│   │   │   ├── exchanges/
+│   │   │   │   ├── BinanceClient.ts
+│   │   │   │   ├── BybitClient.ts
+│   │   │   │   ├── GateClient.ts
+│   │   │   │   ├── KucoinClient.ts
+│   │   │   │   ├── MEXCClient.ts
+│   │   │   │   └── OKXClient.ts
+│   │   │   ├── BinanceDepthConsumer.ts
+│   │   │   ├── BybitDepthConsumer.ts
+│   │   │   ├── OKXDepthConsumer.ts
+│   │   │   ├── OrderBook.ts
+│   │   │   └── index.ts
+│   │   ├── package.json
+│   │   └── tsconfig.json
+│   └── scanner/
+│       ├── src/
+│       │   ├── Scanner.ts
+│       │   ├── ScannerService.ts
+│       │   ├── index.ts
+│       │   ├── movers.ts
+│       │   └── pathGenerator.ts
+│       ├── package.json
+│       └── tsconfig.json
+├── shared/
+│   ├── src/
+│   │   ├── exchange.config.ts
+│   │   ├── tier.config.ts
+│   │   ├── types.ts
+│   │   └── index.ts
+│   ├── package.json
+│   └── tsconfig.json
+├── src/
+│   ├── components/
+│   │   ├── admin/
+│   │   ├── arbitrage/
+│   │   ├── auth/
+│   │   ├── autotrade/
+│   │   ├── dashboard/
+│   │   ├── plans/
+│   │   ├── profile/
+│   │   ├── theme/
+│   │   └── ui/
+│   ├── hooks/
+│   ├── integrations/
+│   ├── lib/
+│   ├── pages/
+│   ├── utils/
+│   ├── App.css
+│   ├── App.tsx
+│   ├── index.css
+│   ├── main.tsx
+│   ├── supabaseClient.ts
+│   └── vite-env.d.ts
+├── supabase/
+├── tailwind.config.ts
+├── tsconfig.json
+├── vercel.json
+└── vite.config.ts

@@ -1,4 +1,4 @@
-import { Opportunity, TierLevel, getTierConfig, getExchangeOverride } from '../../../shared/src';
+import { Opportunity, TierLevel, getTierConfig, getExchangeOverride } from '../../../shared/dist';
 
 
 export interface UserContext {

@@ -1,10 +1,9 @@
-
 import { AsyncLogger, LogLevel } from './AsyncLogger';
 import { EligibilityFilter, UserContext } from './EligibilityFilter';
 import { AllocationEngine } from './AllocationEngine';
 import { ExecutionEngine, IExchangeExecutor, ExecutionState } from './ExecutionEngine';
 import { JobScheduler } from './JobScheduler';
-import { TierLevel, OrderBook } from '../../../shared/src/index';
+import { TierLevel, OrderBook } from '../../../shared/dist/index';
 import { KeyManager } from './KeyManager';
 import { UserService } from './UserService';
 import Redis from 'ioredis';

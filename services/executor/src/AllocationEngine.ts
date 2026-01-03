@@ -1,4 +1,4 @@
-import { Opportunity, TierLevel, getTierConfig } from '../../../shared/src';
+import { Opportunity, TierLevel, getTierConfig } from '../../../shared/dist';
 import { UserContext } from './EligibilityFilter';
 
 export interface Allocation {

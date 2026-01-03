@@ -1,160 +1,47 @@
-PHASE A — ENVIRONMENT SWITCHES (MANDATORY)
-1️⃣ Set runtime flags (PowerShell)
-$env:RUNTIME="vps"
-$env:TRADING_ENABLED="false"
-$env:MARKET_DATA_MODE="LIVE"
+update every exchange client:
 
+services/market-data/src/exchanges/
+├── BinanceClient.ts
+├── BybitClient.ts
+├── GateClient.ts
+├── KucoinClient.ts
+├── MEXCClient.ts
+└── OKXClient.ts
 
-⚠️ TRADING_ENABLED=false must stay false
-This is your hard safety lock
-
-PHASE B — ENABLE REAL BINANCE WEBSOCKETS
-
-You already have 90% correct Binance code.
-We only need to harden + activate it properly.
-
-2️⃣ FIX: Binance WebSocket stream version
-❌ CURRENT (problem)
-`${s.toLowerCase()}@depth`
-
-✅ FIX (correct, production-grade)
-`${s.toLowerCase()}@depth@100ms`
-
-
-✔ Reduces latency
-✔ Required for arbitrage
-
-3️⃣ FIX: Binance event sequencing (CRITICAL)
-
-Your current logic:
-
-if (event.u <= ob.lastUpdateId) return;
-
-❌ This is NOT enough
-
-Binance requires U/u sequencing validation.
-
-✅ REWRITE processUpdate() (MANDATORY)
-processUpdate(event: any) {
-    const ob = this.orderBooks.get(event.s)!;
-
-    // Binance strict sequencing rule
-    if (event.u <= ob.lastUpdateId) return;
-    if (event.U !== ob.lastUpdateId + 1) {
-        console.error(`[Binance] Sequence gap detected for ${event.s}`);
-        this.isSnapshotLoaded.set(event.s, false);
-        this.fetchSnapshot(event.s);
-        return;
-    }
-
-    for (const [price, qty] of event.b) {
-        ob.update(+price, +qty, true);
-    }
-    for (const [price, qty] of event.a) {
-        ob.update(+price, +qty, false);
-    }
-
-    ob.lastUpdateId = event.u;
+🔧 EXACT PATCH PATTERN (SAFE)
+Before
+if (type === 'snapshot') {
+    ob.reset();
 }
 
-
-✔ Prevents corrupted books
-✔ This is non-negotiable in production
-
-4️⃣ FIX: Snapshot replay logic
-❌ CURRENT (unsafe)
-if (event.u > ob.lastUpdateId)
-
-✅ FIX
-if (event.u > ob.lastUpdateId && event.U <= ob.lastUpdateId + 1) {
-    this.processUpdate(event);
+After
+if (type === 'snapshot') {
+    ob.reset();
 }
 
-PHASE C — REAL ORDER BOOK CONSUMPTION
-5️⃣ Confirm fetch availability (Node 18+)
+✅ 4. DELTA UPDATES — CORRECT USAGE
 
-Node v24 already supports fetch, so you’re OK.
+Your clients should now ONLY call:
 
-But add timeout protection:
+ob.updateSide('bids', price, qty);
+ob.updateSide('asks', price, qty);
 
-const controller = new AbortController();
-setTimeout(() => controller.abort(), 3000);
-
-const res = await fetch(url, { signal: controller.signal });
-
-PHASE D — CONNECT MARKET DATA → SCANNER (LIVE)
-
-Right now:
-
-Market Data runs
-
-Scanner runs
-
-❌ They are not connected
-
-We fix this via Redis Pub/Sub (LIVE MODE).
-
-6️⃣ ENABLE REAL REDIS (VPS-ready)
-Install Redis client
-npm install ioredis
-
-Market Data → Publish order book updates
-import Redis from 'ioredis';
-const redis = new Redis();
-
-redis.publish(
-  `depth:binance:${symbol}`,
-  JSON.stringify({
-    symbol,
-    bids: [...ob.bids],
-    asks: [...ob.asks],
-    timestamp: ob.timestamp
-  })
-);
-
-Scanner → Subscribe to real data
-redis.subscribe('depth:binance:*');
-
-redis.on('message', (_, message) => {
-    const data = JSON.parse(message);
-    updateLocalOrderBook(data);
-    scanner.scan('binance', orderBooks);
-});
+❌ Never do this again
+ob.bids.push(...)
+ob.asks.splice(...)
 
 
-✔ Event-driven
-✔ No polling
-✔ Production architecture
+OrderBook owns all mutation.
 
-PHASE E — SAFETY LOCKS (DO NOT SKIP)
-7️⃣ HARD EXECUTION BLOCK (MANDATORY)
+🧠 5. WHY THIS MATTERS (IMPORTANT)
 
-In every execution-related file:
+This change unlocks all of the following:
 
-if (process.env.TRADING_ENABLED !== "true") {
-    console.log("Execution disabled — live trading blocked");
-    return;
-}
+✔ Real Binance depth sync
+✔ Liquidity-aware simulation
+✔ Slippage modeling
+✔ Multi-exchange normalization
+✔ Safe executor sizing
+✔ Deterministic replay for audits
 
-8️⃣ VERIFY: What happens after enabling live data?
-You WILL see:
-Connected to Binance WS
-Snapshot loaded for BTCUSDT
-[Scanner] Found opportunity
-
-You WILL NOT see:
-
-Orders placed
-
-API key usage
-
-Balance changes
-
-✅ FINAL STATUS AFTER THIS STEP
-Feature	Status
-Live Binance prices	✅ ENABLED
-Live WebSockets	✅ ENABLED
-Real order book depth	✅ ENABLED
-Scanner accuracy	✅ REAL
-Execution	❌ DISABLED
-Funds risk	❌ ZERO
+This is production-grade market data handling.
