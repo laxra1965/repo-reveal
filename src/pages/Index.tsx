@@ -25,6 +25,12 @@ const Index = () => {
     );
   }
 
+  // Show plans section only if user is not logged in (will redirect to auth)
+  // If user is logged in, they will be redirected to dashboard
+  if (user) {
+    return null; // Will redirect to dashboard
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <PlansSection />

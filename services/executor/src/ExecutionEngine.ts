@@ -138,6 +138,12 @@ export class ExecutionEngine {
     }
 
     async executeJob(job: ExecutionJob, userTier: TierLevel) {
+        // PHASE E: HARD EXECUTION BLOCK (MANDATORY)
+        if (process.env.TRADING_ENABLED !== "true") {
+            console.log(`[SAFETY] Execution disabled — live trading blocked for job ${job.id}`);
+            throw new Error("Trading is disabled. Set TRADING_ENABLED=true to enable live trading.");
+        }
+        
         // 17.3 System Pause Check
         if (this.systemPaused) {
             job.logs.push("JOB REJECTED: System Paused");

@@ -49,14 +49,13 @@ export class OKXClient {
 
                     // OKX sends 'snapshot' initially, then 'update'
                     if (msg.action === 'snapshot') {
-                        ob.bids.clear();
-                        ob.asks.clear();
-                        updateData.bids.forEach((b: any) => ob.update(parseFloat(b[0]), parseFloat(b[1]), true));
-                        updateData.asks.forEach((a: any) => ob.update(parseFloat(a[0]), parseFloat(a[1]), false));
+                        ob.reset();
+                        updateData.bids.forEach((b: any) => ob.updateSide('bids', parseFloat(b[0]), parseFloat(b[1])));
+                        updateData.asks.forEach((a: any) => ob.updateSide('asks', parseFloat(a[0]), parseFloat(a[1])));
                         console.log(`OKX Snapshot loaded for ${symbol}`);
                     } else if (msg.action === 'update') {
-                        updateData.bids.forEach((b: any) => ob.update(parseFloat(b[0]), parseFloat(b[1]), true));
-                        updateData.asks.forEach((a: any) => ob.update(parseFloat(a[0]), parseFloat(a[1]), false));
+                        updateData.bids.forEach((b: any) => ob.updateSide('bids', parseFloat(b[0]), parseFloat(b[1])));
+                        updateData.asks.forEach((a: any) => ob.updateSide('asks', parseFloat(a[0]), parseFloat(a[1])));
                     }
                 }
             } catch (e) {

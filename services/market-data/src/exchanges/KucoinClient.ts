@@ -69,14 +69,13 @@ export class KucoinClient {
 
                         const ob = this.orderBooks.get(symbol);
                         if (ob && msg.data) {
-                            ob.bids.clear();
-                            ob.asks.clear();
+                            ob.reset();
 
                             if (msg.data.bids) {
-                                msg.data.bids.forEach((b: any) => ob.update(parseFloat(b[0]), parseFloat(b[1]), true));
+                                msg.data.bids.forEach((b: any) => ob.updateSide('bids', parseFloat(b[0]), parseFloat(b[1])));
                             }
                             if (msg.data.asks) {
-                                msg.data.asks.forEach((a: any) => ob.update(parseFloat(a[0]), parseFloat(a[1]), false));
+                                msg.data.asks.forEach((a: any) => ob.updateSide('asks', parseFloat(a[0]), parseFloat(a[1])));
                             }
                         }
                     }

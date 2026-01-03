@@ -55,14 +55,13 @@ export class MEXCClient {
 
                     const ob = this.orderBooks.get(symbol);
                     if (ob) {
-                        ob.bids.clear();
-                        ob.asks.clear();
+                        ob.reset();
 
                         if (msg.d.bids) {
-                            msg.d.bids.forEach((b: any) => ob.update(parseFloat(b.p), parseFloat(b.v), true));
+                            msg.d.bids.forEach((b: any) => ob.updateSide('bids', parseFloat(b.p), parseFloat(b.v)));
                         }
                         if (msg.d.asks) {
-                            msg.d.asks.forEach((a: any) => ob.update(parseFloat(a.p), parseFloat(a.v), false));
+                            msg.d.asks.forEach((a: any) => ob.updateSide('asks', parseFloat(a.p), parseFloat(a.v)));
                         }
                     }
                 }

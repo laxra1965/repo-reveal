@@ -192,9 +192,107 @@ export const ArbitrageScanner = () => {
       if (response.error) {
         console.error('Supabase Edge Function `arbitrage-scanner` returned non-2xx:', response);
         const respErr = response.error;
-        const errMessage = (respErr && (respErr.message || respErr.error || String(respErr))) || 'Edge function returned a non-2xx status code';
-        const statusPart = respErr && (respErr.status || respErr.statusCode) ? ` (status: ${respErr.status || respErr.statusCode})` : '';
-        throw new Error(errMessage + statusPart);
+        const status = respErr?.status || respErr?.statusCode || 'unknown';
+        
+        // Parse error message from response
+        let errMessage = 'Failed to scan for opportunities';
+        
+        if (response.data?.error) {
+          errMessage = response.data.error;
+        } else if (respErr?.message) {
+          errMessage = respErr.message;
+        } else if (typeof respErr === 'string') {
+          errMessage = respErr;
+        }
+
+        // Provide user-friendly error messages based on status
+        if (status === 404) {
+          if (errMessage.includes('User settings not found') || errMessage.includes('settings')) {
+            errMessage = 'User settings not found. Please configure your trading settings first.';
+            // Try to create default settings
+            try {
+              const { error: createError } = await supabase
+                .from('user_settings')
+                .insert({
+                  user_id: user.id,
+                  enabled_exchanges: ['binance', 'bybit', 'okx'],
+                  trade_amount: 10,
+                  min_profit_percent: 0.1,
+                  arbitrage_types: ['triangular', 'cross_exchange']
+                });
+              
+              if (!createError) {
+                toast({
+                  title: "Settings Created",
+                  description: "Default settings have been created. Retrying scan...",
+                });
+                // Retry the scan after creating settings (avoid infinite recursion)
+                setTimeout(async () => {
+                  if (mountedRef.current && !isScanningRef.current) {
+                    isScanningRef.current = true;
+                    try {
+                      // Get fresh session for retry
+                      const { data: { session: retrySession } } = await supabase.auth.getSession();
+                      if (!retrySession) {
+                        throw new Error('No active session for retry');
+                      }
+
+                      const retryResponse = await supabase.functions.invoke('arbitrage-scanner', {
+                        body: {
+                          action: 'scan',
+                          userId: user.id
+                        },
+                        headers: {
+                          Authorization: `Bearer ${retrySession.access_token}`
+                        }
+                      });
+
+                      if (!retryResponse.error && mountedRef.current) {
+                        setScanCount(prev => prev + 1);
+                        setLastScanTime(new Date());
+                        await loadOpportunitiesFromDB();
+                        toast({
+                          title: "Scan Complete",
+                          description: `Found ${retryResponse.data?.opportunities_count || 0} opportunities`,
+                        });
+                      } else if (retryResponse.error && mountedRef.current) {
+                        toast({
+                          title: "Scan Error",
+                          description: retryResponse.error.message || "Failed to scan after creating settings",
+                          variant: "destructive",
+                        });
+                      }
+                    } catch (retryError: any) {
+                      console.error('Retry scan error:', retryError);
+                      if (mountedRef.current) {
+                        toast({
+                          title: "Scan Error",
+                          description: retryError.message || "Failed to retry scan",
+                          variant: "destructive",
+                        });
+                      }
+                    } finally {
+                      isScanningRef.current = false;
+                    }
+                  }
+                }, 1000);
+                return;
+              }
+            } catch (e) {
+              console.error('Failed to create default settings:', e);
+            }
+          } else {
+            errMessage = 'Resource not found. Please try again.';
+          }
+        } else if (status === 401) {
+          errMessage = 'Authentication failed. Please sign in again.';
+        } else if (status === 403) {
+          errMessage = 'Access denied. You may not have permission to perform this action.';
+        } else if (status === 500) {
+          errMessage = 'Server error. The scanner service may be temporarily unavailable.';
+        }
+
+        throw new Error(`${errMessage} (Status: ${status})`);
       }
 
       if (mountedRef.current) {

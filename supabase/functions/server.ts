@@ -54,6 +54,12 @@ async function initializeHandlers() {
       functionHandlers.set('encrypt-api-keys', encryptModule.default);
     }
 
+    // Import clear-user-data handler
+    const clearDataModule = await import('./clear-user-data/index.ts');
+    if (clearDataModule.default) {
+      functionHandlers.set('clear-user-data', clearDataModule.default);
+    }
+
     // Import other handlers as needed
     // Note: Some functions may need to be updated to export default handlers
     
@@ -197,6 +203,9 @@ async function handleRequest(req: Request): Promise<Response> {
           break;
         case 'scheduled-arb-scan':
           handlerModule = await import('./scheduled-arb-scan/index.ts');
+          break;
+        case 'clear-user-data':
+          handlerModule = await import('./clear-user-data/index.ts');
           break;
         default:
           handlerModule = null;

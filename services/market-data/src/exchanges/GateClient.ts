@@ -71,16 +71,15 @@ export class GateClient {
                     if (result && result.s) {
                         const ob = this.orderBooks.get(result.s);
                         if (ob) {
-                            ob.bids.clear();
-                            ob.asks.clear();
+                            ob.reset();
 
                             // Bids
                             if (result.b) {
-                                result.b.forEach((b: any) => ob.update(parseFloat(b[0]), parseFloat(b[1]), true));
+                                result.b.forEach((b: any) => ob.updateSide('bids', parseFloat(b[0]), parseFloat(b[1])));
                             }
                             // Asks
                             if (result.a) {
-                                result.a.forEach((a: any) => ob.update(parseFloat(a[0]), parseFloat(a[1]), false));
+                                result.a.forEach((a: any) => ob.updateSide('asks', parseFloat(a[0]), parseFloat(a[1])));
                             }
                         }
                     }

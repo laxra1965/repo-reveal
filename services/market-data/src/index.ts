@@ -6,6 +6,7 @@ if (process.env.RUNTIME !== 'vps') {
 import { BinanceDepthConsumer } from './BinanceDepthConsumer';
 import { BybitDepthConsumer } from './BybitDepthConsumer';
 import { OKXDepthConsumer } from './OKXDepthConsumer';
+import { startMoversFetchers } from './movers';
 
 console.log('Market Data Service Starting (Phase 2 - Multi-Exchange)...');
 
@@ -14,6 +15,9 @@ const bybitSymbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT'];
 const okxSymbols = ['BTC-USDT', 'ETH-USDT', 'SOL-USDT', 'BTC-USDC'];
 
 async function start() {
+    // Start movers fetchers for all exchanges
+    startMoversFetchers();
+
     // Start Binance consumers
     for (const symbol of binanceSymbols) {
         new BinanceDepthConsumer(symbol).start().catch(e => console.error(`[Binance ${symbol}] failed`, e));

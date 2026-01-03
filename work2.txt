@@ -1,0 +1,622 @@
+A️⃣ CONCRETE CODE FIXES
+1️⃣ OrderBook — REAL DEPTH CONSUMPTION (REQUIRED) ✅ COMPLETED
+🔥 REPLACE your current OrderBook with this
+type Level = [price: number, qty: number];
+
+export class OrderBook {
+    bids: Level[] = []; // DESC
+    asks: Level[] = []; // ASC
+    lastUpdateId = 0;
+    timestamp = 0;
+
+    constructor(public symbol: string) {}
+
+    applySnapshot(bids: Level[], asks: Level[]) {
+        this.bids = bids
+            .map(b => [Number(b[0]), Number(b[1])])
+            .filter(b => b[1] > 0)
+            .sort((a, b) => b[0] - a[0]);
+
+        this.asks = asks
+            .map(a => [Number(a[0]), Number(a[1])])
+            .filter(a => a[1] > 0)
+            .sort((a, b) => a[0] - b[0]);
+
+        this.timestamp = Date.now();
+    }
+
+    applyDelta(bids: Level[], asks: Level[]) {
+        const updateSide = (side: Level[], updates: Level[], desc: boolean) => {
+            const map = new Map(side.map(l => [l[0], l[1]]));
+            for (const [p, q] of updates) {
+                if (q === 0) map.delete(p);
+                else map.set(p, q);
+            }
+            return [...map.entries()]
+                .map(([p, q]) => [p, q] as Level)
+                .sort((a, b) => desc ? b[0] - a[0] : a[0] - b[0]);
+        };
+
+        this.bids = updateSide(this.bids, bids, true);
+        this.asks = updateSide(this.asks, asks, false);
+        this.timestamp = Date.now();
+    }
+
+    simulateMarketOrder(
+        side: 'BUY' | 'SELL',
+        amountIn: number
+    ): { output: number; filled: boolean; avgPrice: number } {
+        let remaining = amountIn;
+        let output = 0;
+        let cost = 0;
+
+        const levels = side === 'BUY' ? this.asks : this.bids;
+
+        for (const [price, qty] of levels) {
+            if (remaining <= 0) break;
+
+            if (side === 'BUY') {
+                const maxBase = remaining / price;
+                const taken = Math.min(qty, maxBase);
+                remaining -= taken * price;
+                output += taken;
+                cost += taken * price;
+            } else {
+                const taken = Math.min(qty, remaining);
+                remaining -= taken;
+                output += taken * price;
+                cost += taken * price;
+            }
+        }
+
+        if (remaining > 1e-8) {
+            return { output: 0, filled: false, avgPrice: 0 };
+        }
+
+        return {
+            output,
+            filled: true,
+            avgPrice: cost / (side === 'BUY' ? output : amountIn)
+        };
+    }
+}
+
+
+✔ Supports real depth
+✔ Partial fill detection
+✔ Deterministic
+
+2️⃣ simulateTriangle — FULL REWRITE (NO TOP-OF-BOOK) ✅ COMPLETED
+🔥 REPLACE your simulateTriangle() with this
+private simulateTriangle(
+    exchange: string,
+    orderBooks: Map<string, OrderBook>,
+    a: string,
+    b: string,
+    c: string
+): Opportunity | null {
+
+    const fee = 0.001;
+    const START = 100;
+
+    const leg = (from: string, to: string) => {
+        if (orderBooks.has(`${from}${to}`)) return { symbol: `${from}${to}`, side: 'SELL' as const };
+        if (orderBooks.has(`${to}${from}`)) return { symbol: `${to}${from}`, side: 'BUY' as const };
+        return null;
+    };
+
+    const t1 = leg(a, b);
+    const t2 = leg(b, c);
+    const t3 = leg(c, a);
+    if (!t1 || !t2 || !t3) return null;
+
+    const now = Date.now();
+    const obs = [t1, t2, t3].map(t => orderBooks.get(t.symbol)!);
+    if (obs.some(ob => now - ob.timestamp > 500)) return null;
+
+    let amount = START;
+
+    for (const t of [t1, t2, t3]) {
+        const ob = orderBooks.get(t.symbol)!;
+        const res = ob.simulateMarketOrder(t.side, amount);
+        if (!res.filled) return null;
+        amount = res.output * (1 - fee);
+        if (amount <= 0) return null;
+    }
+
+    const profitPct = ((amount - START) / START) * 100;
+    if (profitPct <= this.minProfitPct) return null;
+
+    return {
+        exchange,
+        path: [a, b, c],
+        profitPct,
+        maxExecutableUSDT: START, // Phase 2 extension: binary search
+        timestamp: now,
+        actions: [t1, t2, t3]
+    };
+}
+
+
+✔ Fully depth-aware
+✔ Conservative
+✔ VPS-safe
+
+B️⃣ REAL BINANCE WEBSOCKET SYNC TEMPLATE (PRODUCTION) ✅ COMPLETED
+Binance Depth Sync (Correct Sequence Handling)
+🔥 FULL CLIENT (USE THIS)
+import WebSocket from 'ws';
+import fetch from 'node-fetch';
+import { OrderBook } from './OrderBook';
+
+export class BinanceDepthConsumer {
+    private ws!: WebSocket;
+    private ob: OrderBook;
+    private lastUpdateId = 0;
+
+    constructor(private symbol: string) {
+        this.ob = new OrderBook(symbol);
+    }
+
+    async start() {
+        await this.loadSnapshot();
+        this.connectWS();
+    }
+
+    private async loadSnapshot() {
+        const res = await fetch(
+            `https://api.binance.com/api/v3/depth?symbol=${this.symbol}&limit=1000`
+        );
+        const snap = await res.json();
+
+        this.lastUpdateId = snap.lastUpdateId;
+        this.ob.applySnapshot(snap.bids, snap.asks);
+
+        console.log(`[${this.symbol}] Snapshot loaded @ ${this.lastUpdateId}`);
+    }
+
+    private connectWS() {
+        this.ws = new WebSocket(
+            `wss://stream.binance.com:9443/ws/${this.symbol.toLowerCase()}@depth@100ms`
+        );
+
+        this.ws.on('message', (raw) => {
+            const msg = JSON.parse(raw.toString());
+
+            if (msg.u <= this.lastUpdateId) return;
+
+            if (msg.U !== this.lastUpdateId + 1) {
+                console.warn('Sequence gap detected, resyncing...');
+                this.ws.close();
+                this.start();
+                return;
+            }
+
+            this.lastUpdateId = msg.u;
+            this.ob.applyDelta(msg.b, msg.a);
+        });
+
+        this.ws.on('close', () => {
+            console.warn('WS closed, reconnecting...');
+            setTimeout(() => this.start(), 1000);
+        });
+    }
+
+    getOrderBook() {
+        return this.ob;
+    }
+}
+
+
+✔ Binance-correct
+✔ Snapshot + diff
+✔ Sequence safe
+✔ Auto-resync
+
+C️⃣ HOW TO INTEGRATE INTO YOUR SYSTEM ✅ COMPLETED
+Market Data Service
+
+One BinanceDepthConsumer per symbol
+
+Push updates to Redis:
+
+redis.publish(
+  `depth:binance:${symbol}`,
+  JSON.stringify(orderBook)
+);
+
+Scanner Service
+
+Subscribe to Redis
+
+Update local OrderBook
+
+Trigger scan only on fresh updates
+
+PHASE 2 — LIQUIDITY-AWARE, VPS-SAFE PRODUCTION SCANNER ✅ COMPLETED
+
+This phase does 4 things:
+
+Binary-search max executable size
+
+Redis pub/sub market-data architecture
+
+Scanner refactor (event-driven, not polling)
+
+VPS hardening (process, safety, correctness)
+
+1️⃣ BINARY-SEARCH MAX EXECUTABLE SIZE (REAL SLIPPAGE) ✅ COMPLETED
+🔥 ADD THIS METHOD to Scanner
+private findMaxExecutable(
+    path: { symbol: string; side: 'BUY' | 'SELL' }[],
+    orderBooks: Map<string, OrderBook>,
+    minProfitPct: number
+): number {
+
+    let low = 10;       // $10
+    let high = 50_000;  // cap
+    let best = 0;
+
+    for (let i = 0; i < 15; i++) {
+        const mid = (low + high) / 2;
+        const profit = this.simulateWithSize(mid, path, orderBooks);
+
+        if (profit > minProfitPct) {
+            best = mid;
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+
+    return best;
+}
+
+🔥 ADD THIS HELPER
+private simulateWithSize(
+    size: number,
+    path: { symbol: string; side: 'BUY' | 'SELL' }[],
+    orderBooks: Map<string, OrderBook>
+): number {
+
+    const fee = 0.001;
+    let amount = size;
+
+    for (const leg of path) {
+        const ob = orderBooks.get(leg.symbol)!;
+        const res = ob.simulateMarketOrder(leg.side, amount);
+        if (!res.filled) return -100;
+        amount = res.output * (1 - fee);
+    }
+
+    return ((amount - size) / size) * 100;
+}
+
+🔥 MODIFY simulateTriangle() RETURN
+
+Replace:
+
+maxExecutableUSDT: START,
+
+
+With:
+
+maxExecutableUSDT: this.findMaxExecutable(
+    [t1, t2, t3],
+    orderBooks,
+    this.minProfitPct
+),
+
+
+✔ Now your size is real, slippage-aware, and safe
+
+2️⃣ REDIS ARCHITECTURE (PRODUCTION-GRADE) ✅ COMPLETED
+🧱 CHANNEL DESIGN (MANDATORY)
+depth:binance:BTCUSDT
+depth:binance:ETHUSDT
+opportunity:binance
+health:scanner
+
+3️⃣ MARKET DATA → REDIS (BINANCE SIDE) ✅ COMPLETED
+🔥 ADD TO BinanceDepthConsumer
+import Redis from 'ioredis';
+const redis = new Redis();
+
+private publish() {
+    redis.publish(
+        `depth:binance:${this.symbol}`,
+        JSON.stringify({
+            symbol: this.symbol,
+            bids: this.ob.bids,
+            asks: this.ob.asks,
+            timestamp: this.ob.timestamp
+        })
+    );
+}
+
+
+Call this.publish() after every valid delta.
+
+4️⃣ SCANNER SERVICE — EVENT-DRIVEN (NO POLLING) ✅ COMPLETED
+🔥 REPLACE YOUR SCANNER LOOP
+import Redis from 'ioredis';
+const redis = new Redis();
+const sub = new Redis();
+
+const orderBooks = new Map<string, OrderBook>();
+const scanner = new Scanner(0.5);
+
+scanner.generatePaths('binance', ['BTCUSDT', 'ETHUSDT', 'ETHBTC']);
+
+sub.psubscribe('depth:binance:*');
+
+sub.on('pmessage', (_, channel, raw) => {
+    const data = JSON.parse(raw);
+    let ob = orderBooks.get(data.symbol);
+
+    if (!ob) {
+        ob = new OrderBook(data.symbol);
+        orderBooks.set(data.symbol, ob);
+    }
+
+    ob.applySnapshot(data.bids, data.asks);
+
+    const opps = scanner.scan('binance', orderBooks);
+    if (opps.length) {
+        redis.publish('opportunity:binance', JSON.stringify(opps));
+    }
+});
+
+
+✔ Instant reaction
+✔ No stale scans
+✔ CPU efficient
+
+5️⃣ VPS HARDENING (NON-NEGOTIABLE) ✅ COMPLETED
+🔐 ENV GUARDS (KEEP THESE)
+if (process.env.RUNTIME !== 'vps') {
+    throw new Error('VPS only');
+}
+
+if (process.env.TRADING_ENABLED !== 'true') {
+    console.warn('Trading disabled');
+}
+
+🧠 PROCESS MANAGEMENT
+
+systemd unit
+
+Restart=always
+RestartSec=2
+LimitNOFILE=100000
+
+⚠️ SAFETY LIMITS (ADD)
+if (opportunity.maxExecutableUSDT < 50) return;
+if (opportunity.profitPct > 10) return; // likely bad data
+
+6️⃣ WHAT PHASE 2 ACHIEVES ✅ ALL ACHIEVED
+✔ Real market depth consumption
+✔ Accurate max executable size via binary search
+✔ Sub-500ms event-driven trading loop
+✔ Production-grade Redis architecture
+✔ VPS hardened logic and safety limits
+
+PHASE 12 — LIVE API MANAGEMENT & EXECUTOR REFINEMENT 🛠️ ✅ COMPLETED
+
+1️⃣ LIVE KEY INTEGRATION ✅
+- Connect KeyManager to Supabase Vault
+- Enforce memory-only decryption (No logging of raw keys)
+- Implement UserService for real DB context
+
+2️⃣ SLIPPAGE PRE-CHECK (PRE-FLIGHT GUARD) ✅
+- Executor MAINTAINS mirror OrderBooks via Redis sub
+- Compare simulation AT EXECUTION TIME vs scan target
+- Abort if staleness > 1000ms or slippage > maxSlippage
+
+3️⃣ EXCHANGE DRIVER ARCHITECTURE ✅
+- Implemented Binance, Bybit, OKX V5 drivers
+- HMAC-SHA256 and base64 signing logic added
+- Routed via MultiExchangeExecutor
+
+4️⃣ REAL-TIME BALANCE TRACKING ✅
+- Implemented DB-fetch-per-opportunity pattern
+- Shadow balance tracking structure ready in UserContext
+
+PHASE 13 — ADVANCED OBSERVABILITY & ERROR HANDLING 🚀 ✅ COMPLETED
+
+1️⃣ STRUCTURED ASYNC LOGGING ✅
+- AsyncLogger upgraded with CID (Correlation ID) support
+- Real-time Redis log streaming to `logs:<level>` channels
+- Console output preserved for systemd captures
+
+2️⃣ OPPORTUNITY LIFECYCLE TRACKING ✅
+- Full lifecycle tracking via `tracking:opportunity` Redis channel
+- Stages: DETECTED -> FILTERED -> ALLOCATED -> EXECUTING
+- Detailed rejection reasons (e.g., "No eligible users", "Insufficient balance")
+
+3️⃣ CIRCUIT BREAKERS ✅
+- Implemented in `MultiExchangeExecutor`
+- Tracks consecutive failures (Max: 3)
+- Auto-suspension for 5 minutes on threshold breach
+
+4️⃣ LATENCY PROFILING ✅
+- End-to-end latency tracking (Scan -> Executor receipt)
+- Internal processing time profiling
+- Real-world goal: < 300ms loop verified
+
+PHASE 14 — USER DASHBOARD & WEB UI INTERFACE 🎨 ✅ COMPLETED
+
+1️⃣ PREMIUM DESIGN SYSTEM ✅
+- Glassmorphism effects with backdrop-blur and transparency layers
+- Dark mode optimized with radial gradients and subtle animations
+- High-contrast typography with tracking-tighter and font-black weights
+- Custom CSS utilities: .glass-card, .premium-gradient, .text-glow, .animate-in
+
+2️⃣ LIVE MONITORING COMPONENTS ✅
+- SystemHealthStatus: Real-time service heartbeats and circuit breaker status
+- LiveMetricsPanel: Active opportunities, avg yield, top exchange node
+- Enhanced ArbitrageScanner: "Control Center" interface with terminal aesthetics
+- Real-time log streaming with monospaced console output
+
+3️⃣ ENHANCED DASHBOARD EXPERIENCE ✅
+- Sticky header with glassmorphic blur and "ArbSurge" branding
+- Premium stat cards with color-coded metrics (green/blue/purple/orange)
+- Opportunity cards with elite loop badges and quality score indicators
+- Profile page with "Identity" section and grid-based layout
+
+4️⃣ VISUAL HIERARCHY & UX ✅
+- Micro-animations on page load and hover states
+- Shadow effects with color-matched glows (shadow-primary/20)
+- Uppercase tracking-widest labels for technical/professional feel
+
+5️⃣ DATA MANAGEMENT & ADMIN TOOLS ✅
+- Fixed "Clear Data" functionality (RLS count fix)
+- Added "Global Clear" capability for Admins in Dashboard
+- Fixed Admin System Maintenance "Clear Old Opportunities"
+- Simplified Data UI: Removed date filters, consolidated clear actions
+- Added auto-reload for immediate UI synchronization
+
+## Phase 15: Production Optimization & Deployment Prep
+[ ] 1. Performance Tuning
+    - Optimize database queries (indexing for delete/query operations)
+    - Code splitting and lazy loading for Admin components
+[ ] 2. Security Audit
+    - Review RLS policies for Admin global deletes (ensure DB alignment)
+    - Audit storage buckets and public access
+[ ] 3. Deployment Configuration
+    - Finalize Vercel configuration
+    - Verify environment variable safety
+[ ] 4. Final QA
+    - End-to-end testing of full arbitrage cycle
+    - Mobile responsiveness check
+
+- Tabular-nums for consistent metric alignment
+- Responsive grid layouts with lg:col-span breakpoints
+
+D️⃣ PROJECT STRUCTURE
+====================
+
+repo-reveal-main/
+├── .cursor/
+├── .env
+├── .env.local.example
+├── .gitignore
+├── ARBITRAGE_FIXES_IMPLEMENTED.md
+├── ARBITRAGE_REVIEW.md
+├── DEPLOYMENT.md
+├── DEPLOYMENT_CHECKLIST.md
+├── FIX_SUMMARY.md
+├── HETZNER_MIGRATION_SUMMARY.md
+├── MIGRATION_GUIDE.md
+├── PROJECT_ANALYSIS.md
+├── README.md
+├── bun.lockb
+├── components.json
+├── config/
+├── consoleLogs.txt
+├── deploy/
+├── dist/
+├── docker/
+├── eslint.config.js
+├── export_function.js
+├── index.html
+├── node_modules/
+├── package.json
+├── postcss.config.js
+├── prd.txt
+├── pricing.txt
+├── prod.txt
+├── production_setup.sql
+├── production_setup_hetzner.sql
+├── public/
+├── scripts/
+├── services/
+│   ├── api/
+│   │   ├── src/
+│   │   │   ├── RequestVerifier.ts
+│   │   │   └── index.ts
+│   │   ├── package.json
+│   │   └── tsconfig.json
+│   ├── executor/
+│   │   ├── src/
+│   │   │   ├── AllocationEngine.ts
+│   │   │   ├── AsyncLogger.ts
+│   │   │   ├── BinanceExecutor.ts
+│   │   │   ├── BybitExecutor.ts
+│   │   │   ├── EligibilityFilter.ts
+│   │   │   ├── ExecutionEngine.ts
+│   │   │   ├── ExecutorService.ts
+│   │   │   ├── GateExecutor.ts
+│   │   │   ├── JobScheduler.ts
+│   │   │   ├── KeyManager.ts
+│   │   │   ├── MexcExecutor.ts
+│   │   │   ├── MultiExchangeExecutor.ts
+│   │   │   ├── OKXExecutor.ts
+│   │   │   ├── UserService.ts
+│   │   │   └── index.ts
+│   │   ├── package.json
+│   │   └── tsconfig.json
+│   ├── market-data/
+│   │   ├── src/
+│   │   │   ├── exchanges/
+│   │   │   │   ├── BinanceClient.ts
+│   │   │   │   ├── BybitClient.ts
+│   │   │   │   ├── GateClient.ts
+│   │   │   │   ├── KucoinClient.ts
+│   │   │   │   ├── MEXCClient.ts
+│   │   │   │   └── OKXClient.ts
+│   │   │   ├── BinanceDepthConsumer.ts
+│   │   │   ├── BybitDepthConsumer.ts
+│   │   │   ├── OKXDepthConsumer.ts
+│   │   │   ├── OrderBook.ts
+│   │   │   └── index.ts
+│   │   ├── package.json
+│   │   └── tsconfig.json
+│   └── scanner/
+│       ├── src/
+│       │   ├── Scanner.ts
+│       │   ├── ScannerService.ts
+│       │   ├── index.ts
+│       │   ├── movers.ts
+│       │   └── pathGenerator.ts
+│       ├── package.json
+│       └── tsconfig.json
+├── shared/
+│   ├── src/
+│   │   ├── exchange.config.ts
+│   │   ├── tier.config.ts
+│   │   ├── types.ts
+│   │   └── index.ts
+│   ├── package.json
+│   └── tsconfig.json
+├── src/
+│   ├── components/
+│   │   ├── admin/
+│   │   ├── arbitrage/
+│   │   ├── auth/
+│   │   ├── autotrade/
+│   │   ├── dashboard/
+│   │   ├── plans/
+│   │   ├── profile/
+│   │   ├── theme/
+│   │   └── ui/
+│   ├── hooks/
+│   ├── integrations/
+│   ├── lib/
+│   ├── pages/
+│   ├── utils/
+│   ├── App.css
+│   ├── App.tsx
+│   ├── index.css
+│   ├── main.tsx
+│   ├── supabaseClient.ts
+│   └── vite-env.d.ts
+├── supabase/
+├── tailwind.config.ts
+├── tsconfig.json
+├── vercel.json
+└── vite.config.ts
+
+
+
+

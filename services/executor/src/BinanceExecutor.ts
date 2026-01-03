@@ -55,6 +55,11 @@ export class BinanceExecutor implements IExchangeExecutor {
         side: 'BUY' | 'SELL',
         amount: number
     ): Promise<{ fillPrice: number, fillAmount: number, fee: number }> {
+        // PHASE E: HARD EXECUTION BLOCK (MANDATORY)
+        if (process.env.TRADING_ENABLED !== "true") {
+            console.log(`[SAFETY] Execution disabled — live trading blocked for ${exchange} ${symbol} ${side} ${amount}`);
+            throw new Error("Trading is disabled. Set TRADING_ENABLED=true to enable live trading.");
+        }
 
         const dryRun = true;
         if (dryRun) {

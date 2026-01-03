@@ -5,37 +5,62 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Trash2, RefreshCw, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { invokeFunction } from '@/lib/functionsInvoke';
+import { useAuth } from '@/hooks/useAuth';
 
 export const AdminSystemMaintenance = () => {
   const [cleaning, setCleaning] = useState(false);
   const [lastCleanup, setLastCleanup] = useState<{ count: number; timestamp: Date } | null>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const handleCleanupOldOpportunities = async () => {
+    if (!user) return;
+
     try {
       setCleaning(true);
 
-      // Calculate 24 hours ago
-      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      let recordsToDelete = 0;
 
-      // First count matches (RLS workaround)
-      const { count: existingCount, error: countError } = await supabase
-        .from('arbitrage_opportunities')
-        .select('*', { count: 'exact', head: true })
-        .lt('detected_at', twentyFourHoursAgo);
+      // Try using the Edge Function first
+      try {
+        const response = await invokeFunction('clear-user-data', {
+          body: {
+            action: 'clear_opportunities_old',
+            daysOld: 1
+          }
+        });
 
-      if (countError) throw countError;
+        if (response.error) {
+          throw new Error(response.error.message || response.error || 'Function returned error');
+        }
 
-      const recordsToDelete = existingCount || 0;
+        // Handle both response formats (data wrapper or direct response)
+        const result = response.data || response;
+        recordsToDelete = result?.deletedCount || result?.details?.opportunities || 0;
+      } catch (functionError: any) {
+        // If function fails, fall back to direct Supabase query
+        console.warn('Function invocation failed, using direct Supabase query:', functionError);
+        
+        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-      // Then delete old opportunities
-      const { error } = await supabase
-        .from('arbitrage_opportunities')
-        .delete()
-        .lt('detected_at', twentyFourHoursAgo);
+        // Count old opportunities
+        const { count: existingCount, error: countError } = await supabase
+          .from('arbitrage_opportunities')
+          .select('*', { count: 'exact', head: true })
+          .lt('detected_at', twentyFourHoursAgo);
 
-      if (error) {
-        throw error;
+        if (countError) throw countError;
+
+        recordsToDelete = existingCount || 0;
+
+        // Delete old opportunities
+        const { error } = await supabase
+          .from('arbitrage_opportunities')
+          .delete()
+          .lt('detected_at', twentyFourHoursAgo);
+
+        if (error) throw error;
       }
 
       setLastCleanup({ count: recordsToDelete, timestamp: new Date() });
@@ -46,9 +71,20 @@ export const AdminSystemMaintenance = () => {
       });
     } catch (error: any) {
       console.error('Error cleaning up opportunities:', error);
+      let errorMessage = error.message || "Failed to cleanup old opportunities";
+      
+      // Provide more specific error messages
+      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+        errorMessage = "Network error: Unable to reach the server. Please check your connection or ensure the function is deployed.";
+      } else if (errorMessage.includes('404') || errorMessage.includes('not found')) {
+        errorMessage = "Function not found. Please ensure the clear-user-data function is deployed.";
+      } else if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
+        errorMessage = "Authentication failed. Please sign in again.";
+      }
+      
       toast({
         title: "Cleanup Failed",
-        description: error.message || "Failed to cleanup old opportunities",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {

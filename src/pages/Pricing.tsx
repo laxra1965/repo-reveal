@@ -4,7 +4,8 @@ import { useNavigate } from "react-router-dom";
 import { PlanToggle } from "../components/ui/PlanToggle";
 import { supabase } from "../integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { getErrorMessage } from "@/utils/networkUtils";
+import { getErrorMessage, isNetworkError } from "@/utils/networkUtils";
+import { Button } from "@/components/ui/button";
 
 function generateTransactionId() {
   if (window.crypto?.randomUUID) return window.crypto.randomUUID();
@@ -85,7 +86,10 @@ const Pricing = () => {
 
   // Load available plans on mount to verify they exist
   useEffect(() => {
-    const loadPlans = async () => {
+    let retryCount = 0;
+    const maxRetries = 2;
+
+    const loadPlans = async (isRetry: boolean = false) => {
       try {
         const { data, error } = await supabase
           .from('subscription_plans')
@@ -95,24 +99,73 @@ const Pricing = () => {
 
         if (error) {
           console.error('Error loading plans:', error);
-          toast({
-            title: "Database Error",
-            description: `Could not verify plans. Msg: ${error.message}. Hint: ${error.hint || 'No hint'}. Code: ${error.code}`,
-            variant: "destructive",
-          });
+          
+          // Check if it's a network error and retry
+          if (isNetworkError(error) && !isRetry && retryCount < maxRetries) {
+            retryCount++;
+            console.log(`Retrying plan load (attempt ${retryCount}/${maxRetries})...`);
+            setTimeout(() => loadPlans(true), 2000);
+            return;
+          }
+          
+          // Check if it's a network error
+          if (isNetworkError(error)) {
+            toast({
+              title: "Connection Error",
+              description: getErrorMessage(error, "Failed to connect to the database. Please check your internet connection and try again."),
+              variant: "destructive",
+            });
+          } else {
+            // Handle Supabase-specific errors
+            const errorMsg = error.message || 'Unknown database error';
+            const errorCode = error.code || 'N/A';
+            const errorHint = error.hint || '';
+            
+            toast({
+              title: "Database Error",
+              description: `Could not verify plans. ${errorMsg}${errorCode !== 'N/A' ? ` (Code: ${errorCode})` : ''}${errorHint ? ` - ${errorHint}` : ''}`,
+              variant: "destructive",
+            });
+          }
         } else {
           setAvailablePlans(data || []);
           console.log('Available plans:', data);
+          // Reset retry count on success
+          retryCount = 0;
         }
       } catch (error: any) {
         console.error('Error loading plans:', error);
-        toast({
-          title: "Error Loading Plans",
-          description: `Details: ${error.message || 'Unknown error'} (Code: ${error.code || 'N/A'})`,
-          variant: "destructive",
-        });
+        
+        // Handle network errors in catch block and retry
+        if (isNetworkError(error) && !isRetry && retryCount < maxRetries) {
+          retryCount++;
+          console.log(`Retrying plan load (attempt ${retryCount}/${maxRetries})...`);
+          setTimeout(() => loadPlans(true), 2000);
+          return;
+        }
+        
+        // Handle network errors in catch block
+        if (isNetworkError(error)) {
+          toast({
+            title: "Connection Error",
+            description: getErrorMessage(error, "Failed to connect to the server. Please check your internet connection and try again."),
+            variant: "destructive",
+          });
+        } else {
+          // Handle other unexpected errors
+          const errorMsg = error?.message || 'Unknown error occurred';
+          const errorCode = error?.code || error?.name || 'N/A';
+          
+          toast({
+            title: "Error Loading Plans",
+            description: getErrorMessage(error, `Failed to load plans: ${errorMsg}${errorCode !== 'N/A' ? ` (${errorCode})` : ''}`),
+            variant: "destructive",
+          });
+        }
       } finally {
-        setPlansLoading(false);
+        if (retryCount === 0 || retryCount >= maxRetries) {
+          setPlansLoading(false);
+        }
       }
     };
 
@@ -223,73 +276,53 @@ const Pricing = () => {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f7f7fa', maxWidth: 1200, margin: "2rem auto", padding: 16 }}>
-      <h1 style={{ fontSize: 32, fontWeight: 700, marginBottom: 24, textAlign: 'center', color: '#111' }}>Pricing</h1>
+    <div className="min-h-screen bg-background max-w-6xl mx-auto py-8 px-4">
+      <h1 className="text-4xl font-bold mb-6 text-center text-foreground">Pricing</h1>
       {plansLoading && (
-        <div style={{ textAlign: 'center', color: '#888', marginBottom: 16 }}>
+        <div className="text-center text-muted-foreground mb-4">
           Loading plans...
         </div>
       )}
       {!plansLoading && availablePlans.length === 0 && (
-        <div style={{ textAlign: 'center', color: '#d32f2f', marginBottom: 16, padding: 16, background: '#ffebee', borderRadius: 8 }}>
+        <div className="text-center text-destructive mb-4 p-4 bg-destructive/10 rounded-lg">
           ⚠️ No subscription plans are currently available. Please contact support.
         </div>
       )}
-      <PlanToggle value={selectedPlan} onChange={setSelectedPlan} />
-      <div style={{
-        display: "flex",
-        flexDirection: "row",
-        gap: 24,
-        justifyContent: "center",
-        overflowX: "auto",
-        width: "100%"
-      }}>
+      <div className="mb-8">
+        <PlanToggle value={selectedPlan} onChange={setSelectedPlan} />
+      </div>
+      <div className="flex flex-row gap-6 justify-center overflow-x-auto w-full pb-4">
         {tiers.length === 0 ? (
-          <div style={{ color: '#888', fontSize: 18 }}>No pricing tiers available.</div>
+          <div className="text-muted-foreground text-lg">No pricing tiers available.</div>
         ) : (
           tiers.map((tier, idx) => (
             <div
               key={tier.name}
-              style={{
-                border: loadingTier === idx ? "2px solid #0070f3" : "1px solid #ccc",
-                borderRadius: 12,
-                padding: 24,
-                minWidth: 320,
-                background: "#fff",
-                boxShadow: "0 2px 12px 0 rgba(0,0,0,0.07)",
-                color: '#222',
-                cursor: loadingTier !== null ? 'not-allowed' : 'pointer',
-                opacity: loadingTier !== null && loadingTier !== idx ? 0.7 : 1,
-                flex: '0 0 340px',
-                marginBottom: 12
-              }}
+              className={`
+                border rounded-xl p-6 min-w-[320px] bg-card shadow-md text-foreground
+                flex-shrink-0 mb-3
+                ${loadingTier === idx ? 'border-primary border-2' : 'border-border'}
+                ${loadingTier !== null ? 'cursor-not-allowed' : 'cursor-pointer hover:shadow-lg transition-shadow'}
+                ${loadingTier !== null && loadingTier !== idx ? 'opacity-70' : 'opacity-100'}
+              `}
               onClick={() => setSelectedTier(idx)}
             >
-              <h2 style={{ fontSize: 22, fontWeight: 600, color: '#111' }}>{tier.name}</h2>
-              <ul style={{ margin: "12px 0", paddingLeft: 20 }}>
+              <h2 className="text-xl font-semibold text-foreground mb-3">{tier.name}</h2>
+              <ul className="my-3 pl-5 space-y-1.5">
                 {tier.features.map((f, i) => (
-                  <li key={i} style={{ marginBottom: 6 }}>{f}</li>
+                  <li key={i} className="text-sm">{f}</li>
                 ))}
               </ul>
-              <div style={{ margin: "12px 0" }}>
-                <div style={{ fontSize: 28, fontWeight: 700, color: '#0070f3', marginBottom: 8 }}>
+              <div className="my-3">
+                <div className="text-3xl font-bold text-primary mb-2">
                   {tier.plans.find(p => p.label.toLowerCase().replace(/\s/g, "") === selectedPlan)?.price || tier.plans[0].price}
                 </div>
               </div>
-              <button
-                style={{
-                  marginTop: 12,
-                  padding: '10px 24px',
-                  borderRadius: 8,
-                  background: '#0070f3',
-                  color: '#fff',
-                  border: 'none',
-                  fontWeight: 600,
-                  fontSize: 16,
-                  width: '100%',
-                  cursor: loadingTier !== null ? 'not-allowed' : 'pointer',
-                  opacity: loadingTier !== null && loadingTier !== idx ? 0.7 : 1
-                }}
+              <Button
+                className={`
+                  w-full mt-3
+                  ${loadingTier !== null && loadingTier !== idx ? 'opacity-70' : ''}
+                `}
                 disabled={loadingTier !== null}
                 onClick={e => {
                   e.stopPropagation();
@@ -297,7 +330,7 @@ const Pricing = () => {
                 }}
               >
                 {loadingTier === idx ? 'Processing...' : 'Select Plan'}
-              </button>
+              </Button>
             </div>
           ))
         )}

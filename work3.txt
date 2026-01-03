@@ -1,0 +1,5 @@
+.pem is on the root directory(tri-arb-key.pem)
+2.	icacls tri-arb-key.pem /inheritance:r
+	icacls tri-arb-key.pem /grant:r "$($env:USERNAME):(R)"
+
+3.	ssh -i tri-arb-key.pem ubuntu@16.16.77.247

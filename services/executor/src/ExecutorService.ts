@@ -2,7 +2,7 @@
 import { AsyncLogger, LogLevel } from './AsyncLogger';
 import { EligibilityFilter, UserContext } from './EligibilityFilter';
 import { AllocationEngine } from './AllocationEngine';
-import { ExecutionEngine, IExchangeExecutor } from './ExecutionEngine';
+import { ExecutionEngine, IExchangeExecutor, ExecutionState } from './ExecutionEngine';
 import { JobScheduler } from './JobScheduler';
 import { TierLevel, OrderBook } from '../../../shared/src/index';
 import { KeyManager } from './KeyManager';
@@ -124,7 +124,7 @@ export class ExecutorService {
                     const exName = exchange.toLowerCase() as any;
                     if (!ALLOWED_EXCHANGES.includes(exName)) {
                         console.warn(`[Executor] Exchange ${exchange} not in allowlist. Skipping.`);
-                        continue;
+                        return;
                     }
 
                     const users = await this.userService.getEligibleUsers(exchange);

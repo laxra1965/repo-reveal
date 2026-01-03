@@ -48,14 +48,13 @@ export class BybitClient {
 
                     if (msg.type === 'snapshot') {
                         // Reset OB
-                        ob.bids.clear();
-                        ob.asks.clear();
-                        msg.data.b.forEach((b: any) => ob.update(parseFloat(b[0]), parseFloat(b[1]), true));
-                        msg.data.a.forEach((a: any) => ob.update(parseFloat(a[0]), parseFloat(a[1]), false));
+                        ob.reset();
+                        msg.data.b.forEach((b: any) => ob.updateSide('bids', parseFloat(b[0]), parseFloat(b[1])));
+                        msg.data.a.forEach((a: any) => ob.updateSide('asks', parseFloat(a[0]), parseFloat(a[1])));
                         console.log(`Bybit Snapshot loaded for ${topicSymbol}`);
                     } else if (msg.type === 'delta') {
-                        msg.data.b.forEach((b: any) => ob.update(parseFloat(b[0]), parseFloat(b[1]), true));
-                        msg.data.a.forEach((a: any) => ob.update(parseFloat(a[0]), parseFloat(a[1]), false));
+                        msg.data.b.forEach((b: any) => ob.updateSide('bids', parseFloat(b[0]), parseFloat(b[1])));
+                        msg.data.a.forEach((a: any) => ob.updateSide('asks', parseFloat(a[0]), parseFloat(a[1])));
                     }
                 }
             } catch (e) {

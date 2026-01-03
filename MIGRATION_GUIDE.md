@@ -40,7 +40,7 @@ This guide walks you through migrating your edge functions from Supabase to Hetz
 
 1. **On your local machine, create `docker/.env`:**
    ```bash
-   cp docker/.env.template docker/.env
+   cp docker/env.template docker/.env
    ```
 
 2. **Edit `docker/.env` with your values:**

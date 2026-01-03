@@ -19,7 +19,7 @@ const Profile = () => {
     if (!authLoading && !user) {
       navigate('/auth');
     }
-  }, [user, authLoading]);
+  }, [user, authLoading, navigate]);
 
   const isLoading = authLoading || subscriptionLoading;
 

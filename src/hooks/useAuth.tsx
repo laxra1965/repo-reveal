@@ -46,9 +46,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         if (mounted) {
           setSession(session);
           setUser(session?.user ?? null);
-          if (loading) {
-            setLoading(false);
-          }
+          setLoading(false); // Always set loading to false when auth state changes
         }
       }
     );

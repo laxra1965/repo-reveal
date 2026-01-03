@@ -51,11 +51,11 @@ cd /opt/arbitrage-functions
 
 ### 1. Create environment file
 
-Copy `docker/.env.example` to `docker/.env` and fill in your values:
+Copy `docker/env.template` to `docker/.env` and fill in your values:
 
 ```bash
 # On your local machine
-cp docker/.env.example docker/.env
+cp docker/env.template docker/.env
 # Edit docker/.env with your actual values
 ```
 

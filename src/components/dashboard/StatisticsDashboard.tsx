@@ -196,141 +196,126 @@ export const StatisticsDashboard = () => {
     };
   }, [user]);
 
-  // Clear data function - uses direct Supabase queries instead of Edge Function
+  // Clear data function - tries Edge Function first, falls back to direct queries
   const clearData = async (action: string, days?: number) => {
     if (!user) return;
 
     setClearing(true);
     try {
+      // Map action names to function format
+      let functionAction: string;
+      switch (action) {
+        case 'clear_opportunities_all':
+          functionAction = 'clear_opportunities';
+          break;
+        case 'clear_scan_logs_all':
+          functionAction = 'clear_scan_logs';
+          break;
+        case 'clear_all':
+          functionAction = 'clear_all';
+          break;
+        default:
+          functionAction = action;
+      }
+
       let deletedCount = 0;
       let details: Record<string, number> = {};
 
-      switch (action) {
-        case 'clear_opportunities_old': {
-          const cutoffDate = new Date();
-          cutoffDate.setDate(cutoffDate.getDate() - (days || clearDays));
+      // Try using the Edge Function first
+      try {
+        const { invokeFunction } = await import('@/lib/functionsInvoke');
+        const response = await invokeFunction('clear-user-data', {
+          body: {
+            action: functionAction,
+            daysOld: days || clearDays
+          }
+        });
 
-          const { count } = await supabase
-            .from('arbitrage_opportunities')
-            .delete()
-            .eq('user_id', user.id)
-            .lt('detected_at', cutoffDate.toISOString())
-            .select('*', { count: 'exact', head: true });
-
-          deletedCount = count || 0;
-          details.opportunities = deletedCount;
-          break;
+        if (response.error) {
+          throw new Error(response.error.message || response.error || 'Function returned error');
         }
 
-        case 'clear_opportunities_all': {
-          console.log(`Attempting to delete opportunities (Admin: ${isAdmin})`);
+        // Handle both response formats (data wrapper or direct response)
+        const result = response.data || response;
+        deletedCount = result?.deletedCount || 0;
+        details = result?.details || {};
+      } catch (functionError: any) {
+        // If function fails (not deployed or network error), fall back to direct Supabase queries
+        console.warn('Function invocation failed, using direct Supabase queries:', functionError);
+        
+        switch (action) {
+          case 'clear_opportunities_all': {
+            let countQuery = supabase.from('arbitrage_opportunities').select('id', { count: 'exact', head: true });
+            if (!isAdmin) {
+              countQuery = countQuery.eq('user_id', user.id);
+            }
+            const { count } = await countQuery;
+            const recordsToDelete = count || 0;
 
-          // First, check how many opportunities exist
-          let countQuery = supabase.from('arbitrage_opportunities').select('id');
-          // Only filter by user_id if NOT admin
-          if (!isAdmin) {
-            countQuery = countQuery.eq('user_id', user.id);
-          }
-          const { data: existingOpps, error: checkError } = await countQuery;
+            let deleteQuery = supabase.from('arbitrage_opportunities').delete();
+            if (!isAdmin) {
+              deleteQuery = deleteQuery.eq('user_id', user.id);
+            }
+            const { error } = await deleteQuery;
 
-          console.log('Existing opportunities:', existingOpps?.length);
-
-          if (checkError) {
-            console.error('Error checking opportunities:', checkError);
-            throw checkError;
-          }
-
-          const recordsToDelete = existingOpps?.length || 0;
-
-          // Then delete all
-          let deleteQuery = supabase.from('arbitrage_opportunities').delete();
-          if (!isAdmin) {
-            deleteQuery = deleteQuery.eq('user_id', user.id);
-          }
-          const { error } = await deleteQuery;
-
-          console.log('Delete completed, error:', error);
-
-          if (error) {
-            console.error('Delete error:', error);
-            throw error;
+            if (error) throw error;
+            deletedCount = recordsToDelete;
+            details.opportunities = deletedCount;
+            break;
           }
 
-          deletedCount = recordsToDelete;
-          details.opportunities = deletedCount;
-          break;
+          case 'clear_scan_logs_all': {
+            let countQuery = supabase.from('scanner_logs').select('id', { count: 'exact', head: true });
+            if (!isAdmin) {
+              countQuery = countQuery.eq('user_id', user.id);
+            }
+            const { count } = await countQuery;
+            const recordsToDelete = count || 0;
+
+            let deleteQuery = supabase.from('scanner_logs').delete();
+            if (!isAdmin) {
+              deleteQuery = deleteQuery.eq('user_id', user.id);
+            }
+            const { error } = await deleteQuery;
+
+            if (error) throw error;
+            deletedCount = recordsToDelete;
+            details.scan_logs = deletedCount;
+            break;
+          }
+
+          case 'clear_all': {
+            // Count opportunities
+            let oppCountQuery = supabase.from('arbitrage_opportunities').select('id', { count: 'exact', head: true });
+            if (!isAdmin) oppCountQuery = oppCountQuery.eq('user_id', user.id);
+            const { count: oppCount } = await oppCountQuery;
+
+            // Count logs
+            let logCountQuery = supabase.from('scanner_logs').select('id', { count: 'exact', head: true });
+            if (!isAdmin) logCountQuery = logCountQuery.eq('user_id', user.id);
+            const { count: logCount } = await logCountQuery;
+
+            // Delete opportunities
+            let delOppQuery = supabase.from('arbitrage_opportunities').delete();
+            if (!isAdmin) delOppQuery = delOppQuery.eq('user_id', user.id);
+            const { error: oppError } = await delOppQuery;
+            if (oppError) throw oppError;
+
+            // Delete logs
+            let delLogQuery = supabase.from('scanner_logs').delete();
+            if (!isAdmin) delLogQuery = delLogQuery.eq('user_id', user.id);
+            const { error: logError } = await delLogQuery;
+            if (logError) throw logError;
+
+            deletedCount = (oppCount || 0) + (logCount || 0);
+            details.opportunities = oppCount || 0;
+            details.scan_logs = logCount || 0;
+            break;
+          }
+
+          default:
+            throw new Error('Invalid action');
         }
-
-
-        case 'clear_scan_logs_old': {
-          const cutoffDate = new Date();
-          cutoffDate.setDate(cutoffDate.getDate() - (days || clearDays));
-
-          const { count } = await supabase
-            .from('scanner_logs')
-            .delete()
-            .eq('user_id', user.id)
-            .lt('created_at', cutoffDate.toISOString())
-            .select('*', { count: 'exact', head: true });
-
-          deletedCount = count || 0;
-          details.scan_logs = deletedCount;
-          break;
-        }
-
-        case 'clear_scan_logs_all': {
-          let countQuery = supabase.from('scanner_logs').select('id');
-          if (!isAdmin) {
-            countQuery = countQuery.eq('user_id', user.id);
-          }
-          const { data: existingLogs } = await countQuery;
-
-          const recordsToDelete = existingLogs?.length || 0;
-
-          let deleteQuery = supabase.from('scanner_logs').delete();
-          if (!isAdmin) {
-            deleteQuery = deleteQuery.eq('user_id', user.id);
-          }
-          const { error } = await deleteQuery;
-
-          if (error) throw error;
-
-          deletedCount = recordsToDelete;
-          details.scan_logs = deletedCount;
-          break;
-        }
-
-        case 'clear_all': {
-          // Count opportunities
-          let oppCountQuery = supabase.from('arbitrage_opportunities').select('id');
-          if (!isAdmin) oppCountQuery = oppCountQuery.eq('user_id', user.id);
-          const { data: opps } = await oppCountQuery;
-          const oppCount = opps?.length || 0;
-
-          // Count logs
-          let logCountQuery = supabase.from('scanner_logs').select('id');
-          if (!isAdmin) logCountQuery = logCountQuery.eq('user_id', user.id);
-          const { data: logs } = await logCountQuery;
-          const logCount = logs?.length || 0;
-
-          // Delete opportunities
-          let delOppQuery = supabase.from('arbitrage_opportunities').delete();
-          if (!isAdmin) delOppQuery = delOppQuery.eq('user_id', user.id);
-          await delOppQuery;
-
-          // Delete logs
-          let delLogQuery = supabase.from('scanner_logs').delete();
-          if (!isAdmin) delLogQuery = delLogQuery.eq('user_id', user.id);
-          await delLogQuery;
-
-          deletedCount = oppCount + logCount;
-          details.opportunities = oppCount;
-          details.scan_logs = logCount;
-          break;
-        }
-
-        default:
-          throw new Error('Invalid action');
       }
 
       // Immediately reset stats to show cleared state
@@ -348,18 +333,24 @@ export const StatisticsDashboard = () => {
 
       toast({
         title: "Data Cleared",
-        description: `Successfully deleted ${deletedCount} item(s). ${details.opportunities ? `Opportunities: ${details.opportunities}` : ''} ${details.scan_logs ? `Logs: ${details.scan_logs}` : ''} Page will reload...`,
+        description: `Successfully deleted ${deletedCount} item(s). ${details.opportunities ? `Opportunities: ${details.opportunities}` : ''} ${details.scan_logs ? `Logs: ${details.scan_logs}` : ''}`,
       });
-
-      // Reload page after a short delay to show the toast
-      setTimeout(() => {
-        window.location.reload();
-      }, 1500);
     } catch (error: any) {
       console.error('Clear data error:', error);
+      let errorMessage = error.message || "Failed to clear data. Please try again.";
+      
+      // Provide more specific error messages
+      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+        errorMessage = "Network error: Unable to reach the server. Please check your connection or ensure the function is deployed.";
+      } else if (errorMessage.includes('404') || errorMessage.includes('not found')) {
+        errorMessage = "Function not found. Please ensure the clear-user-data function is deployed.";
+      } else if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
+        errorMessage = "Authentication failed. Please sign in again.";
+      }
+      
       toast({
         title: "Clear Data Error",
-        description: error.message || "Failed to clear data",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {

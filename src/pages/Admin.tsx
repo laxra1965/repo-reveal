@@ -1,9 +1,8 @@
 import { useAuth } from '@/hooks/useAuth';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AdminTransactionList } from '@/components/admin/AdminTransactionList';
 import { AdminSubscriptionList } from '@/components/admin/AdminSubscriptionList';
 import { AdminUsersList } from '@/components/admin/AdminUsersList';
@@ -11,13 +10,18 @@ import { AdminSystemMaintenance } from '@/components/admin/AdminSystemMaintenanc
 import { AdminPlanManagement } from '@/components/admin/AdminPlanManagement';
 import { AdminSystemConfig } from '@/components/admin/AdminSystemConfig';
 import { ArrowLeft, Settings, CreditCard, Users, Shield, UserCog, Wrench, Package, Cpu } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const Admin = () => {
   const { user, loading: authLoading, signOut } = useAuth();
   const { isAdmin, loading: adminLoading } = useIsAdmin();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const loading = authLoading || adminLoading;
+
+  // Get current tab from URL hash or default to users
+  const currentTab = location.hash.replace('#', '') || 'users';
 
   useEffect(() => {
     if (!loading && !user) {
@@ -27,6 +31,13 @@ const Admin = () => {
       return;
     }
   }, [user, loading, navigate, isAdmin]);
+
+  // Set default hash on initial load
+  useEffect(() => {
+    if (!location.hash && !loading && user && isAdmin) {
+      navigate('/admin#users', { replace: true });
+    }
+  }, [location.hash, loading, user, isAdmin, navigate]);
 
   if (loading) {
     return (
@@ -57,85 +68,73 @@ const Admin = () => {
     );
   }
 
+  const navItems = [
+    { id: 'users', label: 'Users', icon: UserCog, component: AdminUsersList },
+    { id: 'subscriptions', label: 'Subscriptions', icon: Users, component: AdminSubscriptionList },
+    { id: 'plans', label: 'Plans', icon: Package, component: AdminPlanManagement },
+    { id: 'transactions', label: 'Transactions', icon: CreditCard, component: AdminTransactionList },
+    { id: 'maintenance', label: 'Maintenance', icon: Wrench, component: AdminSystemMaintenance },
+    { id: 'config', label: 'Config', icon: Cpu, component: AdminSystemConfig },
+  ];
+
+  const handleTabChange = (tabId: string) => {
+    navigate(`/admin#${tabId}`, { replace: true });
+  };
+
+  const CurrentComponent = navItems.find(item => item.id === currentTab)?.component || AdminUsersList;
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" onClick={() => navigate('/dashboard')}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Dashboard
-            </Button>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Settings className="h-6 w-6" />
-              Admin Panel
-            </h1>
+      <header className="border-b bg-card/30 backdrop-blur-xl sticky top-0 z-50">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center gap-4">
+              <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard')}>
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Dashboard
+              </Button>
+              <h1 className="text-xl font-bold flex items-center gap-2">
+                <Settings className="h-5 w-5" />
+                Admin Panel
+              </h1>
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-muted-foreground hidden sm:block">
+                {user.email}
+              </span>
+              <Button variant="outline" size="sm" onClick={signOut}>
+                Sign Out
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground">
-              {user.email}
-            </span>
-            <Button variant="outline" onClick={signOut}>
-              Sign Out
-            </Button>
-          </div>
+          
+          {/* Navigation Bar */}
+          <nav className="flex items-center gap-1 overflow-x-auto pb-2 scrollbar-hide">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = currentTab === item.id;
+              return (
+                <Button
+                  key={item.id}
+                  variant={isActive ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => handleTabChange(item.id)}
+                  className={cn(
+                    "flex items-center gap-2 whitespace-nowrap",
+                    isActive && "bg-primary text-primary-foreground"
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span className="hidden sm:inline">{item.label}</span>
+                </Button>
+              );
+            })}
+          </nav>
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8">
-        <Tabs defaultValue="users" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6">
-            <TabsTrigger value="users" className="flex items-center gap-2">
-              <UserCog className="h-4 w-4" />
-              All Users
-            </TabsTrigger>
-            <TabsTrigger value="subscriptions" className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Subscription Requests
-            </TabsTrigger>
-            <TabsTrigger value="plans" className="flex items-center gap-2">
-              <Package className="h-4 w-4" />
-              Plan Management
-            </TabsTrigger>
-            <TabsTrigger value="transactions" className="flex items-center gap-2">
-              <CreditCard className="h-4 w-4" />
-              Transactions
-            </TabsTrigger>
-            <TabsTrigger value="maintenance" className="flex items-center gap-2">
-              <Wrench className="h-4 w-4" />
-              Maintenance
-            </TabsTrigger>
-            <TabsTrigger value="config" className="flex items-center gap-2">
-              <Cpu className="h-4 w-4" />
-              System Config
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="users">
-            <AdminUsersList />
-          </TabsContent>
-
-          <TabsContent value="subscriptions">
-            <AdminSubscriptionList />
-          </TabsContent>
-
-          <TabsContent value="plans">
-            <AdminPlanManagement />
-          </TabsContent>
-
-          <TabsContent value="transactions">
-            <AdminTransactionList />
-          </TabsContent>
-
-          <TabsContent value="maintenance">
-            <AdminSystemMaintenance />
-          </TabsContent>
-
-          <TabsContent value="config">
-            <AdminSystemConfig />
-          </TabsContent>
-        </Tabs>
+      <main className="container mx-auto px-4 py-6">
+        <CurrentComponent />
       </main>
     </div>
   );

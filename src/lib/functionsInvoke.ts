@@ -54,7 +54,13 @@ export async function invokeFunction(name: string, options?: any) {
 
   // Fallback to Supabase Edge Functions
   try {
-    const response = await supabase.functions.invoke(name, options);
+    // Format options for Supabase Edge Functions
+    const supabaseOptions: any = {
+      body: options?.body || {}
+    };
+    
+    const response = await supabase.functions.invoke(name, supabaseOptions);
+    
     if (response && response.error) {
       console.error(`Supabase Edge Function \`${name}\` returned non-2xx:`, response);
       const respErr: any = response.error;
@@ -62,9 +68,15 @@ export async function invokeFunction(name: string, options?: any) {
       const statusPart = respErr && (respErr.status || respErr.statusCode) ? ` (status: ${respErr.status || respErr.statusCode})` : '';
       throw new Error(errMessage + statusPart);
     }
+    
+    // Supabase functions return { data, error } format
     return response;
   } catch (e: any) {
     console.error(`Error invoking function ${name}:`, e);
+    // Handle network errors
+    if (e.message?.includes('Failed to fetch') || e.message?.includes('NetworkError')) {
+      throw new Error('Network error: Unable to reach the server. Please check your connection and try again.');
+    }
     throw e;
   }
 }

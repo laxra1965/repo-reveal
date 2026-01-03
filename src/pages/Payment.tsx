@@ -170,15 +170,15 @@ const Payment = () => {
           <CardHeader>
             <CardTitle>Complete Your Payment</CardTitle>
             <CardDescription>
-              <div style={{marginTop: 8, marginBottom: 8}}>
-                <span style={{fontWeight: 600, color: '#0070f3'}}>Transaction ID:</span>
-                <span style={{fontFamily: 'monospace', marginLeft: 8, color: '#222'}}>{transaction.transaction_id}</span>
+              <div className="mt-2 mb-2">
+                <span className="font-semibold text-primary">Transaction ID:</span>
+                <span className="font-mono ml-2 text-foreground">{transaction.transaction_id}</span>
               </div>
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Info Message */}
-            <div className="bg-blue-50 border border-blue-200 text-blue-900 rounded-lg p-3 text-sm">
+            <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-100 rounded-lg p-3 text-sm">
               Please send the exact amount to the address below. Double-check the network and transaction ID. Your plan will be activated after payment is confirmed by admin.
             </div>
             {/* Plan Details */}
@@ -187,18 +187,17 @@ const Payment = () => {
               <div className="space-y-1 text-sm">
                 <p><strong>Plan:</strong> {transaction.subscription_plans.name}</p>
                 <p><strong>Duration:</strong> {transaction.subscription_plans.duration_type}</p>
-                <p><strong>Amount:</strong> <span style={{color:'#0070f3', fontWeight:600}}>${transaction.amount} USDT</span></p>
+                <p><strong>Amount:</strong> <span className="text-primary font-semibold">${transaction.amount} USDT</span></p>
               </div>
             </div>
             {/* Payment Address Section */}
-            <div className="bg-white p-4 rounded-lg border">
+            <div className="bg-card p-4 rounded-lg border">
               <h3 className="font-semibold mb-2">USDT-TRC20 Payment Address</h3>
               <div className="flex items-center gap-2 mt-2">
                 <Input 
                   value={USDT_ADDRESS} 
                   readOnly 
-                  className="font-mono text-base font-bold"
-                  style={{background:'#f7f7fa', color:'#0070f3'}}
+                  className="font-mono text-base font-bold bg-muted text-primary"
                 />
                 <Button onClick={copyAddress} size="icon" variant="outline">
                   <Copy className="h-4 w-4" />

@@ -52,8 +52,9 @@ export class Scanner {
         console.log(`[${exchange}] Generated ${validPaths.length} triangular paths.`);
     }
 
-    scan(exchange: string, orderBooks: Map<string, OrderBook>): Opportunity[] {
-        const exchangePaths = this.paths.get(exchange) || [];
+    scan(exchange: string, orderBooks: Map<string, OrderBook>, paths?: string[][]): Opportunity[] {
+        // Use provided paths if available (dynamic), otherwise use cached paths
+        const exchangePaths = paths || this.paths.get(exchange) || [];
         const opportunities: Opportunity[] = [];
 
         for (const path of exchangePaths) {

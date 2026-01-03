@@ -18,7 +18,8 @@ export class BinanceClient {
     }
 
     async connect() {
-        const streams = this.symbols.map(s => `${s.toLowerCase()}@depth`).join('/');
+        // FIX: Use @depth@100ms for production-grade low latency
+        const streams = this.symbols.map(s => `${s.toLowerCase()}@depth@100ms`).join('/');
         const url = `wss://stream.binance.com:9443/stream?streams=${streams}`;
 
         console.log(`Connecting to Binance WS...`);
@@ -70,7 +71,16 @@ export class BinanceClient {
     async fetchSnapshot(symbol: string) {
         try {
             console.log(`Fetching snapshot for ${symbol}`);
-            const res = await fetch(`https://api.binance.com/api/v3/depth?symbol=${symbol.toUpperCase()}&limit=1000`);
+            // FIX: Add timeout protection (3 seconds)
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+            const res = await fetch(
+                `https://api.binance.com/api/v3/depth?symbol=${symbol.toUpperCase()}&limit=1000`,
+                { signal: controller.signal }
+            );
+            clearTimeout(timeoutId);
+
             const data = await res.json();
 
             if (!data.lastUpdateId) {
@@ -78,18 +88,20 @@ export class BinanceClient {
             }
 
             const ob = this.orderBooks.get(symbol)!;
+            ob.reset();
             ob.lastUpdateId = data.lastUpdateId;
 
-            data.bids.forEach((b: any) => ob.update(parseFloat(b[0]), parseFloat(b[1]), true));
-            data.asks.forEach((a: any) => ob.update(parseFloat(a[0]), parseFloat(a[1]), false));
+            data.bids.forEach(([price, qty]: [string, string]) => ob.updateSide('bids', +price, +qty));
+            data.asks.forEach(([price, qty]: [string, string]) => ob.updateSide('asks', +price, +qty));
 
             this.isSnapshotLoaded.set(symbol, true);
             console.log(`Snapshot loaded for ${symbol}`);
 
-            // Replay buffer
+            // FIX: Replay buffer with proper sequencing validation
             const buffer = this.buffer.get(symbol) || [];
             for (const event of buffer) {
-                if (event.u > ob.lastUpdateId) {
+                // Only process if: u > lastUpdateId AND U <= lastUpdateId + 1 (no gap)
+                if (event.u > ob.lastUpdateId && event.U <= ob.lastUpdateId + 1) {
                     this.processUpdate(event);
                 }
             }
@@ -100,11 +112,29 @@ export class BinanceClient {
         }
     }
 
+    // FIX: Strict Binance sequencing validation (CRITICAL for production)
     processUpdate(event: any) {
         const ob = this.orderBooks.get(event.s)!;
-        if (event.u <= ob.lastUpdateId) return;
-        event.b.forEach((b: any) => ob.update(parseFloat(b[0]), parseFloat(b[1]), true));
-        event.a.forEach((a: any) => ob.update(parseFloat(a[0]), parseFloat(a[1]), false));
+
+        // Binance strict sequencing rule
+        if (event.u <= ob.lastUpdateId) return; // Discard old events
+
+        // CRITICAL: Check if U matches expected sequence (must be lastUpdateId + 1)
+        if (event.U !== ob.lastUpdateId + 1) {
+            console.error(`[Binance] Sequence gap detected for ${event.s}: U=${event.U}, expected=${ob.lastUpdateId + 1}`);
+            this.isSnapshotLoaded.set(event.s, false);
+            this.fetchSnapshot(event.s);
+            return;
+        }
+
+        // Apply updates
+        for (const [price, qty] of event.b) {
+            ob.updateSide('bids', +price, +qty);
+        }
+        for (const [price, qty] of event.a) {
+            ob.updateSide('asks', +price, +qty);
+        }
+
         ob.lastUpdateId = event.u;
     }
 }

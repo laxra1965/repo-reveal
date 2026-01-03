@@ -4,6 +4,7 @@ import { PlanCard } from './PlanCard';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
+import { useAdminSettings } from '@/hooks/useAdminSettings';
 import { isNetworkError, getErrorMessage } from '@/utils/networkUtils';
 
 interface Plan {
@@ -21,6 +22,7 @@ export const PlansSection = () => {
   const [selectingPlan, setSelectingPlan] = useState<string | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
+  const { getSetting: getAdminSetting } = useAdminSettings();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -71,6 +73,9 @@ export const PlansSection = () => {
       const selectedPlan = plans.find(p => p.id === planId);
       if (!selectedPlan) throw new Error('Plan not found');
 
+      // Get USDT address from admin settings
+      const usdtAddress = getAdminSetting('usdt_address', 'TQzjbHBa9ckat52PtVn7m2SSEM7dJXQ2uP');
+
       // Create transaction record
       const { data, error } = await supabase
         .from('transactions')
@@ -79,7 +84,7 @@ export const PlansSection = () => {
           plan_id: planId,
           transaction_id: transactionId,
           amount: selectedPlan.price,
-          usdt_address: 'TRC20_ADDRESS_HERE', // This will be replaced with actual address
+          usdt_address: usdtAddress,
           status: 'pending'
         })
         .select()

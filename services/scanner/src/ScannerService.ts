@@ -1,6 +1,8 @@
 
 import { Scanner, OrderBook } from './Scanner';
 import Redis from 'ioredis';
+import { initMoversSubscription } from './movers';
+import { generateDynamicPaths } from './pathGenerator';
 
 export class ScannerService {
     private redis: Redis;
@@ -21,6 +23,11 @@ export class ScannerService {
 
     async start() {
         console.log(`[ScannerService] Starting for ${this.exchange}...`);
+        
+        // Initialize movers subscription (only once, shared across all instances)
+        initMoversSubscription();
+        
+        // Generate static paths as fallback
         this.scanner.generatePaths(this.exchange, this.symbols);
 
         this.sub.psubscribe(`depth:${this.exchange}:*`);
@@ -118,7 +125,12 @@ export class ScannerService {
 
         if (Date.now() - ob.timestamp > 300) return; // Drop stale
 
-        const opps = this.scanner.scan(this.exchange, this.orderBooks);
+        // Generate dynamic paths (combines base quotes + movers)
+        // Falls back to static paths if movers are not available
+        const dynamicPaths = generateDynamicPaths(this.exchange, this.symbols);
+        const paths = dynamicPaths.length > 0 ? dynamicPaths : undefined; // Use dynamic if available, else fallback to static
+
+        const opps = this.scanner.scan(this.exchange, this.orderBooks, paths);
         if (opps.length) {
             const validOpps = opps.filter(o => {
                 if (o.maxExecutableUSDT < 50) return false;

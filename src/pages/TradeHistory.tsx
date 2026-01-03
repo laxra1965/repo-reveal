@@ -60,19 +60,26 @@ const TradeHistory = () => {
   }, [user]);
 
   const fetchTradeHistory = async () => {
+    if (!user) return;
+    
     try {
+      setLoading(true);
       const { data, error } = await supabase
         .from('trade_history')
         .select('*')
-        .eq('user_id', user!.id)
+        .eq('user_id', user.id)
         .order('started_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching trade history:', error);
+        // Could show toast here if needed
+        return;
+      }
 
       setTrades(data || []);
       calculateStats(data || []);
     } catch (error) {
-      console.error('Error fetching trade history:', error);
+      console.error('Unexpected error fetching trade history:', error);
     } finally {
       setLoading(false);
     }

@@ -16,7 +16,8 @@ echo "📁 Deploy directory: $DEPLOY_DIR"
 # Check if .env file exists
 if [ ! -f "$PROJECT_DIR/docker/.env" ]; then
     echo "❌ Error: docker/.env file not found!"
-    echo "   Please create docker/.env from docker/.env.example"
+    echo "   Please create docker/.env from docker/env.template"
+    echo "   Command: cp docker/env.template docker/.env"
     exit 1
 fi
 
