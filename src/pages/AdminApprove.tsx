@@ -58,16 +58,30 @@ const AdminApprove = () => {
           subscription_plans (
             name,
             duration_type
-          ),
-          users (
-            email
           )
         `)
         .eq("status", "proof_submitted")
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setTransactions(data || []);
+      
+      // Fetch user emails separately since there's no direct relation
+      const transactionsWithUsers: Transaction[] = [];
+      for (const tx of data || []) {
+        // Get user email from profiles table
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('email')
+          .eq('user_id', tx.user_id)
+          .maybeSingle();
+        
+        transactionsWithUsers.push({
+          ...tx,
+          users: profile ? { email: profile.email } : undefined
+        });
+      }
+      
+      setTransactions(transactionsWithUsers);
     } catch (error: any) {
       console.error("Error fetching transactions:", error);
       toast({

@@ -64,18 +64,21 @@ export default async function handler(req: Request): Promise<Response> {
     // Auto Mode Logic - DISABLED: VPS API handles auto-trade scheduling
     if (mode === 'auto') {
       return new Response(JSON.stringify({ message: 'Auto-trade mode is handled by VPS API. Supabase edge function is deprecated for this purpose.' }), { status: 200, headers: corsHeaders });
+    }
+    
+    // Dead code block below - keeping for reference but unreachable
+    const _unusedAutoModeBlock = async () => {
       const { data: users } = await supabase.from('user_settings').select('*').eq('auto_trade', true);
       if (!users || users.length === 0) return new Response(JSON.stringify({ message: 'No auto-trade users found' }), { headers: corsHeaders });
 
       // 1. Fetch ALL required exchange data once (Network Optimization)
       const allExchs = Array.from(new Set(users.flatMap((u: any) => u.enabled_exchanges || ['binance', 'bybit', 'okx']))) as string[];
-      const data = await fetchAllExchangeData(allExchs); // Returns map of "SYMBOL_EXCHANGE" -> data
 
       let totalProcessed = 0;
       let totalOpportunities = 0;
 
       // 2. Process logic PER USER (CPU Bound - ensuring correct slippage/whitelist compliance)
-      for (const u of users) {
+      for (const u of users!) {
         try {
           // Check subscription status
           const { data: sub } = await supabase.from('user_subscriptions').select('*, subscription_plans(name)').eq('user_id', u.user_id).eq('status', 'active').gte('end_date', new Date().toISOString()).maybeSingle();

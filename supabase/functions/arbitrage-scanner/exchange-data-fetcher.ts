@@ -3,6 +3,9 @@
 import ccxt from 'https://esm.sh/ccxt@4.4.35';
 import { EXCHANGE_CONFIG } from './config.ts';
 
+// Type for ccxt module indexing
+type CcxtModule = typeof ccxt & Record<string, any>;
+
 /**
  * Get CCXT exchange instance
  * @param exchangeName - Exchange name (binance, bybit, etc.)
@@ -10,8 +13,9 @@ import { EXCHANGE_CONFIG } from './config.ts';
  */
 export function getExchangeInstance(exchangeName: string) {
   const exchangeId = exchangeName.toLowerCase();
-  if (!ccxt[exchangeId]) return null;
-  return new ccxt[exchangeId]({
+  const ccxtMod = ccxt as CcxtModule;
+  if (!ccxtMod[exchangeId]) return null;
+  return new ccxtMod[exchangeId]({
     enableRateLimit: true,
     timeout: EXCHANGE_CONFIG.timeout,
     options: { 'defaultType': EXCHANGE_CONFIG.defaultType }

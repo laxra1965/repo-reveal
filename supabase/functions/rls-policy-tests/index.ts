@@ -128,7 +128,7 @@ async function testExchangeCredentialsRLS(
             const supabaseUser2 = createClient(supabaseUrl, anonKey, {
                 global: {
                     headers: {
-                        Authorization: `Bearer ${session2.properties.hashed_token}`,
+                        Authorization: `Bearer ${session2.properties?.hashed_token || ''}`,
                     },
                 },
             });
