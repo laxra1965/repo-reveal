@@ -7,6 +7,8 @@ import { ArbitrageScanner } from '@/components/arbitrage/ArbitrageScanner';
 import { StatisticsDashboard } from '@/components/dashboard/StatisticsDashboard';
 import { SystemHealthStatus } from '@/components/dashboard/SystemHealthStatus';
 import { LiveMetricsPanel } from '@/components/dashboard/LiveMetricsPanel';
+import { VPSHealthMonitor } from '@/components/dashboard/VPSHealthMonitor';
+import { ScannerDebugPanel } from '@/components/dashboard/ScannerDebugPanel';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -141,6 +143,13 @@ const Dashboard = () => {
           </div>
           <LiveMetricsPanel />
         </div>
+        
+        {/* VPS & Scanner Debug Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <VPSHealthMonitor />
+          <ScannerDebugPanel />
+        </div>
+        
         <StatisticsDashboard />
         <ArbitrageScanner />
       </main>
