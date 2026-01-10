@@ -70,7 +70,13 @@ export const AdminPlanManagement = () => {
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
-            setPlans(data || []);
+            // Map the data to match our SubscriptionPlan interface
+            const mappedPlans: SubscriptionPlan[] = (data || []).map((plan) => ({
+                ...plan,
+                features: plan.features as { features: string[] } | null,
+                active: plan.active ?? false,
+            }));
+            setPlans(mappedPlans);
         } catch (error) {
             toast({
                 title: "Error",

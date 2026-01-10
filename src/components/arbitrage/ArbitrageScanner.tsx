@@ -314,7 +314,7 @@ export const ArbitrageScanner = () => {
       if (mountedRef.current) {
         setScanCount(prev => prev + 1);
         setLastScanTime(new Date());
-        setScanDebug(response.data?.exchange_debug || null);
+        setScanDebug(vpsResponse.data?.exchange_debug || null);
       }
 
       // Load updated opportunities from database
@@ -323,7 +323,7 @@ export const ArbitrageScanner = () => {
       if (mountedRef.current) {
         toast({
           title: "Scan Complete",
-          description: `Found ${response.data?.opportunities_count || 0} opportunities`,
+          description: `Found ${vpsResponse.data?.opportunities_count || 0} opportunities`,
         });
       }
     } catch (error: any) {

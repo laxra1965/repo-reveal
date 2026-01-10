@@ -103,7 +103,7 @@ async function handleHealthCheck(): Promise<Response> {
         status: error ? 'degraded' : 'healthy',
         database: error ? 'disconnected' : 'connected',
         timestamp: new Date().toISOString(),
-        uptime: process.uptime ? process.uptime() : 'unknown'
+        uptime: 'deno-runtime'
       }),
       {
         status: error ? 503 : 200,
@@ -211,8 +211,8 @@ async function handleRequest(req: Request): Promise<Response> {
           handlerModule = null;
       }
       
-      if (handlerModule?.default) {
-        const dynamicHandler = handlerModule.default;
+      if (handlerModule && typeof (handlerModule as any).default === 'function') {
+        const dynamicHandler = (handlerModule as any).default;
         functionHandlers.set(functionName, dynamicHandler);
         const response = await dynamicHandler(req);
         
