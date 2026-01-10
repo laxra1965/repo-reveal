@@ -7,6 +7,16 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { RequestVerifier } from './RequestVerifier';
 
+// Import edge function routes
+import arbitrageScannerRouter from './routes/arbitrage-scanner';
+import executeTradeRouter from './routes/execute-trade';
+import scheduledArbScanRouter from './routes/scheduled-arb-scan';
+import autoTradeSchedulerRouter from './routes/auto-trade-scheduler';
+import binanceWebsocketRouter from './routes/binance-websocket';
+import fetchExchangeBalancesRouter from './routes/fetch-exchange-balances';
+import rateLimiterRouter from './routes/rate-limiter';
+import validateApiKeysRouter from './routes/validate-api-keys';
+
 // In CommonJS (default for this config), __dirname is available globally.
 // In ESM, we would need fileURLToPath. Let's stick to CJS for simplicity in this service.
 
@@ -46,6 +56,9 @@ const supabase = (supabaseUrl && supabaseServiceKey && !supabaseServiceKey.inclu
     ? createClient(supabaseUrl, supabaseServiceKey)
     : null;
 
+// Store supabase client in app for use in routes
+app.set('supabase', supabase);
+
 // API Secret for HMAC
 const apiSecret = process.env.API_CONTROL_SECRET || 'dev-secret-key';
 const verifier = new RequestVerifier(apiSecret);
@@ -63,6 +76,16 @@ app.use((req, res, next) => {
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// Register edge function routes
+app.use(arbitrageScannerRouter);
+app.use(executeTradeRouter);
+app.use(scheduledArbScanRouter);
+app.use(autoTradeSchedulerRouter);
+app.use(binanceWebsocketRouter);
+app.use(fetchExchangeBalancesRouter);
+app.use(rateLimiterRouter);
+app.use(validateApiKeysRouter);
 
 /**
  * Clear User Data Endpoint (VPS Implementation)
@@ -112,7 +135,7 @@ app.post('/functions/clear-user-data', async (req, res) => {
                 query = query.lt('detected_at', cutoff.toISOString());
             }
 
-            const { count, error } = await query.select('*', { count: 'exact' });
+            const { count, error } = await query.select('*');
             if (error) throw error;
             details.opportunities = count || 0;
             totalDeleted += details.opportunities;
@@ -128,7 +151,7 @@ app.post('/functions/clear-user-data', async (req, res) => {
                 query = query.lt('created_at', cutoff.toISOString());
             }
 
-            const { count, error } = await query.select('*', { count: 'exact' });
+            const { count, error } = await query.select('*');
             if (error) throw error;
             details.scan_logs = count || 0;
             totalDeleted += details.scan_logs;
@@ -151,4 +174,7 @@ app.post('/functions/clear-user-data', async (req, res) => {
 app.listen(port, () => {
     console.log(`API Service listening at http://localhost:${port}`);
     console.log(`CORS enabled for all origins`);
+}).on('error', (err: any) => {
+    console.error('Server error:', err);
+    process.exit(1);
 });

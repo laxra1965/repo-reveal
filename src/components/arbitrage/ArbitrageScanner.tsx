@@ -179,31 +179,38 @@ export const ArbitrageScanner = () => {
         throw new Error('No active session');
       }
 
-      const response = await supabase.functions.invoke('arbitrage-scanner', {
-        body: {
-          action: 'scan',
-          userId: user.id
-        },
+      // Use VPS API instead of Supabase edge functions
+      const functionsUrl = import.meta.env.VITE_FUNCTIONS_URL || 'http://localhost:3001';
+      const response = await fetch(`${functionsUrl}/functions/arbitrage-scanner`, {
+        method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`
-        }
+        },
+        body: JSON.stringify({
+          mode: 'manual',
+          userId: user.id
+        })
       });
 
-      if (response.error) {
-        console.error('Supabase Edge Function `arbitrage-scanner` returned non-2xx:', response);
-        const respErr = response.error;
-        const status = respErr?.status || respErr?.statusCode || 'unknown';
+      const data = await response.json();
+      
+      // Handle VPS API response
+      const vpsResponse = {
+        data,
+        error: !response.ok ? { 
+          status: response.status,
+          statusCode: response.status,
+          message: data?.error || 'Failed to scan for opportunities'
+        } : null
+      };
+
+      if (vpsResponse.error) {
+        console.error('VPS API returned error:', vpsResponse);
+        const status = vpsResponse.error?.status || vpsResponse.error?.statusCode || 'unknown';
         
         // Parse error message from response
-        let errMessage = 'Failed to scan for opportunities';
-        
-        if (response.data?.error) {
-          errMessage = response.data.error;
-        } else if (respErr?.message) {
-          errMessage = respErr.message;
-        } else if (typeof respErr === 'string') {
-          errMessage = respErr;
-        }
+        let errMessage = vpsResponse.error?.message || 'Failed to scan for opportunities';
 
         // Provide user-friendly error messages based on status
         if (status === 404) {
@@ -237,15 +244,24 @@ export const ArbitrageScanner = () => {
                         throw new Error('No active session for retry');
                       }
 
-                      const retryResponse = await supabase.functions.invoke('arbitrage-scanner', {
-                        body: {
-                          action: 'scan',
-                          userId: user.id
-                        },
+                      const functionsUrl = import.meta.env.VITE_FUNCTIONS_URL || 'http://localhost:3001';
+                      const retryFetch = await fetch(`${functionsUrl}/functions/arbitrage-scanner`, {
+                        method: 'POST',
                         headers: {
+                          'Content-Type': 'application/json',
                           Authorization: `Bearer ${retrySession.access_token}`
-                        }
+                        },
+                        body: JSON.stringify({
+                          mode: 'manual',
+                          userId: user.id
+                        })
                       });
+
+                      const retryData = await retryFetch.json();
+                      const retryResponse = {
+                        data: retryData,
+                        error: !retryFetch.ok ? { status: retryFetch.status, message: retryData?.message || 'Scan failed' } : null
+                      };
 
                       if (!retryResponse.error && mountedRef.current) {
                         setScanCount(prev => prev + 1);

@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 Type=simple
-User=root
+User=ubuntu
 WorkingDirectory=/opt/repo-reveal/services/scanner
 ExecStart=/usr/bin/npm start
 Restart=always

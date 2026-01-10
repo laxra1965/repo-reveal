@@ -8,6 +8,7 @@
         "dev": "ts-node src/index.ts"
     },
     "dependencies": {
+        "@repo-reveal/shared": "file:../../shared",
         "ioredis": "^5.8.2"
     },
     "devDependencies": {

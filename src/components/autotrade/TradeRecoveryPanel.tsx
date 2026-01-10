@@ -95,13 +95,24 @@ export function TradeRecoveryPanel() {
             console.log(`Attempting recovery for trade ${tradeId}...`);
 
             // Call execute-trade Edge Function to retry the trade
-            const { data, error } = await supabase.functions.invoke('execute-trade', {
-                body: {
+            const { data: { session } } = await supabase.auth.getSession();
+            const functionsUrl = import.meta.env.VITE_FUNCTIONS_URL || 'http://localhost:3001';
+            
+            const fetchResponse = await fetch(`${functionsUrl}/functions/execute-trade`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${session?.access_token}`
+                },
+                body: JSON.stringify({
                     action: 'retry_failed',
                     tradeId: tradeId,
                     recoveryId: recoveryId
-                }
+                })
             });
+
+            const data = await fetchResponse.json();
+            const error = !fetchResponse.ok ? { message: data?.message || 'Recovery attempt failed' } : null;
 
             if (error) {
                 console.error('Recovery error:', error);

@@ -1,16 +1,17 @@
+import fetch from 'node-fetch';
 import Redis from 'ioredis';
 import WebSocket from 'ws';
 
-export class BinanceDepthConsumer {
+export class MEXCDepthConsumer {
     private ws: WebSocket | null = null;
-    private lastUpdateId = 0;
     private symbol: string;
     private redis: Redis;
 
-    // safety locks
     private snapshotInProgress = false;
     private reconnectTimer: NodeJS.Timeout | null = null;
-    private reconnectDelay = 1000; // start with 1s
+    private reconnectDelay = 1000;
+
+    private lastVersion = 0;
 
     constructor(symbol: string, redisInstance?: Redis) {
         this.symbol = symbol;
@@ -31,30 +32,30 @@ export class BinanceDepthConsumer {
 
         try {
             const res = await fetch(
-                `https://api.binance.com/api/v3/depth?symbol=${this.symbol.toUpperCase()}&limit=1000`
+                `https://api.mexc.com/api/v3/depth?symbol=${this.symbol}&limit=1000`
             );
 
-            const snap = await res.json() as any;
-            this.lastUpdateId = snap.lastUpdateId;
+            const snap = await res.json();
 
-            console.log(`[${this.symbol}] Snapshot loaded @ ${this.lastUpdateId}`);
+            this.lastVersion = snap.lastUpdateId;
+
+            console.log(`[MEXC ${this.symbol}] Snapshot loaded @ ${this.lastVersion}`);
 
             await this.redis.publish(
-                `depth:binance:${this.symbol}`,
+                `depth:mexc:${this.symbol}`,
                 JSON.stringify({
                     type: 'snapshot',
                     symbol: this.symbol,
                     bids: snap.bids,
                     asks: snap.asks,
-                    lastUpdateId: this.lastUpdateId,
+                    lastUpdateId: this.lastVersion,
                     timestamp: Date.now()
                 })
             );
 
-            // reset backoff after success
             this.reconnectDelay = 1000;
         } catch (e) {
-            console.error(`[${this.symbol}] Snapshot failed`, e);
+            console.error(`[MEXC ${this.symbol}] Snapshot failed`, e);
             this.scheduleReconnect();
         } finally {
             this.snapshotInProgress = false;
@@ -68,71 +69,70 @@ export class BinanceDepthConsumer {
         if (this.ws) return;
 
         this.ws = new WebSocket(
-            `wss://stream.binance.com:9443/ws/${this.symbol.toLowerCase()}@depth@100ms`
+            `wss://wbs.mexc.com/ws`
         );
 
+        this.ws.on('open', () => {
+            this.ws!.send(JSON.stringify({
+                method: 'SUBSCRIPTION',
+                params: [`spot@public.depth.v3.api@${this.symbol}@100ms`]
+            }));
+        });
+
         this.ws.on('message', (raw) => {
-            try {
-                const msg = JSON.parse(raw.toString());
+            const msg = JSON.parse(raw.toString());
+            if (!msg.d) return;
 
-                // ignore old events
-                if (msg.u <= this.lastUpdateId) return;
+            const { u, b, a } = msg.d;
 
-                // gap detection
-                if (msg.U > this.lastUpdateId + 1) {
-                    console.warn(
-                        `[${this.symbol}] Gap detected (${msg.U} > ${this.lastUpdateId + 1}), resyncing`
-                    );
-                    this.forceResync();
-                    return;
-                }
+            if (u <= this.lastVersion) return;
 
-                this.lastUpdateId = msg.u;
-
-                this.redis.publish(
-                    `depth:binance:${this.symbol}`,
-                    JSON.stringify({
-                        type: 'delta',
-                        symbol: this.symbol,
-                        bids: msg.b,
-                        asks: msg.a,
-                        u: msg.u,
-                        U: msg.U,
-                        timestamp: Date.now()
-                    })
-                );
-            } catch (e) {
-                console.error(`[${this.symbol}] WS message error`, e);
+            if (this.lastVersion && u > this.lastVersion + 1) {
+                console.warn(`[MEXC ${this.symbol}] Gap detected  resync`);
+                this.forceResync();
+                return;
             }
+
+            this.lastVersion = u;
+
+            this.redis.publish(
+                `depth:mexc:${this.symbol}`,
+                JSON.stringify({
+                    type: 'delta',
+                    symbol: this.symbol,
+                    bids: b,
+                    asks: a,
+                    u,
+                    timestamp: Date.now()
+                })
+            );
         });
 
         this.ws.on('close', () => {
-            console.warn(`[${this.symbol}] WS closed`);
+            console.warn(`[MEXC ${this.symbol}] WS closed`);
             this.cleanupWS();
             this.scheduleReconnect();
         });
 
         this.ws.on('error', (err) => {
-            console.error(`[${this.symbol}] WS error`, err);
+            console.error(`[MEXC ${this.symbol}] WS error`, err);
             this.cleanupWS();
             this.scheduleReconnect();
         });
     }
 
     // =========================
-    // RESYNC / RECONNECT
+    // RECONNECT CONTROL
     // =========================
     private forceResync() {
         this.cleanupWS();
-        this.lastUpdateId = 0;
+        this.lastVersion = 0;
         this.start();
     }
 
     private cleanupWS() {
         if (this.ws) {
-            try {
-                this.ws.terminate();
-            } catch {}
+            try { this.ws.terminate(); } catch {}
             this.ws = null;
         }
     }
@@ -145,7 +145,6 @@ export class BinanceDepthConsumer {
             this.start();
         }, this.reconnectDelay);
 
-        // exponential backoff (max 30s)
         this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30_000);
     }
 }

@@ -122,16 +122,25 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
       // Call execute-trade edge function
       const { data: { session } } = await supabase.auth.getSession();
 
-      const response = await supabase.functions.invoke('execute-trade', {
-        body: {
+      const functionsUrl = import.meta.env.VITE_FUNCTIONS_URL || 'http://localhost:3001';
+      const fetchResponse = await fetch(`${functionsUrl}/functions/execute-trade`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
           action: 'execute_single',
           tradeId: tradeEntry.id,
           userId: user.id
-        },
-        headers: {
-          Authorization: `Bearer ${session?.access_token}`
-        }
+        })
       });
+
+      const responseData = await fetchResponse.json();
+      const response = {
+        data: responseData,
+        error: !fetchResponse.ok ? { status: fetchResponse.status, message: responseData?.message || 'Trade execution failed' } : null
+      };
 
       if (response.error) throw response.error;
 

@@ -1,16 +1,16 @@
+import fetch from 'node-fetch';
 import Redis from 'ioredis';
 import WebSocket from 'ws';
 
-export class BinanceDepthConsumer {
+export class GateDepthConsumer {
     private ws: WebSocket | null = null;
-    private lastUpdateId = 0;
     private symbol: string;
     private redis: Redis;
 
-    // safety locks
     private snapshotInProgress = false;
     private reconnectTimer: NodeJS.Timeout | null = null;
-    private reconnectDelay = 1000; // start with 1s
+    private reconnectDelay = 1000; // 1s  backoff
+    private lastUpdateId = 0;
 
     constructor(symbol: string, redisInstance?: Redis) {
         this.symbol = symbol;
@@ -31,18 +31,20 @@ export class BinanceDepthConsumer {
 
         try {
             const res = await fetch(
-                `https://api.binance.com/api/v3/depth?symbol=${this.symbol.toUpperCase()}&limit=1000`
+                `https://api.gateio.ws/api/v4/spot/order_book?currency_pair=${this.symbol}&limit=100`
             );
 
             const snap = await res.json() as any;
-            this.lastUpdateId = snap.lastUpdateId;
 
-            console.log(`[${this.symbol}] Snapshot loaded @ ${this.lastUpdateId}`);
+            this.lastUpdateId = Number(snap.id);
+
+            console.log(`[Gate ${this.symbol}] Snapshot loaded @ ${this.lastUpdateId}`);
 
             await this.redis.publish(
-                `depth:binance:${this.symbol}`,
+                `depth:gate:${this.symbol}`,
                 JSON.stringify({
                     type: 'snapshot',
+                    exchange: 'gate',
                     symbol: this.symbol,
                     bids: snap.bids,
                     asks: snap.asks,
@@ -51,10 +53,9 @@ export class BinanceDepthConsumer {
                 })
             );
 
-            // reset backoff after success
             this.reconnectDelay = 1000;
         } catch (e) {
-            console.error(`[${this.symbol}] Snapshot failed`, e);
+            console.error(`[Gate ${this.symbol}] Snapshot failed`, e);
             this.scheduleReconnect();
         } finally {
             this.snapshotInProgress = false;
@@ -67,53 +68,68 @@ export class BinanceDepthConsumer {
     private connectWS() {
         if (this.ws) return;
 
-        this.ws = new WebSocket(
-            `wss://stream.binance.com:9443/ws/${this.symbol.toLowerCase()}@depth@100ms`
-        );
+        this.ws = new WebSocket('wss://api.gateio.ws/ws/v4/');
+
+        this.ws.on('open', () => {
+            console.log(`[Gate ${this.symbol}] WS Connected`);
+
+            this.ws?.send(
+                JSON.stringify({
+                    time: Date.now(),
+                    channel: 'spot.order_book_update',
+                    event: 'subscribe',
+                    payload: [this.symbol, '100ms']
+                })
+            );
+        });
 
         this.ws.on('message', (raw) => {
             try {
                 const msg = JSON.parse(raw.toString());
 
-                // ignore old events
-                if (msg.u <= this.lastUpdateId) return;
+                if (!msg.result || !msg.result.id) return;
 
-                // gap detection
-                if (msg.U > this.lastUpdateId + 1) {
+                const updateId = Number(msg.result.id);
+
+                // ignore old updates
+                if (updateId <= this.lastUpdateId) return;
+
+                // GAP DETECTION
+                if (this.lastUpdateId && updateId !== this.lastUpdateId + 1) {
                     console.warn(
-                        `[${this.symbol}] Gap detected (${msg.U} > ${this.lastUpdateId + 1}), resyncing`
+                        `[Gate ${this.symbol}] Gap detected (${updateId} != ${this.lastUpdateId + 1})  resync`
                     );
                     this.forceResync();
                     return;
                 }
 
-                this.lastUpdateId = msg.u;
+                this.lastUpdateId = updateId;
 
                 this.redis.publish(
-                    `depth:binance:${this.symbol}`,
+                    `depth:gate:${this.symbol}`,
                     JSON.stringify({
                         type: 'delta',
+                        exchange: 'gate',
                         symbol: this.symbol,
-                        bids: msg.b,
-                        asks: msg.a,
-                        u: msg.u,
-                        U: msg.U,
+                        bids: msg.result.b,
+                        asks: msg.result.a,
+                        lastUpdateId: updateId,
                         timestamp: Date.now()
                     })
                 );
             } catch (e) {
-                console.error(`[${this.symbol}] WS message error`, e);
+                console.error(`[Gate ${this.symbol}] WS message error`, e);
             }
         });
 
         this.ws.on('close', () => {
-            console.warn(`[${this.symbol}] WS closed`);
+            console.warn(`[Gate ${this.symbol}] WS closed`);
             this.cleanupWS();
             this.scheduleReconnect();
         });
 
         this.ws.on('error', (err) => {
-            console.error(`[${this.symbol}] WS error`, err);
+            console.error(`[Gate ${this.symbol}] WS error`, err);
             this.cleanupWS();
             this.scheduleReconnect();
         });
@@ -145,7 +161,6 @@ export class BinanceDepthConsumer {
             this.start();
         }, this.reconnectDelay);
 
-        // exponential backoff (max 30s)
         this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30_000);
     }
 }

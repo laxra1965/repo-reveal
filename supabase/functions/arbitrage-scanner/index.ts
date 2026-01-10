@@ -16,11 +16,6 @@ const corsHeaders = {
 
 // Main Handler
 export default async function handler(req: Request): Promise<Response> {
-  // PHASE 0 Safety Lock
-  if (Deno.env.get('RUNTIME') !== 'vps') {
-    throw new Error('Execution outside VPS is disabled.');
-  }
-
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   const startTime = Date.now();
@@ -66,13 +61,9 @@ export default async function handler(req: Request): Promise<Response> {
 
     console.log(`Scanner invoked: mode=${mode}, action=${action}, isServiceRole=${isServiceRole}, globallyEnabled=${globalEnabledTypes.join('|')}`);
 
-    // Auto Mode Logic
+    // Auto Mode Logic - DISABLED: VPS API handles auto-trade scheduling
     if (mode === 'auto') {
-      if (!isServiceRole) {
-        return new Response(JSON.stringify({ error: 'Auto mode requires service role' }), { status: 403, headers: corsHeaders });
-      }
-
-      console.log('Starting Auto-Trade Cycle...');
+      return new Response(JSON.stringify({ message: 'Auto-trade mode is handled by VPS API. Supabase edge function is deprecated for this purpose.' }), { status: 200, headers: corsHeaders });
       const { data: users } = await supabase.from('user_settings').select('*').eq('auto_trade', true);
       if (!users || users.length === 0) return new Response(JSON.stringify({ message: 'No auto-trade users found' }), { headers: corsHeaders });
 

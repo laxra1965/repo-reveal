@@ -1,95 +1,151 @@
-
-import WebSocket from 'ws';
-import { OrderBook } from './OrderBook';
+import fetch from 'node-fetch';
 import Redis from 'ioredis';
+import WebSocket from 'ws';
 
 export class OKXDepthConsumer {
-    private ws!: WebSocket;
-    private ob: OrderBook;
+    private ws: WebSocket | null = null;
+    private symbol: string;
     private redis: Redis;
 
-    constructor(private symbol: string, redisInstance?: Redis) {
-        // OKX uses BTC-USDT format
-        this.ob = new OrderBook(symbol);
+    // OKX uses timestamp-based sequencing
+    private snapshotInProgress = false;
+    private reconnectTimer: NodeJS.Timeout | null = null;
+    private reconnectDelay = 1000;
+
+    constructor(symbol: string, redisInstance?: Redis) {
+        this.symbol = symbol;
         this.redis = redisInstance || new Redis();
     }
 
     async start() {
+        if (this.snapshotInProgress) return;
+        await this.loadSnapshot();
         this.connectWS();
     }
 
+    // =========================
+    // SNAPSHOT
+    // =========================
+    private async loadSnapshot() {
+        this.snapshotInProgress = true;
+
+        try {
+            const res = await fetch(
+                `https://www.okx.com/api/v5/market/books?instId=${this.symbol}&sz=400`
+            );
+            const json = await res.json();
+
+            const book = json?.data?.[0];
+            if (!book) throw new Error('Invalid OKX snapshot');
+
+            console.log(`[OKX ${this.symbol}] Snapshot loaded`);
+
+            await this.redis.publish(
+                `depth:okx:${this.symbol}`,
+                JSON.stringify({
+                    type: 'snapshot',
+                    exchange: 'okx',
+                    symbol: this.symbol,
+                    bids: book.bids,
+                    asks: book.asks,
+                    timestamp: Date.now()
+                })
+            );
+
+            this.reconnectDelay = 1000;
+        } catch (e) {
+            console.error(`[OKX ${this.symbol}] Snapshot failed`, e);
+            this.scheduleReconnect();
+        } finally {
+            this.snapshotInProgress = false;
+        }
+    }
+
+    // =========================
+    // WEBSOCKET
+    // =========================
     private connectWS() {
+        if (this.ws) return;
+
         this.ws = new WebSocket('wss://ws.okx.com:8443/ws/v5/public');
 
         this.ws.on('open', () => {
             console.log(`[OKX ${this.symbol}] WS Connected`);
-            this.ws.send(JSON.stringify({
-                op: 'subscribe',
-                args: [{
-                    channel: 'books',
-                    instId: this.symbol
-                }]
-            }));
 
-            // Heartbeat
-            setInterval(() => {
-                if (this.ws.readyState === WebSocket.OPEN) {
-                    this.ws.send('ping');
-                }
-            }, 20000);
+            this.ws?.send(
+                JSON.stringify({
+                    op: 'subscribe',
+                    args: [
+                        {
+                            channel: 'books',
+                            instId: this.symbol
+                        }
+                    ]
+                })
+            );
         });
 
         this.ws.on('message', (raw) => {
             try {
-                const rawStr = raw.toString();
-                if (rawStr === 'pong') return;
+                const msg = JSON.parse(raw.toString());
 
-                const msg = JSON.parse(rawStr);
-                if (msg.event === 'subscribe' && msg.arg.channel === 'books') {
-                    console.log(`[OKX ${this.symbol}] Subscribed to ${this.symbol}`);
-                    return;
-                }
-
-                if (!msg.data || msg.arg.channel !== 'books') return;
+                if (!msg?.data?.[0]) return;
 
                 const data = msg.data[0];
-                const action = msg.action; // 'snapshot' or 'update'
 
-                // OKX bids/asks are [price, size, numOrders, totalSize]
-                const normalize = (levels: any[][]) => levels.map(l => [Number(l[0]), Number(l[1])] as [number, number]);
+                // OKX sends full refresh or partial updates
+                const type = data.action === 'snapshot' ? 'snapshot' : 'delta';
 
-                if (action === 'snapshot') {
-                    this.ob.applySnapshot(normalize(data.bids), normalize(data.asks));
-                    this.publish();
-                } else if (action === 'update') {
-                    this.ob.applyDelta(normalize(data.bids), normalize(data.asks));
-                    this.publish();
-                }
+                this.redis.publish(
+                    `depth:okx:${this.symbol}`,
+                    JSON.stringify({
+                        type,
+                        exchange: 'okx',
+                        symbol: this.symbol,
+                        bids: data.bids || [],
+                        asks: data.asks || [],
+                        timestamp: Date.now()
+                    })
+                );
             } catch (e) {
-                console.error(`[OKX ${this.symbol}] Message error`, e);
+                console.error(`[OKX ${this.symbol}] WS message error`, e);
             }
         });
 
         this.ws.on('close', () => {
-            console.warn(`[OKX ${this.symbol}] WS closed, reconnecting...`);
-            setTimeout(() => this.connectWS(), 1000);
+            console.warn(`[OKX ${this.symbol}] WS closed`);
+            this.cleanupWS();
+            this.scheduleReconnect();
         });
 
         this.ws.on('error', (err) => {
-            console.error(`[OKX ${this.symbol}] WS Error`, err);
-            this.ws.terminate();
+            console.error(`[OKX ${this.symbol}] WS error`, err);
+            this.cleanupWS();
+            this.scheduleReconnect();
         });
     }
 
-    private publish() {
-        this.redis.publish(
-            `depth:okx:${this.symbol}`,
-            JSON.stringify({
-                symbol: this.symbol,
-                bids: this.ob.bids,
-                asks: this.ob.asks,
-                timestamp: this.ob.timestamp
-            })
-        );
+    // =========================
+    // RECONNECT CONTROL
+    // =========================
+    private cleanupWS() {
+        if (this.ws) {
+            try {
+                this.ws.terminate();
+            } catch {}
+            this.ws = null;
+        }
+    }
+
+    private scheduleReconnect() {
+        if (this.reconnectTimer) return;
+
+        this.reconnectTimer = setTimeout(() => {
+            this.reconnectTimer = null;
+            this.start();
+        }, this.reconnectDelay);
+
+        this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30_000);
     }
 }
+

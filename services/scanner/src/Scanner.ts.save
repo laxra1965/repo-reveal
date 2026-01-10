@@ -1,7 +1,4 @@
-
-import { OrderBook, Opportunity } from '@repo-reveal/shared';
-
-export { OrderBook, Opportunity };
+^/ import { OrderBook, Opportunity } from '../../..[ export { OrderBook, Opportunity };
 
 export class Scanner {
     private paths: Map<string, string[][]> = new Map();

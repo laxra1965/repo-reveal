@@ -1,108 +1,167 @@
+import Redis from "ioredis";
+import WebSocket from "ws";
 
-import WebSocket from 'ws';
-import { OrderBook } from './OrderBook';
-import Redis from 'ioredis';
+interface BybitDelta {
+    u: number;
+    pu: number;
+    b: [string, string][];
+    a: [string, string][];
+}
 
 export class BybitDepthConsumer {
-    private ws!: WebSocket;
-    private ob: OrderBook;
-    private lastSeq = 0;
-    private redis: Redis;
+    private ws: WebSocket | null = null;
+    private readonly wsUrl = "wss://stream.bybit.com/v5/public/spot";
 
-    constructor(private symbol: string, redisInstance?: Redis) {
-        this.ob = new OrderBook(symbol);
-        this.redis = redisInstance || new Redis();
+    private readonly symbol: string;
+    private readonly redis: Redis;
+
+    private lastUpdateId = 0;
+
+    // safety
+    private snapshotInProgress = false;
+    private reconnectTimer: NodeJS.Timeout | null = null;
+    private reconnectDelay = 1000;
+
+    constructor(symbol: string, redis?: Redis) {
+        this.symbol = symbol;
+        this.redis = redis || new Redis();
     }
 
     async start() {
+        if (this.snapshotInProgress) return;
+        await this.loadSnapshot();
         this.connectWS();
     }
 
+    // =========================
+    // SNAPSHOT
+    // =========================
+    private async loadSnapshot() {
+        this.snapshotInProgress = true;
+
+        try {
+            const res = await fetch(
+                `https://api.bybit.com/v5/market/orderbook?category=spot&symbol=${this.symbol}&limit=50`
+            );
+
+            const json: any = await res.json();
+            const data = json?.result;
+
+            if (!data?.u) throw new Error("Invalid snapshot");
+
+            this.lastUpdateId = Number(data.u);
+
+            console.log(`[Bybit ${this.symbol}] Snapshot loaded @ ${this.lastUpdateId}`);
+
+            await this.redis.publish(
+                `depth:bybit:${this.symbol}`,
+                JSON.stringify({
+                    type: "snapshot",
+                    exchange: "bybit",
+                    symbol: this.symbol,
+                    bids: data.b,
+                    asks: data.a,
+                    u: this.lastUpdateId,
+                    timestamp: Date.now()
+                })
+            );
+
+            this.reconnectDelay = 1000;
+        } catch (e) {
+            console.error(`[Bybit ${this.symbol}] Snapshot failed`, e);
+            this.scheduleReconnect();
+        } finally {
+            this.snapshotInProgress = false;
+        }
+    }
+
+    // =========================
+    // WEBSOCKET
+    // =========================
     private connectWS() {
-        const topic = `orderbook.50.${this.symbol.toUpperCase()}`;
-        // Bybit V5 Public Spot WebSocket
-        this.ws = new WebSocket('wss://stream.bybit.com/v5/public/spot');
+        if (this.ws) return;
 
-        this.ws.on('open', () => {
+        const ws = new WebSocket(this.wsUrl);
+        this.ws = ws;
+
+        ws.on("open", () => {
             console.log(`[Bybit ${this.symbol}] WS Connected`);
-            this.ws.send(JSON.stringify({
-                op: 'subscribe',
-                args: [topic]
+            ws.send(JSON.stringify({
+                op: "subscribe",
+                args: [`orderbook.50.${this.symbol}`]
             }));
-
-            // Heartbeat every 20s
-            const pingInterval = setInterval(() => {
-                if (this.ws.readyState === WebSocket.OPEN) {
-                    this.ws.send(JSON.stringify({ op: 'ping' }));
-                } else {
-                    clearInterval(pingInterval);
-                }
-            }, 20000);
         });
 
-        this.ws.on('message', (raw) => {
+        ws.on("message", (raw) => {
             try {
                 const msg = JSON.parse(raw.toString());
+                const data: BybitDelta | undefined = msg?.data;
 
-                // Handle pong
-                if (msg.op === 'pong' || (msg.ret_msg === 'pong')) return;
+                if (!data || typeof data.u !== "number") return;
 
-                // Handle subscription success
-                if (msg.op === 'subscribe' && msg.success) {
-                    console.log(`[Bybit ${this.symbol}] Subscribed to ${topic}`);
-                    return;
-                }
+                // accept monotonic updates only
+                if (data.u <= this.lastUpdateId) return;
 
-                if (msg.topic !== topic) return;
+                this.lastUpdateId = data.u;
 
-                const data = msg.data;
-                const type = msg.type; // 'snapshot' or 'delta'
-
-                if (type === 'snapshot') {
-                    this.lastSeq = msg.data.seq;
-                    this.ob.applySnapshot(data.b, data.a);
-                    this.publish();
-                } else if (type === 'delta') {
-                    // Sequence check for Bybit V5
-                    if (this.lastSeq > 0 && msg.data.seq !== this.lastSeq + 1) {
-                        console.warn(`[Bybit ${this.symbol}] Sequence gap detected (${msg.data.seq} != ${this.lastSeq + 1}), resyncing...`);
-                        this.ws.close();
-                        // Reconnection handled by 'close' listener
-                        return;
-                    }
-                    this.lastSeq = msg.data.seq;
-                    this.ob.applyDelta(data.b, data.a);
-                    this.publish();
-                }
+                this.redis.publish(
+                    `depth:bybit:${this.symbol}`,
+                    JSON.stringify({
+                        type: "delta",
+                        exchange: "bybit",
+                        symbol: this.symbol,
+                        bids: data.b,
+                        asks: data.a,
+                        u: data.u,
+                        pu: data.pu,
+                        timestamp: Date.now()
+                    })
+                );
             } catch (e) {
-                console.error(`[Bybit ${this.symbol}] Message error`, e);
+                console.error(`[Bybit ${this.symbol}] WS message error`, e);
             }
         });
 
-        this.ws.on('close', () => {
-            console.warn(`[Bybit ${this.symbol}] WS closed, reconnecting...`);
-            setTimeout(() => this.connectWS(), 1000);
+        ws.on("close", () => {
+            console.warn(`[Bybit ${this.symbol}] WS closed`);
+            this.cleanupWS();
+            this.scheduleReconnect();
         });
 
-        this.ws.on('error', (err) => {
-            console.error(`[Bybit ${this.symbol}] WS Error`, err);
-            this.ws.terminate();
+        ws.on("error", (err) => {
+            console.error(`[Bybit ${this.symbol}] WS error`, err);
+            this.cleanupWS();
+            this.scheduleReconnect();
         });
     }
 
-    private publish() {
-        this.redis.publish(
-            `depth:bybit:${this.symbol}`,
-            JSON.stringify({
-                symbol: this.symbol,
-                bids: this.ob.bids,
-                asks: this.ob.asks,
-                timestamp: this.ob.timestamp
-            })
-        );
+    // =========================
+    // RESYNC / RECONNECT
+    // =========================
+    private forceResync() {
+        this.cleanupWS();
+        this.lastUpdateId = 0;
+        this.start();
     }
 
-    getOrderBook() {
-        return this.ob;
+    private cleanupWS() {
+        if (this.ws) {
+            try {
+                this.ws.terminate();
+            } catch {}
+            this.ws = null;
+        }
+    }
+
+    private scheduleReconnect() {
+        if (this.reconnectTimer) return;
+
+        this.reconnectTimer = setTimeout(() => {
+            this.reconnectTimer = null;
+            this.start();
+        }, this.reconnectDelay);
+
+        this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30_000);
     }
 }
+
