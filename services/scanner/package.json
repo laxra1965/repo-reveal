@@ -9,6 +9,7 @@
     },
     "dependencies": {
         "@repo-reveal/shared": "file:../../shared",
+        "@supabase/supabase-js": "^2.89.0",
         "ioredis": "^5.8.2"
     },
     "devDependencies": {
