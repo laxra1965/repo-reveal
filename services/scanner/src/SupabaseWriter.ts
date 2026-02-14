@@ -26,10 +26,38 @@ interface OpportunityRow {
     signal_type: string;
 }
 
+// --- Monitoring stats ---
+interface WriterStats {
+    totalEnqueued: number;
+    totalWritten: number;
+    totalFailed: number;
+    totalRetries: number;
+    consecutiveFailures: number;
+    lastWriteAt: number | null;
+    lastErrorAt: number | null;
+    lastError: string | null;
+}
+
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 1000; // exponential: 1s, 2s, 4s
+const MAX_QUEUE_SIZE = 500;
+const ALERT_CONSECUTIVE_FAILURES = 5;
+
 export class SupabaseWriter {
     private supabase: SupabaseClient;
     private writeQueue: OpportunityRow[] = [];
     private flushInterval: ReturnType<typeof setInterval> | null = null;
+    private statsInterval: ReturnType<typeof setInterval> | null = null;
+    private stats: WriterStats = {
+        totalEnqueued: 0,
+        totalWritten: 0,
+        totalFailed: 0,
+        totalRetries: 0,
+        consecutiveFailures: 0,
+        lastWriteAt: null,
+        lastErrorAt: null,
+        lastError: null,
+    };
 
     constructor() {
         const url = process.env.SUPABASE_URL;
@@ -43,7 +71,11 @@ export class SupabaseWriter {
 
         // Flush queue every 2 seconds to batch writes
         this.flushInterval = setInterval(() => this.flush(), 2000);
-        console.log('[SupabaseWriter] Initialized');
+
+        // Log stats every 30 seconds
+        this.statsInterval = setInterval(() => this.logStats(), 30_000);
+
+        console.log('[SupabaseWriter] Initialized with retry & monitoring');
     }
 
     enqueue(exchange: string, opp: {
@@ -53,12 +85,17 @@ export class SupabaseWriter {
         maxExecutableUSDT: number;
         timestamp: number;
     }) {
+        // Backpressure: drop oldest if queue is too large
+        if (this.writeQueue.length >= MAX_QUEUE_SIZE) {
+            const dropped = this.writeQueue.splice(0, 50);
+            console.warn(`[SupabaseWriter] Queue overflow, dropped ${dropped.length} oldest entries`);
+        }
+
         const [assetA, assetB, assetC] = opp.path;
         const startAmount = 100;
         const endAmount = startAmount * (1 + opp.profitPct / 100);
         const profitAmount = endAmount - startAmount;
 
-        // TTL based on profit: higher profit = longer TTL
         const ttlSeconds = opp.profitPct > 1 ? 180 : opp.profitPct > 0.5 ? 120 : 60;
         const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
 
@@ -71,7 +108,7 @@ export class SupabaseWriter {
             intermediate_symbol: assetC,
             type: 'triangular',
             step1_action: `${opp.actions[0].side} ${opp.actions[0].symbol}`,
-            step1_price: 0, // filled from orderbook best price
+            step1_price: 0,
             step1_amount: startAmount,
             step2_action: `${opp.actions[1].side} ${opp.actions[1].symbol}`,
             step2_price: 0,
@@ -89,29 +126,87 @@ export class SupabaseWriter {
         };
 
         this.writeQueue.push(row);
+        this.stats.totalEnqueued++;
     }
 
     private async flush() {
         if (this.writeQueue.length === 0) return;
 
-        const batch = this.writeQueue.splice(0, 50); // max 50 per batch
+        const batch = this.writeQueue.splice(0, 50);
+        await this.insertWithRetry(batch, 0);
+    }
+
+    private async insertWithRetry(batch: OpportunityRow[], attempt: number) {
         try {
-            const { error, count } = await this.supabase
+            const { error } = await this.supabase
                 .from('arbitrage_opportunities')
                 .insert(batch);
 
             if (error) {
-                console.error('[SupabaseWriter] Insert error:', error.message);
-            } else {
-                console.log(`[SupabaseWriter] Wrote ${batch.length} opportunities`);
+                throw new Error(error.message);
             }
+
+            // Success
+            this.stats.totalWritten += batch.length;
+            this.stats.consecutiveFailures = 0;
+            this.stats.lastWriteAt = Date.now();
+            console.log(`[SupabaseWriter] Wrote ${batch.length} opps (total: ${this.stats.totalWritten})`);
+
         } catch (e: any) {
-            console.error('[SupabaseWriter] Flush error:', e.message);
+            const errMsg = e.message || 'Unknown error';
+
+            if (attempt < MAX_RETRIES) {
+                this.stats.totalRetries++;
+                const delay = RETRY_DELAY_MS * Math.pow(2, attempt);
+                console.warn(`[SupabaseWriter] Retry ${attempt + 1}/${MAX_RETRIES} in ${delay}ms: ${errMsg}`);
+                await this.sleep(delay);
+                return this.insertWithRetry(batch, attempt + 1);
+            }
+
+            // All retries exhausted
+            this.stats.totalFailed += batch.length;
+            this.stats.consecutiveFailures++;
+            this.stats.lastErrorAt = Date.now();
+            this.stats.lastError = errMsg;
+            console.error(`[SupabaseWriter] FAILED after ${MAX_RETRIES} retries (${batch.length} rows lost): ${errMsg}`);
+
+            if (this.stats.consecutiveFailures >= ALERT_CONSECUTIVE_FAILURES) {
+                this.emitAlert();
+            }
         }
+    }
+
+    private emitAlert() {
+        console.error('🚨 [SupabaseWriter] ALERT: Multiple consecutive write failures!', {
+            consecutiveFailures: this.stats.consecutiveFailures,
+            totalFailed: this.stats.totalFailed,
+            lastError: this.stats.lastError,
+            queueDepth: this.writeQueue.length,
+        });
+        // Could integrate with external alerting (Slack webhook, PagerDuty, etc.)
+    }
+
+    private logStats() {
+        const { totalEnqueued, totalWritten, totalFailed, totalRetries, consecutiveFailures, lastWriteAt, lastError } = this.stats;
+        const queueDepth = this.writeQueue.length;
+        const successRate = totalEnqueued > 0 ? ((totalWritten / totalEnqueued) * 100).toFixed(1) : '0';
+
+        console.log(`[SupabaseWriter] Stats: enqueued=${totalEnqueued} written=${totalWritten} failed=${totalFailed} retries=${totalRetries} queue=${queueDepth} successRate=${successRate}% consecutiveFails=${consecutiveFailures} lastWrite=${lastWriteAt ? new Date(lastWriteAt).toISOString() : 'never'}${lastError ? ` lastErr="${lastError}"` : ''}`);
+    }
+
+    getStats(): WriterStats {
+        return { ...this.stats };
+    }
+
+    private sleep(ms: number): Promise<void> {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 
     async stop() {
         if (this.flushInterval) clearInterval(this.flushInterval);
+        if (this.statsInterval) clearInterval(this.statsInterval);
         await this.flush(); // final flush
+        this.logStats();
+        console.log('[SupabaseWriter] Stopped');
     }
 }
