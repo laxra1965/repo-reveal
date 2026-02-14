@@ -3,6 +3,8 @@ import { Scanner, OrderBook } from './Scanner';
 import Redis from 'ioredis';
 import { initMoversSubscription } from './movers';
 import { generateDynamicPaths } from './pathGenerator';
+import { SupabaseWriter } from './SupabaseWriter';
+import { getSnapshotConfig } from './snapshotUrls';
 
 export class ScannerService {
     private redis: Redis;
@@ -11,14 +13,16 @@ export class ScannerService {
     private orderBooks: Map<string, OrderBook>;
     private symbols: string[];
     private exchange: string;
+    private supabaseWriter: SupabaseWriter;
 
-    constructor(minProfitPct: number = 0.5, symbols: string[], exchange: string = 'binance', redisInstance?: Redis, subInstance?: Redis) {
+    constructor(minProfitPct: number = 0.5, symbols: string[], exchange: string = 'binance', redisInstance?: Redis, subInstance?: Redis, writer?: SupabaseWriter) {
         this.redis = redisInstance || new Redis();
         this.sub = subInstance || new Redis();
         this.scanner = new Scanner(minProfitPct);
         this.orderBooks = new Map<string, OrderBook>();
         this.symbols = symbols;
         this.exchange = exchange;
+        this.supabaseWriter = writer || new SupabaseWriter();
     }
 
     async start() {
@@ -60,48 +64,37 @@ export class ScannerService {
         const symbol = data.symbol;
         let ob = this.orderBooks.get(symbol);
 
-        // If no OrderBook, we must initialize via Snapshot first
         if (!ob) {
             await this.fetchSnapshot(symbol);
-            // After snapshot, we might need to process this event if it came *after* snapshot?
-            // Actually, fetchSnapshot sets OB. We can return, next events will apply.
-            // But this specific event might be lost if we don't apply it?
-            // If we just fetched snapshot, that snapshot includes latest state.
-            // This event 'data' might be older or newer.
-            // Safest is to just return and let stream continue.
             return;
         }
 
-        // 3. Binance Event Sequencing (Strict)
-        if (data.u <= ob.lastUpdateId) return; // Discard old events
+        if (data.u <= ob.lastUpdateId) return;
 
-        // Gap Detection
-        // Correct logic: U <= lastUpdateId + 1 is Allowed (Overlap or Exact)
-        // U > lastUpdateId + 1 is GAP
         if (data.U > ob.lastUpdateId + 1) {
             console.warn(`[Scanner] Sequence Gap for ${symbol}: Event U=${data.U} > OB=${ob.lastUpdateId} + 1. Re-syncing...`);
             this.fetchSnapshot(symbol);
             return;
         }
 
-        // Apply Delta
         ob.applyDelta(data.bids, data.asks);
         ob.lastUpdateId = data.u;
         ob.timestamp = data.timestamp;
 
-        // Scan for Opportunities
         this.runScan(symbol);
     }
 
     private async fetchSnapshot(symbol: string) {
         try {
             const controller = new AbortController();
-            setTimeout(() => controller.abort(), 3000); // 3s Timeout (Phase C)
+            setTimeout(() => controller.abort(), 5000);
 
-            const res = await fetch(`https://api.binance.com/api/v3/depth?symbol=${symbol.toUpperCase()}&limit=1000`, {
-                signal: controller.signal
-            });
-            const snap = await res.json() as any;
+            const config = getSnapshotConfig(this.exchange);
+            const url = config.buildUrl(symbol);
+
+            const res = await fetch(url, { signal: controller.signal });
+            const rawData = await res.json() as any;
+            const snap = config.parseResponse(rawData);
 
             let ob = this.orderBooks.get(symbol);
             if (!ob) {
@@ -112,23 +105,20 @@ export class ScannerService {
             ob.applySnapshot(snap.bids, snap.asks);
             ob.lastUpdateId = snap.lastUpdateId;
             ob.timestamp = Date.now();
-            console.log(`[Scanner] Snapshot loaded for ${symbol} @ ${ob.lastUpdateId}`);
+            console.log(`[Scanner:${this.exchange}] Snapshot loaded for ${symbol} @ ${ob.lastUpdateId}`);
         } catch (e: any) {
-            console.error(`[Scanner] Fetch Snapshot failed for ${symbol}: ${e.message}`);
+            console.error(`[Scanner:${this.exchange}] Fetch Snapshot failed for ${symbol}: ${e.message}`);
         }
     }
 
     private runScan(symbol: string) {
-        // Kill Switch: Latency Check
         const ob = this.orderBooks.get(symbol);
         if (!ob) return;
 
-        if (Date.now() - ob.timestamp > 300) return; // Drop stale
+        if (Date.now() - ob.timestamp > 300) return;
 
-        // Generate dynamic paths (combines base quotes + movers)
-        // Falls back to static paths if movers are not available
         const dynamicPaths = generateDynamicPaths(this.exchange, this.symbols);
-        const paths = dynamicPaths.length > 0 ? dynamicPaths : undefined; // Use dynamic if available, else fallback to static
+        const paths = dynamicPaths.length > 0 ? dynamicPaths : undefined;
 
         const opps = this.scanner.scan(this.exchange, this.orderBooks, paths);
         if (opps.length) {
@@ -140,7 +130,13 @@ export class ScannerService {
             });
 
             if (validOpps.length > 0) {
+                // Publish to Redis (existing behavior)
                 this.redis.publish(`opportunity:${this.exchange}`, JSON.stringify(validOpps));
+
+                // Write to Supabase database
+                for (const opp of validOpps) {
+                    this.supabaseWriter.enqueue(this.exchange, opp);
+                }
             }
         }
     }
