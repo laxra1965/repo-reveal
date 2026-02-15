@@ -20,7 +20,7 @@ const corsHeaders = {
  */
 
 interface EncryptRequest {
-    action: 'encrypt' | 'decrypt' | 'migrate' | 'test_encryption';
+    action: 'encrypt' | 'decrypt' | 'migrate' | 'test_encryption' | 'rotate_keys';
     data?: string;
     apiKey?: string;
     apiSecret?: string;
@@ -125,23 +125,30 @@ async function handler(req: Request): Promise<Response> {
 
             case 'test_encryption': {
                 const testData = data || 'test_api_key_12345';
-
-                // Encrypt
                 const encrypted = await encryptWithVault(supabase, testData);
-
-                // Decrypt
                 const decrypted = await decryptWithVault(supabase, encrypted);
-
                 const success = testData === decrypted;
 
                 return new Response(
-                    JSON.stringify({
-                        success,
-                        original: testData,
-                        encrypted,
-                        decrypted,
-                        matches: success
-                    }),
+                    JSON.stringify({ success, original: testData, encrypted, decrypted, matches: success }),
+                    { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
+            }
+
+            case 'rotate_keys': {
+                // Verify caller is service role by checking auth header
+                const authHeader = req.headers.get('Authorization');
+                const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+                if (!authHeader || !authHeader.includes(supabaseServiceKey)) {
+                    return new Response(
+                        JSON.stringify({ success: false, error: 'Unauthorized: service role required' }),
+                        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                    );
+                }
+
+                const result = await rotateEncryptionKeys(supabase);
+                return new Response(
+                    JSON.stringify(result),
                     { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
                 );
             }
@@ -321,5 +328,83 @@ async function migrateCredentials(supabase: any, userId?: string): Promise<any> 
         total: credentials.length,
         errors,
         durationMs: duration
+    };
+}
+
+/**
+ * Rotate encryption keys: decrypt all credentials with old key, re-encrypt with new key
+ */
+async function rotateEncryptionKeys(supabase: any): Promise<any> {
+    const startTime = Date.now();
+
+    // Fetch all encrypted credentials
+    const { data: credentials, error: fetchError } = await supabase
+        .from('exchange_credentials')
+        .select('*')
+        .not('encrypted_api_key', 'is', null);
+
+    if (fetchError) {
+        throw new Error(`Failed to fetch credentials: ${fetchError.message}`);
+    }
+
+    if (!credentials || credentials.length === 0) {
+        return { success: true, message: 'No credentials to rotate', rotated: 0 };
+    }
+
+    let rotated = 0;
+    let failed = 0;
+    const errors: any[] = [];
+    const newVersion = 2; // Increment version on rotation
+
+    for (const cred of credentials) {
+        try {
+            // Decrypt with current key
+            const decryptedKey = await decryptWithVault(supabase, cred.encrypted_api_key);
+            const decryptedSecret = await decryptWithVault(supabase, cred.encrypted_api_secret);
+            let decryptedPassphrase: string | undefined;
+            if (cred.encrypted_api_passphrase) {
+                decryptedPassphrase = await decryptWithVault(supabase, cred.encrypted_api_passphrase);
+            }
+
+            // Re-encrypt with new vault key (Vault handles key management internally)
+            const newEncryptedKey = await encryptWithVault(supabase, decryptedKey);
+            const newEncryptedSecret = await encryptWithVault(supabase, decryptedSecret);
+            let newEncryptedPassphrase: string | undefined;
+            if (decryptedPassphrase) {
+                newEncryptedPassphrase = await encryptWithVault(supabase, decryptedPassphrase);
+            }
+
+            // Update with re-encrypted values
+            const { error: updateError } = await supabase
+                .from('exchange_credentials')
+                .update({
+                    encrypted_api_key: newEncryptedKey,
+                    encrypted_api_secret: newEncryptedSecret,
+                    encrypted_api_passphrase: newEncryptedPassphrase || null,
+                    encryption_version: newVersion,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq('id', cred.id);
+
+            if (updateError) throw updateError;
+            rotated++;
+        } catch (error) {
+            failed++;
+            errors.push({
+                credentialId: cred.id,
+                exchange: cred.exchange,
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
+        }
+    }
+
+    return {
+        success: failed === 0,
+        rotated,
+        failed,
+        total: credentials.length,
+        newVersion,
+        errors,
+        durationMs: Date.now() - startTime,
     };
 }

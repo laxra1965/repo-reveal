@@ -21,3 +21,6 @@ verify_jwt = false
 
 [functions.validate-api-keys]
 verify_jwt = true
+
+[functions.encrypt-api-keys]
+verify_jwt = false

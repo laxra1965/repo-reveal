@@ -9,7 +9,8 @@ import { AdminUsersList } from '@/components/admin/AdminUsersList';
 import { AdminSystemMaintenance } from '@/components/admin/AdminSystemMaintenance';
 import { AdminPlanManagement } from '@/components/admin/AdminPlanManagement';
 import { AdminSystemConfig } from '@/components/admin/AdminSystemConfig';
-import { ArrowLeft, Settings, CreditCard, Users, Shield, UserCog, Wrench, Package, Cpu } from 'lucide-react';
+import { AdminSecurityDashboard } from '@/components/admin/AdminSecurityDashboard';
+import { ArrowLeft, Settings, CreditCard, Users, Shield, UserCog, Wrench, Package, Cpu, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const Admin = () => {
@@ -73,6 +74,7 @@ const Admin = () => {
     { id: 'subscriptions', label: 'Subscriptions', icon: Users, component: AdminSubscriptionList },
     { id: 'plans', label: 'Plans', icon: Package, component: AdminPlanManagement },
     { id: 'transactions', label: 'Transactions', icon: CreditCard, component: AdminTransactionList },
+    { id: 'security', label: 'Security', icon: ShieldCheck, component: AdminSecurityDashboard },
     { id: 'maintenance', label: 'Maintenance', icon: Wrench, component: AdminSystemMaintenance },
     { id: 'config', label: 'Config', icon: Cpu, component: AdminSystemConfig },
   ];
