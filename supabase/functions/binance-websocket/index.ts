@@ -272,9 +272,27 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  // Authenticate: require valid JWT or service role
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+  const token = authHeader.replace('Bearer ', '');
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  if (token !== serviceKey) {
+    // Verify as user JWT
+    const anonClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+      global: { headers: { Authorization: authHeader } }
+    });
+    const { error: claimsErr } = await anonClient.auth.getClaims(token);
+    if (claimsErr) {
+      return new Response(JSON.stringify({ error: 'Invalid authentication' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+  }
   
-  const { headers } = req;
-  const upgradeHeader = headers.get("upgrade") || "";
+  const { headers: reqHeaders } = req;
+  const upgradeHeader = reqHeaders.get("upgrade") || "";
 
   if (upgradeHeader.toLowerCase() !== "websocket") {
     return new Response("Expected WebSocket connection", { status: 400 });

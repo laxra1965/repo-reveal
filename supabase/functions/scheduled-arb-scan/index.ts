@@ -15,13 +15,20 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // PHASE 0 Safety Lock
-  if (Deno.env.get('RUNTIME') !== 'vps') {
-    throw new Error('Execution outside VPS is disabled.');
-  }
-
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // PHASE 0 Safety Lock
+  if (Deno.env.get('RUNTIME') !== 'vps') {
+    return new Response(JSON.stringify({ error: 'Execution outside VPS is disabled.' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+
+  // Service role authentication required
+  const authHeader = req.headers.get('Authorization');
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  if (!authHeader || authHeader.replace('Bearer ', '') !== serviceKey) {
+    return new Response(JSON.stringify({ error: 'Unauthorized: service role required' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 
   try {
