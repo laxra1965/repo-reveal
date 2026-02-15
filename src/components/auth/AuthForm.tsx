@@ -72,19 +72,13 @@ export const AuthForm = () => {
             description: getErrorMessage(error, 'Failed to sign in. Please try again.'),
             variant: "destructive",
           });
-        } else {
+         } else {
           toast({
             title: "Success",
             description: "Successfully logged in",
           });
-
-          // Check if admin
-          const ADMIN_EMAILS = ['laxracorp@gmail.com', 'admin@arbitrage.com'];
-          if (ADMIN_EMAILS.includes(email)) {
-            navigate('/admin');
-          } else {
-            navigate('/dashboard');
-          }
+          // Navigate to dashboard; admin access is handled by useIsAdmin hook on the admin page
+          navigate('/dashboard');
         }
       } else {
         const { error } = await supabase.auth.signUp({
