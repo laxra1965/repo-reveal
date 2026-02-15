@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { ArbitrageSettings } from './ArbitrageSettings';
 import { ArbitrageOpportunityCard } from './ArbitrageOpportunityCard';
-import { ArbitrageLogPanel } from './ArbitrageLogPanel';
+
 import { PaperTradeHistory } from './PaperTradeHistory';
 import { PlansSection } from '@/components/plans/PlansSection';
 import { Play, Pause, Settings, TrendingUp, Lock, ChevronLeft, ChevronRight, TestTube, Shield, Clock } from 'lucide-react';
@@ -685,8 +685,6 @@ export const ArbitrageScanner = () => {
       {/* Paper Trade History */}
       <PaperTradeHistory />
 
-      {/* Log Panel */}
-      <ArbitrageLogPanel />
 
       {/* Settings Modal */}
       {showSettings && (
