@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -8,10 +8,8 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Shield, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { useEffect } from 'react';
+import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
-
-const ADMIN_EMAILS = ['laxracorp@gmail.com', 'admin@arbitrage.com'];
 
 const AdminAuth = () => {
   const [email, setEmail] = useState('');
@@ -20,33 +18,23 @@ const AdminAuth = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { isAdmin, loading: adminLoading } = useIsAdmin();
 
   // Redirect if already logged in as admin
   useEffect(() => {
-    if (user?.email && ADMIN_EMAILS.includes(user.email)) {
+    if (adminLoading) return;
+    if (user && isAdmin) {
       navigate('/admin');
-    } else if (user?.email) {
-      // If logged in but not admin, redirect to dashboard
+    } else if (user && !isAdmin) {
       navigate('/dashboard');
     }
-  }, [user, navigate]);
+  }, [user, isAdmin, adminLoading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      // Check if email is in admin list
-      if (!ADMIN_EMAILS.includes(email)) {
-        toast({
-          title: "Access Denied",
-          description: "This email is not authorized for admin access",
-          variant: "destructive",
-        });
-        setLoading(false);
-        return;
-      }
-
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -59,16 +47,11 @@ const AdminAuth = () => {
           variant: "destructive",
         });
       } else if (data.user) {
+        // Admin check will be handled by useIsAdmin hook after auth state updates
         toast({
-          title: "Welcome Admin",
-          description: "Successfully logged in",
+          title: "Signing in...",
+          description: "Verifying admin access",
         });
-        // Always check if the user is admin after login
-        if (ADMIN_EMAILS.includes(email)) {
-          navigate('/admin');
-        } else {
-          navigate('/dashboard');
-        }
       }
     } catch (error) {
       toast({
@@ -105,7 +88,7 @@ const AdminAuth = () => {
               <Input
                 id="email"
                 type="email"
-                placeholder="admin@arbitrage.com"
+                placeholder="Enter admin email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
