@@ -83,6 +83,34 @@ const configs: Record<string, SnapshotConfig> = {
             };
         },
     },
+    htx: {
+        buildUrl: (symbol: string) => {
+            const sym = symbol.replace(/[-_]/g, '').toLowerCase();
+            return `https://api.huobi.pro/market/depth?symbol=${sym}&type=step0&depth=150`;
+        },
+        parseResponse: (data: any) => {
+            const tick = data.tick || {};
+            return {
+                bids: (tick.bids || []).map((l: number[]) => [l[0], l[1]]),
+                asks: (tick.asks || []).map((l: number[]) => [l[0], l[1]]),
+                lastUpdateId: data.ts || Date.now(),
+            };
+        },
+    },
+    bitget: {
+        buildUrl: (symbol: string) => {
+            const sym = symbol.replace(/[-_]/g, '').toUpperCase();
+            return `https://api.bitget.com/api/v2/spot/market/orderbook?symbol=${sym}&limit=150`;
+        },
+        parseResponse: (data: any) => {
+            const book = data.data || {};
+            return {
+                bids: (book.bids || []).map((l: string[]) => [Number(l[0]), Number(l[1])]),
+                asks: (book.asks || []).map((l: string[]) => [Number(l[0]), Number(l[1])]),
+                lastUpdateId: Number(book.ts) || Date.now(),
+            };
+        },
+    },
 };
 
 export function getSnapshotConfig(exchange: string): SnapshotConfig {
