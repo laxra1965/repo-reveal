@@ -12,12 +12,14 @@ console.log('Scanner Service Starting (Phase 3 - All Exchanges)...');
 const writer = new SupabaseWriter();
 
 // Exchange-specific symbol formats
-const binanceSymbols = ['BTCUSDT', 'ETHUSDT', 'ETHBTC', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT'];
-const bybitSymbols  = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'BNBUSDT'];
-const okxSymbols    = ['BTC-USDT', 'ETH-USDT', 'SOL-USDT', 'XRP-USDT', 'DOGE-USDT', 'ADA-USDT'];
-const gateSymbols   = ['BTC_USDT', 'ETH_USDT', 'SOL_USDT', 'XRP_USDT', 'DOGE_USDT', 'ADA_USDT'];
-const mexcSymbols   = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT'];
-const kucoinSymbols = ['BTC-USDT', 'ETH-USDT', 'SOL-USDT', 'XRP-USDT', 'DOGE-USDT', 'ADA-USDT'];
+const binanceSymbols = ['BTCUSDT', 'ETHUSDT', 'ETHBTC', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'LINKUSDT', 'DOTUSDT', 'MATICUSDT'];
+const bybitSymbols  = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'BNBUSDT', 'AVAXUSDT', 'LINKUSDT', 'DOTUSDT'];
+const okxSymbols    = ['BTC-USDT', 'ETH-USDT', 'SOL-USDT', 'XRP-USDT', 'DOGE-USDT', 'ADA-USDT', 'AVAX-USDT', 'LINK-USDT', 'DOT-USDT'];
+const gateSymbols   = ['BTC_USDT', 'ETH_USDT', 'SOL_USDT', 'XRP_USDT', 'DOGE_USDT', 'ADA_USDT', 'AVAX_USDT', 'LINK_USDT', 'DOT_USDT'];
+const mexcSymbols   = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'LINKUSDT', 'DOTUSDT'];
+const kucoinSymbols = ['BTC-USDT', 'ETH-USDT', 'SOL-USDT', 'XRP-USDT', 'DOGE-USDT', 'ADA-USDT', 'AVAX-USDT', 'LINK-USDT', 'DOT-USDT'];
+const htxSymbols    = ['btcusdt', 'ethusdt', 'solusdt', 'xrpusdt', 'dogeusdt', 'adausdt', 'avaxusdt', 'linkusdt', 'dotusdt'];
+const bitgetSymbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'LINKUSDT', 'DOTUSDT'];
 
 const exchanges = [
     { name: 'binance', symbols: binanceSymbols },
@@ -26,6 +28,8 @@ const exchanges = [
     { name: 'gate',    symbols: gateSymbols },
     { name: 'mexc',    symbols: mexcSymbols },
     { name: 'kucoin',  symbols: kucoinSymbols },
+    { name: 'htx',     symbols: htxSymbols },
+    { name: 'bitget',  symbols: bitgetSymbols },
 ];
 
 for (const ex of exchanges) {

@@ -48,6 +48,7 @@ export class SupabaseWriter {
     private writeQueue: OpportunityRow[] = [];
     private flushInterval: ReturnType<typeof setInterval> | null = null;
     private statsInterval: ReturnType<typeof setInterval> | null = null;
+    private metricsInterval: ReturnType<typeof setInterval> | null = null;
     private stats: WriterStats = {
         totalEnqueued: 0,
         totalWritten: 0,
@@ -75,7 +76,10 @@ export class SupabaseWriter {
         // Log stats every 30 seconds
         this.statsInterval = setInterval(() => this.logStats(), 30_000);
 
-        console.log('[SupabaseWriter] Initialized with retry & monitoring');
+        // Persist health metrics to Supabase every 60 seconds
+        this.metricsInterval = setInterval(() => this.persistMetrics(), 60_000);
+
+        console.log('[SupabaseWriter] Initialized with retry, monitoring & metric persistence');
     }
 
     enqueue(exchange: string, opp: {
@@ -205,8 +209,34 @@ export class SupabaseWriter {
     async stop() {
         if (this.flushInterval) clearInterval(this.flushInterval);
         if (this.statsInterval) clearInterval(this.statsInterval);
+        if (this.metricsInterval) clearInterval(this.metricsInterval);
         await this.flush(); // final flush
+        await this.persistMetrics(); // final metrics push
         this.logStats();
         console.log('[SupabaseWriter] Stopped');
+    }
+
+    private async persistMetrics() {
+        const metrics = [
+            { metric_name: 'writer_total_enqueued', metric_value: this.stats.totalEnqueued },
+            { metric_name: 'writer_total_written', metric_value: this.stats.totalWritten },
+            { metric_name: 'writer_total_failed', metric_value: this.stats.totalFailed },
+            { metric_name: 'writer_total_retries', metric_value: this.stats.totalRetries },
+            { metric_name: 'writer_consecutive_failures', metric_value: this.stats.consecutiveFailures },
+            { metric_name: 'writer_queue_depth', metric_value: this.writeQueue.length },
+            { metric_name: 'writer_success_rate', metric_value: this.stats.totalEnqueued > 0 ? (this.stats.totalWritten / this.stats.totalEnqueued) * 100 : 100 },
+        ];
+
+        try {
+            const { error } = await this.supabase
+                .from('scanner_health_metrics')
+                .insert(metrics);
+
+            if (error) {
+                console.warn(`[SupabaseWriter] Failed to persist metrics: ${error.message}`);
+            }
+        } catch (e: any) {
+            console.warn(`[SupabaseWriter] Metrics persistence error: ${e.message}`);
+        }
     }
 }
