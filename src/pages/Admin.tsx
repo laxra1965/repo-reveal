@@ -10,6 +10,7 @@ import { AdminSystemMaintenance } from '@/components/admin/AdminSystemMaintenanc
 import { AdminPlanManagement } from '@/components/admin/AdminPlanManagement';
 import { AdminSystemConfig } from '@/components/admin/AdminSystemConfig';
 import { AdminSecurityDashboard } from '@/components/admin/AdminSecurityDashboard';
+import { AdminOnboardingTour } from '@/components/admin/AdminOnboardingTour';
 import { ArrowLeft, Settings, CreditCard, Users, Shield, UserCog, Wrench, Package, Cpu, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -136,6 +137,7 @@ const Admin = () => {
       </header>
 
       <main className="container mx-auto px-4 py-6">
+        <AdminOnboardingTour onNavigate={handleTabChange} />
         <CurrentComponent />
       </main>
     </div>

@@ -6,6 +6,8 @@ import { supabase } from "../integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage, isNetworkError } from "@/utils/networkUtils";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Check } from "lucide-react";
 
 function generateTransactionId() {
   if (window.crypto?.randomUUID) return window.crypto.randomUUID();
@@ -276,65 +278,110 @@ const Pricing = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background max-w-6xl mx-auto py-8 px-4">
-      <h1 className="text-4xl font-bold mb-6 text-center text-foreground">Pricing</h1>
-      {plansLoading && (
-        <div className="text-center text-muted-foreground mb-4">
-          Loading plans...
+    <div className="min-h-screen bg-background">
+      <div className="max-w-6xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+        {/* Header */}
+        <div className="text-center mb-10">
+          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground mb-3">
+            Choose Your Plan
+          </h1>
+          <p className="text-base text-muted-foreground max-w-2xl mx-auto">
+            Select the tier and billing cycle that fits your trading strategy.
+          </p>
         </div>
-      )}
-      {!plansLoading && availablePlans.length === 0 && (
-        <div className="text-center text-destructive mb-4 p-4 bg-destructive/10 rounded-lg">
-          ⚠️ No subscription plans are currently available. Please contact support.
-        </div>
-      )}
-      <div className="mb-8">
-        <PlanToggle value={selectedPlan} onChange={setSelectedPlan} />
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
-        {tiers.length === 0 ? (
-          <div className="text-muted-foreground text-lg col-span-full text-center">No pricing tiers available.</div>
-        ) : (
-          tiers.map((tier, idx) => (
-            <div
-              key={tier.name}
-              className={`
-                border rounded-xl p-6 bg-card shadow-md text-foreground
-                ${loadingTier === idx ? 'border-primary border-2' : 'border-border'}
-                ${loadingTier !== null ? 'cursor-not-allowed' : 'cursor-pointer hover:shadow-lg transition-shadow'}
-                ${loadingTier !== null && loadingTier !== idx ? 'opacity-70' : 'opacity-100'}
-              `}
-              onClick={() => setSelectedTier(idx)}
-            >
-              <h2 className="text-xl font-semibold text-foreground mb-3">{tier.name}</h2>
-              <ul className="my-3 pl-5 space-y-1.5">
-                {tier.features.map((f, i) => (
-                  <li key={i} className="text-sm break-words">{f}</li>
-                ))}
-              </ul>
-              <div className="my-3">
-                <div className="text-3xl font-bold text-primary mb-2">
-                  {tier.plans.find(p => p.label.toLowerCase().replace(/\s/g, "") === selectedPlan)?.price || tier.plans[0].price}
-                </div>
-              </div>
-              <Button
-                className={`
-                  w-full mt-3
-                  ${loadingTier !== null && loadingTier !== idx ? 'opacity-70' : ''}
-                `}
-                disabled={loadingTier !== null}
-                onClick={e => {
-                  e.stopPropagation();
-                  handleSelect(idx);
-                }}
-              >
-                {loadingTier === idx ? 'Processing...' : 'Select Plan'}
-              </Button>
-            </div>
-          ))
+
+        {plansLoading && (
+          <div className="text-center text-muted-foreground mb-6">Loading plans...</div>
         )}
+        {!plansLoading && availablePlans.length === 0 && (
+          <div className="text-center text-destructive mb-6 p-4 bg-destructive/10 rounded-lg">
+            ⚠️ No subscription plans are currently available. Please contact support.
+          </div>
+        )}
+
+        <div className="flex justify-center mb-10">
+          <PlanToggle value={selectedPlan} onChange={setSelectedPlan} />
+        </div>
+
+        {/* Pricing Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
+          {tiers.length === 0 ? (
+            <div className="text-muted-foreground text-lg col-span-full text-center">
+              No pricing tiers available.
+            </div>
+          ) : (
+            tiers.map((tier, idx) => {
+              const currentPrice =
+                tier.plans.find(
+                  (p) => p.label.toLowerCase().replace(/\s/g, '') === selectedPlan
+                )?.price || tier.plans[0].price;
+              const isMiddle = idx === 1;
+
+              return (
+                <div
+                  key={tier.name}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Select ${tier.name}`}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') setSelectedTier(idx);
+                  }}
+                  className={`
+                    relative flex flex-col border rounded-2xl p-6 bg-card text-card-foreground
+                    transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
+                    ${isMiddle ? 'ring-2 ring-primary shadow-xl scale-[1.02]' : 'shadow-md'}
+                    ${loadingTier === idx ? 'border-primary border-2' : 'border-border'}
+                    ${loadingTier !== null ? 'cursor-not-allowed' : 'cursor-pointer hover:shadow-lg'}
+                    ${loadingTier !== null && loadingTier !== idx ? 'opacity-60' : ''}
+                  `}
+                  onClick={() => setSelectedTier(idx)}
+                >
+                  {isMiddle && (
+                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-xs px-3">
+                      Most Popular
+                    </Badge>
+                  )}
+
+                  <h2 className="text-lg font-bold text-foreground leading-snug mb-1">
+                    {tier.name}
+                  </h2>
+
+                  <div className="mt-3 mb-5">
+                    <span className="text-4xl font-extrabold tracking-tight text-primary">
+                      {currentPrice}
+                    </span>
+                    <span className="text-sm font-medium text-muted-foreground ml-1">
+                      /{selectedPlan === 'weekly' ? 'wk' : selectedPlan === 'monthly' ? 'mo' : 'qtr'}
+                    </span>
+                  </div>
+
+                  <ul className="space-y-2 flex-1 mb-6">
+                    {tier.features.map((f, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-foreground break-words">
+                        <Check className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <Button
+                    className="w-full"
+                    size="lg"
+                    variant={isMiddle ? 'default' : 'outline'}
+                    disabled={loadingTier !== null}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSelect(idx);
+                    }}
+                  >
+                    {loadingTier === idx ? 'Processing...' : 'Get Started'}
+                  </Button>
+                </div>
+              );
+            })
+          )}
+        </div>
       </div>
-      {/* USDT-TRC20 address will be shown on the payment page after plan selection */}
     </div>
   );
 };
