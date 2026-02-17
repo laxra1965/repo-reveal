@@ -291,16 +291,15 @@ const Pricing = () => {
       <div className="mb-8">
         <PlanToggle value={selectedPlan} onChange={setSelectedPlan} />
       </div>
-      <div className="flex flex-row gap-6 justify-center overflow-x-auto w-full pb-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
         {tiers.length === 0 ? (
-          <div className="text-muted-foreground text-lg">No pricing tiers available.</div>
+          <div className="text-muted-foreground text-lg col-span-full text-center">No pricing tiers available.</div>
         ) : (
           tiers.map((tier, idx) => (
             <div
               key={tier.name}
               className={`
-                border rounded-xl p-6 min-w-[320px] bg-card shadow-md text-foreground
-                flex-shrink-0 mb-3
+                border rounded-xl p-6 bg-card shadow-md text-foreground
                 ${loadingTier === idx ? 'border-primary border-2' : 'border-border'}
                 ${loadingTier !== null ? 'cursor-not-allowed' : 'cursor-pointer hover:shadow-lg transition-shadow'}
                 ${loadingTier !== null && loadingTier !== idx ? 'opacity-70' : 'opacity-100'}
@@ -310,7 +309,7 @@ const Pricing = () => {
               <h2 className="text-xl font-semibold text-foreground mb-3">{tier.name}</h2>
               <ul className="my-3 pl-5 space-y-1.5">
                 {tier.features.map((f, i) => (
-                  <li key={i} className="text-sm">{f}</li>
+                  <li key={i} className="text-sm break-words">{f}</li>
                 ))}
               </ul>
               <div className="my-3">
