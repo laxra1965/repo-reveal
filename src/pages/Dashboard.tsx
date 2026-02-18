@@ -5,9 +5,6 @@ import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { ArbitrageScanner } from '@/components/arbitrage/ArbitrageScanner';
 import { StatisticsDashboard } from '@/components/dashboard/StatisticsDashboard';
-import { SystemHealthStatus } from '@/components/dashboard/SystemHealthStatus';
-import { LiveMetricsPanel } from '@/components/dashboard/LiveMetricsPanel';
-import { VPSHealthMonitor } from '@/components/dashboard/VPSHealthMonitor';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -136,16 +133,6 @@ const Dashboard = () => {
       </header>
 
       <main className="container mx-auto px-4 py-8 space-y-8 animate-in">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <SystemHealthStatus />
-          </div>
-          <LiveMetricsPanel />
-        </div>
-        
-        {/* VPS Health Section */}
-        <VPSHealthMonitor />
-        
         <StatisticsDashboard />
         <ArbitrageScanner />
       </main>
