@@ -11,7 +11,10 @@ import { AdminPlanManagement } from '@/components/admin/AdminPlanManagement';
 import { AdminSystemConfig } from '@/components/admin/AdminSystemConfig';
 import { AdminSecurityDashboard } from '@/components/admin/AdminSecurityDashboard';
 import { AdminOnboardingTour } from '@/components/admin/AdminOnboardingTour';
-import { ArrowLeft, Settings, CreditCard, Users, Shield, UserCog, Wrench, Package, Cpu, ShieldCheck } from 'lucide-react';
+import { SystemHealthStatus } from '@/components/dashboard/SystemHealthStatus';
+import { LiveMetricsPanel } from '@/components/dashboard/LiveMetricsPanel';
+import { VPSHealthMonitor } from '@/components/dashboard/VPSHealthMonitor';
+import { ArrowLeft, Settings, CreditCard, Users, Shield, UserCog, Wrench, Package, Cpu, ShieldCheck, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const Admin = () => {
@@ -70,11 +73,25 @@ const Admin = () => {
     );
   }
 
+  // Monitoring tab component combining all system health panels
+  const AdminMonitoring = () => (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <SystemHealthStatus />
+        </div>
+        <LiveMetricsPanel />
+      </div>
+      <VPSHealthMonitor />
+    </div>
+  );
+
   const navItems = [
     { id: 'users', label: 'Users', icon: UserCog, component: AdminUsersList },
     { id: 'subscriptions', label: 'Subscriptions', icon: Users, component: AdminSubscriptionList },
     { id: 'plans', label: 'Plans', icon: Package, component: AdminPlanManagement },
     { id: 'transactions', label: 'Transactions', icon: CreditCard, component: AdminTransactionList },
+    { id: 'monitoring', label: 'Monitoring', icon: Activity, component: AdminMonitoring },
     { id: 'security', label: 'Security', icon: ShieldCheck, component: AdminSecurityDashboard },
     { id: 'maintenance', label: 'Maintenance', icon: Wrench, component: AdminSystemMaintenance },
     { id: 'config', label: 'Config', icon: Cpu, component: AdminSystemConfig },
