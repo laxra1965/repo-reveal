@@ -1,7 +1,7 @@
 import { useAuth } from '@/hooks/useAuth';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { AdminTransactionList } from '@/components/admin/AdminTransactionList';
 import { AdminSubscriptionList } from '@/components/admin/AdminSubscriptionList';
@@ -14,7 +14,7 @@ import { AdminOnboardingTour } from '@/components/admin/AdminOnboardingTour';
 import { SystemHealthStatus } from '@/components/dashboard/SystemHealthStatus';
 import { LiveMetricsPanel } from '@/components/dashboard/LiveMetricsPanel';
 import { VPSHealthMonitor } from '@/components/dashboard/VPSHealthMonitor';
-import { ArrowLeft, Settings, CreditCard, Users, Shield, UserCog, Wrench, Package, Cpu, ShieldCheck, Activity } from 'lucide-react';
+import { ArrowLeft, Settings, CreditCard, Users, Shield, UserCog, Wrench, Package, Cpu, ShieldCheck, Activity, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const Admin = () => {
@@ -74,17 +74,59 @@ const Admin = () => {
   }
 
   // Monitoring tab component combining all system health panels
-  const AdminMonitoring = () => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <SystemHealthStatus />
+  const AdminMonitoring = () => {
+    const [refreshKey, setRefreshKey] = useState(0);
+    const [lastRefresh, setLastRefresh] = useState(new Date());
+    const [isRefreshing, setIsRefreshing] = useState(false);
+
+    const handleRefreshAll = useCallback(() => {
+      setIsRefreshing(true);
+      setRefreshKey(k => k + 1);
+      setLastRefresh(new Date());
+      setTimeout(() => setIsRefreshing(false), 1500);
+    }, []);
+
+    // Auto-refresh every 30s
+    useEffect(() => {
+      const interval = setInterval(() => {
+        setRefreshKey(k => k + 1);
+        setLastRefresh(new Date());
+      }, 30000);
+      return () => clearInterval(interval);
+    }, []);
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold tracking-tight">System Monitoring</h2>
+            <p className="text-xs text-muted-foreground">
+              Auto-refreshes every 30s · Last: {lastRefresh.toLocaleTimeString()}
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefreshAll}
+            disabled={isRefreshing}
+            className="gap-2"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            Refresh All
+          </Button>
         </div>
-        <LiveMetricsPanel />
+        <div key={refreshKey} className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <SystemHealthStatus />
+            </div>
+            <LiveMetricsPanel />
+          </div>
+          <VPSHealthMonitor />
+        </div>
       </div>
-      <VPSHealthMonitor />
-    </div>
-  );
+    );
+  };
 
   const navItems = [
     { id: 'users', label: 'Users', icon: UserCog, component: AdminUsersList },
