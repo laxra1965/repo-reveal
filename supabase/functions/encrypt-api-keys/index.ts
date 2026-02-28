@@ -174,9 +174,10 @@ function jsonResponse(data: any, status = 200) {
 
 export default handler;
 
-if (typeof Deno !== 'undefined' && typeof Deno.serve === 'function') {
-    serve(handler);
-}
+// For Supabase Edge Functions compatibility (commented out for unified server)
+// if (typeof Deno !== 'undefined' && typeof Deno.serve === 'function') {
+//     serve(handler);
+// }
 
 async function encryptWithVault(supabase: any, plaintext: string): Promise<string> {
     const { data, error } = await supabase.rpc('pgsodium_encrypt', {

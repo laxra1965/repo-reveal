@@ -34,7 +34,7 @@ const EXCHANGE_LIMITS: Record<string, RateLimitConfig> = {
 // In-memory storage (use KV or Redis for production)
 const requestLog = new Map<string, number[]>();
 
-serve(async (req) => {
+export default async (req: Request): Promise<Response> => {
     if (req.method === 'OPTIONS') {
         return new Response(null, { headers: corsHeaders });
     }
@@ -62,7 +62,7 @@ serve(async (req) => {
             }
         );
     }
-});
+};
 
 async function handleRateLimitCheck(req: Request): Promise<Response> {
     const { userId, exchange, endpoint } = await req.json();

@@ -205,7 +205,7 @@ async function handler(req: Request): Promise<Response> {
 // Export default handler for unified server
 export default handler;
 
-// For Supabase Edge Functions compatibility
-if (typeof Deno !== 'undefined' && typeof Deno.serve === 'function') {
-  serve(handler);
-}
+// For Supabase Edge Functions compatibility (commented out for unified server)
+// if (typeof Deno !== 'undefined' && typeof Deno.serve === 'function') {
+//   serve(handler);
+// }

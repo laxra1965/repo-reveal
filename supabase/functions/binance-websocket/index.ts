@@ -267,7 +267,7 @@ const findBNBTriangularArbitrage = (priceMap: Record<string, any>, tradeAmount: 
   return opportunities.sort((a, b) => b.profit_percent - a.profit_percent).slice(0, 5);
 };
 
-serve(async (req) => {
+export default async (req: Request): Promise<Response> => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -361,4 +361,4 @@ serve(async (req) => {
   };
 
   return response;
-});
+};

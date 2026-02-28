@@ -22,7 +22,7 @@ interface TestResult {
     duration: number;
 }
 
-serve(async (req) => {
+export default async (req: Request): Promise<Response> => {
     if (req.method === 'OPTIONS') {
         return new Response(null, { headers: corsHeaders });
     }
@@ -78,7 +78,7 @@ serve(async (req) => {
             }
         );
     }
-});
+};
 
 async function testExchangeCredentialsRLS(
     supabaseUrl: string,

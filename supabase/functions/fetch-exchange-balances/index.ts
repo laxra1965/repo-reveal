@@ -284,7 +284,7 @@ async function fetchGateBalance(apiKey: string, apiSecret: string): Promise<Exch
   }
 }
 
-serve(async (req) => {
+export default async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -380,4 +380,4 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-});
+};

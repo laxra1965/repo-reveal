@@ -14,7 +14,7 @@ const corsHeaders = {
   'Access-Control-Max-Age': '86400',
 };
 
-serve(async (req) => {
+export default async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -69,4 +69,4 @@ serve(async (req) => {
       }
     );
   }
-});
+};
