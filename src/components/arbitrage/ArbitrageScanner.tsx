@@ -62,7 +62,7 @@ export const ArbitrageScanner = () => {
   const [isInitializing, setIsInitializing] = useState(false);
   const [autoPaperTrade, setAutoPaperTrade] = useState(false);
   const [autoPaperTradeCount, setAutoPaperTradeCount] = useState(0);
-  const [scanDebug, setScanDebug] = useState<any[] | null>(null);
+  
   const [activeArbTypes, setActiveArbTypes] = useState<string[]>(['triangular', 'cross_exchange']);
 
   // Pagination state
@@ -166,179 +166,8 @@ export const ArbitrageScanner = () => {
     }
   }, [user, hasActiveSubscription, isAdmin, loadOpportunitiesFromDB]);
 
-  // Perform scan
-  const performScan = useCallback(async () => {
-    if (isScanningRef.current || !user) return;
 
-    isScanningRef.current = true;
 
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (!session) {
-        throw new Error('No active session');
-      }
-
-      // Use VPS API instead of Supabase edge functions
-      const functionsUrl = import.meta.env.VITE_FUNCTIONS_URL || 'http://localhost:3001';
-      const response = await fetch(`${functionsUrl}/functions/arbitrage-scanner`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({
-          mode: 'manual',
-          userId: user.id
-        })
-      });
-
-      const data = await response.json();
-      
-      // Handle VPS API response
-      const vpsResponse = {
-        data,
-        error: !response.ok ? { 
-          status: response.status,
-          statusCode: response.status,
-          message: data?.error || 'Failed to scan for opportunities'
-        } : null
-      };
-
-      if (vpsResponse.error) {
-        console.error('VPS API returned error:', vpsResponse);
-        const status = vpsResponse.error?.status || vpsResponse.error?.statusCode || 'unknown';
-        
-        // Parse error message from response
-        let errMessage = vpsResponse.error?.message || 'Failed to scan for opportunities';
-
-        // Provide user-friendly error messages based on status
-        if (status === 404) {
-          if (errMessage.includes('User settings not found') || errMessage.includes('settings')) {
-            errMessage = 'User settings not found. Please configure your trading settings first.';
-            // Try to create default settings
-            try {
-              const { error: createError } = await supabase
-                .from('user_settings')
-                .insert({
-                  user_id: user.id,
-                  enabled_exchanges: ['binance', 'bybit', 'okx'],
-                  trade_amount: 10,
-                  min_profit_percent: 0.1,
-                  arbitrage_types: ['triangular', 'cross_exchange']
-                });
-              
-              if (!createError) {
-                toast({
-                  title: "Settings Created",
-                  description: "Default settings have been created. Retrying scan...",
-                });
-                // Retry the scan after creating settings (avoid infinite recursion)
-                setTimeout(async () => {
-                  if (mountedRef.current && !isScanningRef.current) {
-                    isScanningRef.current = true;
-                    try {
-                      // Get fresh session for retry
-                      const { data: { session: retrySession } } = await supabase.auth.getSession();
-                      if (!retrySession) {
-                        throw new Error('No active session for retry');
-                      }
-
-                      const functionsUrl = import.meta.env.VITE_FUNCTIONS_URL || 'http://localhost:3001';
-                      const retryFetch = await fetch(`${functionsUrl}/functions/arbitrage-scanner`, {
-                        method: 'POST',
-                        headers: {
-                          'Content-Type': 'application/json',
-                          Authorization: `Bearer ${retrySession.access_token}`
-                        },
-                        body: JSON.stringify({
-                          mode: 'manual',
-                          userId: user.id
-                        })
-                      });
-
-                      const retryData = await retryFetch.json();
-                      const retryResponse = {
-                        data: retryData,
-                        error: !retryFetch.ok ? { status: retryFetch.status, message: retryData?.message || 'Scan failed' } : null
-                      };
-
-                      if (!retryResponse.error && mountedRef.current) {
-                        setScanCount(prev => prev + 1);
-                        setLastScanTime(new Date());
-                        await loadOpportunitiesFromDB();
-                        toast({
-                          title: "Scan Complete",
-                          description: `Found ${retryResponse.data?.opportunities_count || 0} opportunities`,
-                        });
-                      } else if (retryResponse.error && mountedRef.current) {
-                        toast({
-                          title: "Scan Error",
-                          description: retryResponse.error.message || "Failed to scan after creating settings",
-                          variant: "destructive",
-                        });
-                      }
-                    } catch (retryError: any) {
-                      console.error('Retry scan error:', retryError);
-                      if (mountedRef.current) {
-                        toast({
-                          title: "Scan Error",
-                          description: retryError.message || "Failed to retry scan",
-                          variant: "destructive",
-                        });
-                      }
-                    } finally {
-                      isScanningRef.current = false;
-                    }
-                  }
-                }, 1000);
-                return;
-              }
-            } catch (e) {
-              console.error('Failed to create default settings:', e);
-            }
-          } else {
-            errMessage = 'Resource not found. Please try again.';
-          }
-        } else if (status === 401) {
-          errMessage = 'Authentication failed. Please sign in again.';
-        } else if (status === 403) {
-          errMessage = 'Access denied. You may not have permission to perform this action.';
-        } else if (status === 500) {
-          errMessage = 'Server error. The scanner service may be temporarily unavailable.';
-        }
-
-        throw new Error(`${errMessage} (Status: ${status})`);
-      }
-
-      if (mountedRef.current) {
-        setScanCount(prev => prev + 1);
-        setLastScanTime(new Date());
-        setScanDebug(vpsResponse.data?.exchange_debug || null);
-      }
-
-      // Load updated opportunities from database
-      await loadOpportunitiesFromDB();
-
-      if (mountedRef.current) {
-        toast({
-          title: "Scan Complete",
-          description: `Found ${vpsResponse.data?.opportunities_count || 0} opportunities`,
-        });
-      }
-    } catch (error: any) {
-      console.error('Scan error:', error);
-      if (mountedRef.current) {
-        toast({
-          title: "Scan Error",
-          description: error.message || "Failed to scan for opportunities",
-          variant: "destructive",
-        });
-      }
-    } finally {
-      isScanningRef.current = false;
-    }
-  }, [user, loadOpportunitiesFromDB, toast]);
 
   // Auto paper trade function
   const executeAutoPaperTrade = useCallback(async (opportunity: Opportunity) => {
@@ -400,7 +229,7 @@ export const ArbitrageScanner = () => {
     });
   }, [opportunities, autoPaperTrade, isScanning, executeAutoPaperTrade]);
 
-  // Start scanning
+  // Start scanning - reads from DB (VPS scanner writes opportunities independently)
   const startScanning = useCallback(async () => {
     if (!user || (!hasActiveSubscription && !isAdmin)) {
       toast({
@@ -413,17 +242,26 @@ export const ArbitrageScanner = () => {
 
     setIsInitializing(true);
 
-    // Perform initial scan
-    await performScan();
+    // Load current opportunities from database
+    await loadOpportunitiesFromDB();
 
     if (mountedRef.current) {
       setIsInitializing(false);
       setIsScanning(true);
+      setScanCount(prev => prev + 1);
 
-      // Set up periodic scanning
-      scanIntervalRef.current = setInterval(performScan, 30000);
+      toast({
+        title: "Scanner Active",
+        description: "Reading opportunities from VPS scanner. Updates every 20s + real-time.",
+      });
+
+      // Set up periodic polling (complements real-time subscription)
+      scanIntervalRef.current = setInterval(() => {
+        loadOpportunitiesFromDB();
+        setScanCount(prev => prev + 1);
+      }, 20000);
     }
-  }, [user, hasActiveSubscription, toast, performScan]);
+  }, [user, hasActiveSubscription, isAdmin, toast, loadOpportunitiesFromDB]);
 
   // Stop scanning
   const stopScanning = useCallback(() => {
@@ -612,25 +450,6 @@ export const ArbitrageScanner = () => {
               <p className="text-muted-foreground mb-4">
                 No opportunities found. Click "Start" to begin scanning.
               </p>
-
-              {/* Debug Info Display */}
-              {scanDebug && (
-                <div className="mt-4 text-left max-w-md mx-auto border rounded p-3 bg-card/50">
-                  <p className="text-xs font-semibold mb-2 text-muted-foreground">Exchange Connectivity Status:</p>
-                  <div className="grid gap-2">
-                    {scanDebug.map((d: any, i: number) => (
-                      <div key={i} className={`text-xs p-2 rounded flex justify-between items-center border ${d.success ? 'border-green-500/20 bg-green-500/5 text-green-600 dark:text-green-400' : 'border-red-500/20 bg-red-500/5 text-red-600 dark:text-red-400'}`}>
-                        <span className="flex items-center gap-2">
-                          <span className={`w-2 h-2 rounded-full ${d.success ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                          {d.exchange}
-                        </span>
-                        <span>{d.ticker_count} pairs</span>
-                        {!d.success && <span className="ml-2">Err: {d.error}</span>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </CardContent>
           </Card>
         )}

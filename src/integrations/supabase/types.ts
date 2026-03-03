@@ -1023,7 +1023,6 @@ export type Database = {
         Args: never
         Returns: {
           deleted_count: number
-          execution_time_ms: number
         }[]
       }
       cleanup_expired_opportunities_full: { Args: never; Returns: undefined }
@@ -1037,12 +1036,12 @@ export type Database = {
       get_auto_trade_status: {
         Args: never
         Returns: {
-          avg_trade_time_seconds: number
-          failed_trades_last_hour: number
-          processing_trades: number
-          queued_trades: number
-          total_users_with_auto_trade: number
-          trades_last_hour: number
+          active_users: number
+          completed_today: number
+          executing_trades: number
+          failed_today: number
+          pending_trades: number
+          total_profit_today: number
         }[]
       }
       get_cached: { Args: { key: string }; Returns: Json }
