@@ -52,12 +52,12 @@ interface TradeHistory {
 }
 
 interface AutoTradeStats {
-  total_users_with_auto_trade: number;
-  queued_trades: number;
-  processing_trades: number;
-  trades_last_hour: number;
-  failed_trades_last_hour: number;
-  avg_trade_time_seconds: number;
+  active_users: number;
+  pending_trades: number;
+  executing_trades: number;
+  completed_today: number;
+  failed_today: number;
+  total_profit_today: number;
 }
 
 export const AutoTradeMonitor = () => {
@@ -445,25 +445,29 @@ export const AutoTradeMonitor = () => {
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
               <div>
-                <span className="text-muted-foreground">Users with Auto-Trade:</span>
-                <span className="ml-2 font-medium">{stats.total_users_with_auto_trade}</span>
+                <span className="text-muted-foreground">Active Users:</span>
+                <span className="ml-2 font-medium">{stats.active_users}</span>
               </div>
               <div>
-                <span className="text-muted-foreground">System Queue:</span>
-                <span className="ml-2 font-medium">{stats.queued_trades}</span>
+                <span className="text-muted-foreground">Pending Trades:</span>
+                <span className="ml-2 font-medium">{stats.pending_trades}</span>
               </div>
               <div>
-                <span className="text-muted-foreground">Trades Last Hour:</span>
-                <span className="ml-2 font-medium">{stats.trades_last_hour}</span>
+                <span className="text-muted-foreground">Executing:</span>
+                <span className="ml-2 font-medium">{stats.executing_trades}</span>
               </div>
               <div>
-                <span className="text-muted-foreground">Failed Last Hour:</span>
-                <span className="ml-2 font-medium text-red-500">{stats.failed_trades_last_hour}</span>
+                <span className="text-muted-foreground">Completed Today:</span>
+                <span className="ml-2 font-medium">{stats.completed_today}</span>
               </div>
               <div>
-                <span className="text-muted-foreground">Avg Trade Time:</span>
+                <span className="text-muted-foreground">Failed Today:</span>
+                <span className="ml-2 font-medium text-destructive">{stats.failed_today}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Profit Today:</span>
                 <span className="ml-2 font-medium">
-                  {stats.avg_trade_time_seconds ? `${stats.avg_trade_time_seconds.toFixed(1)}s` : 'N/A'}
+                  {stats.total_profit_today ? `$${Number(stats.total_profit_today).toFixed(2)}` : '$0.00'}
                 </span>
               </div>
             </div>
