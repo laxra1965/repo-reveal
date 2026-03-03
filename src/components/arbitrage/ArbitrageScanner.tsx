@@ -93,7 +93,8 @@ export const ArbitrageScanner = () => {
       const { data, error } = await supabase
         .from('arbitrage_opportunities')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .eq('is_valid', true)
         .gt('expires_at', new Date().toISOString())
         .order('profit_percent', { ascending: false })
         .limit(100);
