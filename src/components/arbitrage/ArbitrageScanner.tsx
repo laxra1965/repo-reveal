@@ -73,7 +73,7 @@ export const ArbitrageScanner = () => {
   const autoTradedIdsRef = useRef<Set<string>>(new Set());
   const isScanningRef = useRef(false);
   const mountedRef = useRef(true);
-  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -138,7 +138,7 @@ export const ArbitrageScanner = () => {
       loadOpportunitiesFromDB();
 
       // Set up real-time subscription with debounce
-      let debounceTimer: NodeJS.Timeout;
+      let debounceTimer: ReturnType<typeof setTimeout>;
       const channel = supabase
         .channel('arbitrage-opportunities')
         .on(
