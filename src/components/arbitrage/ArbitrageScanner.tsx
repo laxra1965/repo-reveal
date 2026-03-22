@@ -85,11 +85,43 @@ export const ArbitrageScanner = () => {
     };
   }, []);
 
-  // Load opportunities from database - memoized to prevent recreation
+  // Load opportunities from VPS API (primary) with Supabase fallback
   const loadOpportunitiesFromDB = useCallback(async () => {
     if (!user || !mountedRef.current) return;
 
     try {
+      // Primary: fetch from VPS API
+      const vpsUrl = import.meta.env.VITE_FUNCTIONS_URL || '';
+      if (vpsUrl) {
+        const apiBase = vpsUrl.replace(/\/functions\/?$/, '');
+        const response = await fetch(
+          `${apiBase}/fetch-opportunities?` + new URLSearchParams({
+            limit: '100',
+            sort_by: 'profit',
+            order: 'desc',
+          }),
+          { signal: AbortSignal.timeout(8000) }
+        );
+
+        if (response.ok) {
+          const result = await response.json();
+          const data = result.data || result;
+          if (Array.isArray(data) && data.length > 0 && mountedRef.current) {
+            setOpportunities(prev => {
+              const prevIds = new Set(prev.map(o => o.id));
+              const newIds = new Set(data.map((o: Opportunity) => o.id));
+              const hasChanged = prev.length !== data.length ||
+                data.some((o: Opportunity) => !prevIds.has(o.id)) ||
+                prev.some(o => !newIds.has(o.id));
+              return hasChanged ? data : prev;
+            });
+            setLastScanTime(new Date());
+            return;
+          }
+        }
+      }
+
+      // Fallback: read directly from Supabase
       const { data, error } = await supabase
         .from('arbitrage_opportunities')
         .select('*')
@@ -102,7 +134,6 @@ export const ArbitrageScanner = () => {
       if (error) throw error;
 
       if (data && mountedRef.current) {
-        // Only update if data actually changed
         setOpportunities(prev => {
           const prevIds = new Set(prev.map(o => o.id));
           const newIds = new Set(data.map(o => o.id));
