@@ -3,14 +3,16 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Trash2, RefreshCw, AlertCircle } from 'lucide-react';
+import { Trash2, RefreshCw, AlertCircle, Zap } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { invokeFunction } from '@/lib/functionsInvoke';
 import { useAuth } from '@/hooks/useAuth';
 
 export const AdminSystemMaintenance = () => {
   const [cleaning, setCleaning] = useState(false);
+  const [purging, setPurging] = useState(false);
   const [lastCleanup, setLastCleanup] = useState<{ count: number; timestamp: Date } | null>(null);
+  const [lastPurge, setLastPurge] = useState<{ count: number; timestamp: Date } | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -22,7 +24,6 @@ export const AdminSystemMaintenance = () => {
 
       let recordsToDelete = 0;
 
-      // Try using the Edge Function first
       try {
         const response = await invokeFunction('clear-user-data', {
           body: {
@@ -35,16 +36,13 @@ export const AdminSystemMaintenance = () => {
           throw new Error(response.error.message || response.error || 'Function returned error');
         }
 
-        // Handle both response formats (data wrapper or direct response)
         const result = response.data || response;
         recordsToDelete = result?.deletedCount || result?.details?.opportunities || 0;
       } catch (functionError: any) {
-        // If function fails, fall back to direct Supabase query
         console.warn('Function invocation failed, using direct Supabase query:', functionError);
         
         const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-        // Count old opportunities
         const { count: existingCount, error: countError } = await supabase
           .from('arbitrage_opportunities')
           .select('*', { count: 'exact', head: true })
@@ -54,7 +52,6 @@ export const AdminSystemMaintenance = () => {
 
         recordsToDelete = existingCount || 0;
 
-        // Delete old opportunities
         const { error } = await supabase
           .from('arbitrage_opportunities')
           .delete()
@@ -73,11 +70,10 @@ export const AdminSystemMaintenance = () => {
       console.error('Error cleaning up opportunities:', error);
       let errorMessage = error.message || "Failed to cleanup old opportunities";
       
-      // Provide more specific error messages
       if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
-        errorMessage = "Network error: Unable to reach the server. Please check your connection or ensure the function is deployed.";
+        errorMessage = "Network error: Unable to reach the server.";
       } else if (errorMessage.includes('404') || errorMessage.includes('not found')) {
-        errorMessage = "Function not found. Please ensure the clear-user-data function is deployed.";
+        errorMessage = "Function not found. Please ensure clear-user-data is deployed.";
       } else if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
         errorMessage = "Authentication failed. Please sign in again.";
       }
@@ -89,6 +85,36 @@ export const AdminSystemMaintenance = () => {
       });
     } finally {
       setCleaning(false);
+    }
+  };
+
+  const handlePurgeExpired = async () => {
+    if (!user) return;
+
+    try {
+      setPurging(true);
+
+      // Use the existing DB function to purge all expired opportunities
+      const { data, error } = await supabase.rpc('cleanup_expired_opportunities');
+
+      if (error) throw error;
+
+      const deletedCount = data?.[0]?.deleted_count ?? 0;
+      setLastPurge({ count: deletedCount, timestamp: new Date() });
+
+      toast({
+        title: "Purge Complete",
+        description: `Removed ${deletedCount} expired opportunities from the database.`,
+      });
+    } catch (error: any) {
+      console.error('Error purging expired opportunities:', error);
+      toast({
+        title: "Purge Failed",
+        description: error.message || "Failed to purge expired opportunities",
+        variant: "destructive",
+      });
+    } finally {
+      setPurging(false);
     }
   };
 
@@ -107,10 +133,43 @@ export const AdminSystemMaintenance = () => {
         <Alert>
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            Cleanup removes all arbitrage opportunities older than 24 hours from the database to improve performance.
+            Cleanup removes stale data from the database to improve performance and reduce storage usage.
           </AlertDescription>
         </Alert>
 
+        {/* Purge All Expired */}
+        <div className="border rounded-lg p-4 space-y-4 border-destructive/30">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold flex items-center gap-2">
+                <Zap className="h-4 w-4 text-destructive" />
+                Purge All Expired Opportunities
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Remove all expired, inactive, or stale opportunities immediately
+              </p>
+            </div>
+            <Button
+              onClick={handlePurgeExpired}
+              disabled={purging}
+              variant="destructive"
+              className="flex items-center gap-2"
+            >
+              <Trash2 className="h-4 w-4" />
+              {purging ? "Purging..." : "Purge Now"}
+            </Button>
+          </div>
+
+          {lastPurge && (
+            <div className="pt-3 border-t">
+              <p className="text-sm text-muted-foreground">
+                Last purge: {lastPurge.timestamp.toLocaleString()} — Deleted: {lastPurge.count} records
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Clean Old (24h+) */}
         <div className="border rounded-lg p-4 space-y-4">
           <div className="flex items-center justify-between">
             <div>
@@ -133,10 +192,7 @@ export const AdminSystemMaintenance = () => {
           {lastCleanup && (
             <div className="pt-3 border-t">
               <p className="text-sm text-muted-foreground">
-                Last cleanup: {lastCleanup.timestamp.toLocaleString()}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Deleted: {lastCleanup.count} opportunities
+                Last cleanup: {lastCleanup.timestamp.toLocaleString()} — Deleted: {lastCleanup.count} records
               </p>
             </div>
           )}
@@ -146,7 +202,7 @@ export const AdminSystemMaintenance = () => {
           <h4 className="font-medium text-sm mb-2">Automatic Cleanup</h4>
           <p className="text-sm text-muted-foreground">
             The system automatically cleans up expired opportunities during scans.
-            This manual cleanup is useful for immediate maintenance needs.
+            Use manual purge for immediate maintenance needs.
           </p>
         </div>
       </CardContent>
