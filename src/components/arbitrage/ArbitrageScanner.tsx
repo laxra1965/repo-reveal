@@ -138,7 +138,7 @@ export const ArbitrageScanner = () => {
       loadOpportunitiesFromDB();
 
       // Set up real-time subscription with debounce
-      let debounceTimer: NodeJS.Timeout;
+      let debounceTimer: ReturnType<typeof setTimeout>;
       const channel = supabase
         .channel('arbitrage-opportunities')
         .on(
