@@ -468,6 +468,60 @@ export type Database = {
           },
         ]
       }
+      opportunities: {
+        Row: {
+          detected_at: string
+          estimated_slippage: number
+          exchange1: string | null
+          exchange2: string | null
+          exchange3: string | null
+          id: string
+          liquidity_score: number
+          pair1: string | null
+          pair2: string | null
+          pair3: string | null
+          path: string
+          profit_percent: number
+          status: string
+          strategy: string
+          volume_estimate: number
+        }
+        Insert: {
+          detected_at?: string
+          estimated_slippage?: number
+          exchange1?: string | null
+          exchange2?: string | null
+          exchange3?: string | null
+          id?: string
+          liquidity_score: number
+          pair1?: string | null
+          pair2?: string | null
+          pair3?: string | null
+          path: string
+          profit_percent: number
+          status?: string
+          strategy: string
+          volume_estimate: number
+        }
+        Update: {
+          detected_at?: string
+          estimated_slippage?: number
+          exchange1?: string | null
+          exchange2?: string | null
+          exchange3?: string | null
+          id?: string
+          liquidity_score?: number
+          pair1?: string | null
+          pair2?: string | null
+          pair3?: string | null
+          path?: string
+          profit_percent?: number
+          status?: string
+          strategy?: string
+          volume_estimate?: number
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string | null
@@ -1028,6 +1082,7 @@ export type Database = {
       cleanup_expired_opportunities_full: { Args: never; Returns: undefined }
       cleanup_invalid_opportunities: { Args: never; Returns: undefined }
       cleanup_old_opportunities: { Args: never; Returns: number }
+      cleanup_stale_opportunities: { Args: never; Returns: number }
       expire_invalid_opportunities: {
         Args: { min_profit_threshold?: number }
         Returns: number
