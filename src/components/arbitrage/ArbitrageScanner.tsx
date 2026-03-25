@@ -18,29 +18,20 @@ import { Play, Pause, Settings, TrendingUp, Lock, ChevronLeft, ChevronRight, Tes
 
 interface Opportunity {
   id: string;
-  base_symbol: string;
-  quote_symbol: string;
-  intermediate_symbol: string;
-  exchange1: string;
-  exchange2: string;
-  exchange3: string;
-  step1_action: string;
-  step1_price: number;
-  step1_amount: number;
-  step2_action: string;
-  step2_price: number;
-  step2_amount: number;
-  step3_action: string;
-  step3_price: number;
-  step3_amount: number;
-  start_amount: number;
-  end_amount: number;
-  profit_amount: number;
+  strategy: string;
+  path: string;
+  exchange1: string | null;
+  exchange2: string | null;
+  exchange3: string | null;
+  pair1: string | null;
+  pair2: string | null;
+  pair3: string | null;
   profit_percent: number;
+  liquidity_score: number;
+  volume_estimate: number;
+  estimated_slippage: number;
   detected_at: string;
-  expires_at: string;
-  type?: string;
-  quality_score?: number;
+  status: string;
 }
 
 const OPPORTUNITIES_PER_PAGE = 10;

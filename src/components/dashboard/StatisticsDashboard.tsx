@@ -101,9 +101,9 @@ export const StatisticsDashboard = () => {
           .filter((val, idx, arr) => arr.indexOf(val) === idx);
 
         const profit = Number(opp.profit_percent) || 0;
-        const volume = Number(opp.start_amount) || 0;
+        const volume = Number(opp.volume_estimate) || 0;
         const isProfitable = profit > 0;
-        const qualityScore = Number(opp.quality_score ?? 0);
+        const qualityScore = Number(opp.liquidity_score ?? 0);
 
         totalOpps++;
         totalProfitSum += profit;
@@ -181,8 +181,7 @@ export const StatisticsDashboard = () => {
         {
           event: '*',
           schema: 'public',
-          table: 'arbitrage_opportunities',
-          filter: `user_id=eq.${user.id}`
+          table: 'opportunities'
         },
         () => {
           fetchStats();
@@ -244,17 +243,11 @@ export const StatisticsDashboard = () => {
         
         switch (action) {
           case 'clear_opportunities_all': {
-            let countQuery = supabase.from('arbitrage_opportunities').select('id', { count: 'exact', head: true });
-            if (!isAdmin) {
-              countQuery = countQuery.eq('user_id', user.id);
-            }
+            let countQuery = supabase.from('opportunities').select('id', { count: 'exact', head: true });
             const { count } = await countQuery;
             const recordsToDelete = count || 0;
 
-            let deleteQuery = supabase.from('arbitrage_opportunities').delete();
-            if (!isAdmin) {
-              deleteQuery = deleteQuery.eq('user_id', user.id);
-            }
+            let deleteQuery = supabase.from('opportunities').delete().neq('id', '00000000-0000-0000-0000-000000000000');
             const { error } = await deleteQuery;
 
             if (error) throw error;
@@ -285,8 +278,7 @@ export const StatisticsDashboard = () => {
 
           case 'clear_all': {
             // Count opportunities
-            let oppCountQuery = supabase.from('arbitrage_opportunities').select('id', { count: 'exact', head: true });
-            if (!isAdmin) oppCountQuery = oppCountQuery.eq('user_id', user.id);
+            let oppCountQuery = supabase.from('opportunities').select('id', { count: 'exact', head: true });
             const { count: oppCount } = await oppCountQuery;
 
             // Count logs
@@ -295,8 +287,7 @@ export const StatisticsDashboard = () => {
             const { count: logCount } = await logCountQuery;
 
             // Delete opportunities
-            let delOppQuery = supabase.from('arbitrage_opportunities').delete();
-            if (!isAdmin) delOppQuery = delOppQuery.eq('user_id', user.id);
+            let delOppQuery = supabase.from('opportunities').delete().neq('id', '00000000-0000-0000-0000-000000000000');
             const { error: oppError } = await delOppQuery;
             if (oppError) throw oppError;
 
