@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,14 +7,40 @@ import { Trash2, RefreshCw, AlertCircle, Zap } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { invokeFunction } from '@/lib/functionsInvoke';
 import { useAuth } from '@/hooks/useAuth';
+import { Badge } from '@/components/ui/badge';
+import { Database } from 'lucide-react';
 
 export const AdminSystemMaintenance = () => {
   const [cleaning, setCleaning] = useState(false);
   const [purging, setPurging] = useState(false);
   const [lastCleanup, setLastCleanup] = useState<{ count: number; timestamp: Date } | null>(null);
   const [lastPurge, setLastPurge] = useState<{ count: number; timestamp: Date } | null>(null);
+  const [dbStats, setDbStats] = useState<{ total: number; expired: number; active: number } | null>(null);
+  const [loadingStats, setLoadingStats] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
+
+  const fetchStats = useCallback(async () => {
+    setLoadingStats(true);
+    try {
+      const [totalRes, expiredRes, activeRes] = await Promise.all([
+        supabase.from('arbitrage_opportunities').select('*', { count: 'exact', head: true }),
+        supabase.from('arbitrage_opportunities').select('*', { count: 'exact', head: true }).or('expires_at.lt.now(),is_active.eq.false'),
+        supabase.from('arbitrage_opportunities').select('*', { count: 'exact', head: true }).gt('expires_at', new Date().toISOString()).eq('is_active', true),
+      ]);
+      setDbStats({
+        total: totalRes.count ?? 0,
+        expired: expiredRes.count ?? 0,
+        active: activeRes.count ?? 0,
+      });
+    } catch (e) {
+      console.error('Failed to fetch db stats:', e);
+    } finally {
+      setLoadingStats(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchStats(); }, [fetchStats]);
 
   const handleCleanupOldOpportunities = async () => {
     if (!user) return;
@@ -130,6 +156,28 @@ export const AdminSystemMaintenance = () => {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Live DB Stats */}
+        <div className="border rounded-lg p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Database className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <h3 className="font-semibold text-sm">Opportunities in Database</h3>
+              {loadingStats ? (
+                <p className="text-sm text-muted-foreground">Loading...</p>
+              ) : dbStats ? (
+                <div className="flex items-center gap-2 mt-1">
+                  <Badge variant="secondary">{dbStats.total.toLocaleString()} total</Badge>
+                  <Badge variant="destructive">{dbStats.expired.toLocaleString()} expired</Badge>
+                  <Badge className="bg-emerald-600 hover:bg-emerald-700">{dbStats.active.toLocaleString()} active</Badge>
+                </div>
+              ) : null}
+            </div>
+          </div>
+          <Button variant="ghost" size="sm" onClick={fetchStats} disabled={loadingStats}>
+            <RefreshCw className={`h-4 w-4 ${loadingStats ? 'animate-spin' : ''}`} />
+          </Button>
+        </div>
+
         <Alert>
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
