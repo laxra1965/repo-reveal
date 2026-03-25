@@ -29,10 +29,9 @@ export const LiveMetricsPanel = () => {
         const fetchMetrics = async () => {
             try {
                 const { data: opportunities } = await supabase
-                    .from('arbitrage_opportunities')
+                    .from('opportunities')
                     .select('*')
-                    .eq('user_id', user.id)
-                    .gt('expires_at', new Date().toISOString());
+                    .eq('status', 'active');
 
                 if (opportunities && opportunities.length > 0) {
                     const avgProfit = opportunities.reduce((sum, opp) => sum + (opp.profit_percent || 0), 0) / opportunities.length;

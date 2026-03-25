@@ -18,29 +18,20 @@ import { Play, Pause, Settings, TrendingUp, Lock, ChevronLeft, ChevronRight, Tes
 
 interface Opportunity {
   id: string;
-  base_symbol: string;
-  quote_symbol: string;
-  intermediate_symbol: string;
-  exchange1: string;
-  exchange2: string;
-  exchange3: string;
-  step1_action: string;
-  step1_price: number;
-  step1_amount: number;
-  step2_action: string;
-  step2_price: number;
-  step2_amount: number;
-  step3_action: string;
-  step3_price: number;
-  step3_amount: number;
-  start_amount: number;
-  end_amount: number;
-  profit_amount: number;
+  strategy: string;
+  path: string;
+  exchange1: string | null;
+  exchange2: string | null;
+  exchange3: string | null;
+  pair1: string | null;
+  pair2: string | null;
+  pair3: string | null;
   profit_percent: number;
+  liquidity_score: number;
+  volume_estimate: number;
+  estimated_slippage: number;
   detected_at: string;
-  expires_at: string;
-  type?: string;
-  quality_score?: number;
+  status: string;
 }
 
 const OPPORTUNITIES_PER_PAGE = 10;
@@ -123,11 +114,9 @@ export const ArbitrageScanner = () => {
 
       // Fallback: read directly from Supabase
       const { data, error } = await supabase
-        .from('arbitrage_opportunities')
+        .from('opportunities')
         .select('*')
-        .eq('is_active', true)
-        .eq('is_valid', true)
-        .gt('expires_at', new Date().toISOString())
+        .eq('status', 'active')
         .order('profit_percent', { ascending: false })
         .limit(100);
 
@@ -177,7 +166,7 @@ export const ArbitrageScanner = () => {
           {
             event: '*',
             schema: 'public',
-            table: 'arbitrage_opportunities'
+            table: 'opportunities'
           },
           () => {
             // Debounce rapid updates
@@ -209,18 +198,25 @@ export const ArbitrageScanner = () => {
     autoTradedIdsRef.current.add(opportunity.id);
 
     try {
+      const symbols = opportunity.path.split(/[→>\/\-]/).map(s => s.trim()).filter(Boolean);
+      const baseSymbol = symbols[0] || 'UNKNOWN';
+      const intermediateSymbol = symbols[1] || 'UNKNOWN';
+      const quoteSymbol = symbols[2] || symbols[0] || 'UNKNOWN';
+      const startAmount = opportunity.volume_estimate;
+      const expectedProfit = startAmount * (opportunity.profit_percent / 100);
+
       const slippage = (Math.random() - 0.5) * 0.002;
-      const simulatedProfit = opportunity.profit_amount * (1 + slippage);
-      const simulatedFinalAmount = opportunity.start_amount + simulatedProfit;
+      const simulatedProfit = expectedProfit * (1 + slippage);
+      const simulatedFinalAmount = startAmount + simulatedProfit;
 
       await supabase.from('trade_history').insert({
         user_id: user.id,
         opportunity_id: opportunity.id,
-        base_symbol: opportunity.base_symbol,
-        quote_symbol: opportunity.quote_symbol,
-        intermediate_symbol: opportunity.intermediate_symbol,
-        start_amount: opportunity.start_amount,
-        expected_profit: opportunity.profit_amount,
+        base_symbol: baseSymbol,
+        quote_symbol: quoteSymbol,
+        intermediate_symbol: intermediateSymbol,
+        start_amount: startAmount,
+        expected_profit: expectedProfit,
         actual_profit: simulatedProfit,
         final_amount: simulatedFinalAmount,
         status: 'completed',
@@ -251,8 +247,7 @@ export const ArbitrageScanner = () => {
     // Find new opportunities that haven't been auto-traded yet
     const newOpportunities = opportunities.filter(opp =>
       !autoTradedIdsRef.current.has(opp.id) &&
-      opp.profit_percent > 0 &&
-      new Date(opp.expires_at) > new Date()
+      opp.profit_percent > 0
     );
 
     // Execute paper trades for top 3 new opportunities
@@ -309,12 +304,12 @@ export const ArbitrageScanner = () => {
   const filteredOpportunities = useMemo(() => {
     return opportunities
       .filter(opp =>
-        new Date(opp.expires_at) > new Date() &&
-        (!opp.type || activeArbTypes.includes(opp.type))
+        opp.status === 'active' &&
+        (!opp.strategy || activeArbTypes.includes(opp.strategy))
       )
       .sort((a, b) => {
-        if (a.quality_score && b.quality_score && a.quality_score !== b.quality_score) {
-          return b.quality_score - a.quality_score;
+        if (a.liquidity_score !== b.liquidity_score) {
+          return b.liquidity_score - a.liquidity_score;
         }
         return b.profit_percent - a.profit_percent;
       });
