@@ -304,12 +304,12 @@ export const ArbitrageScanner = () => {
   const filteredOpportunities = useMemo(() => {
     return opportunities
       .filter(opp =>
-        new Date(opp.expires_at) > new Date() &&
-        (!opp.type || activeArbTypes.includes(opp.type))
+        opp.status === 'active' &&
+        (!opp.strategy || activeArbTypes.includes(opp.strategy))
       )
       .sort((a, b) => {
-        if (a.quality_score && b.quality_score && a.quality_score !== b.quality_score) {
-          return b.quality_score - a.quality_score;
+        if (a.liquidity_score !== b.liquidity_score) {
+          return b.liquidity_score - a.liquidity_score;
         }
         return b.profit_percent - a.profit_percent;
       });
