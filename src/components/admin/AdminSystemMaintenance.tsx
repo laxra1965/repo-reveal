@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Trash2, RefreshCw, AlertCircle, Zap } from 'lucide-react';
+import { Trash2, RefreshCw, AlertCircle, Zap, Clock } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { invokeFunction } from '@/lib/functionsInvoke';
 import { useAuth } from '@/hooks/useAuth';
@@ -15,7 +15,7 @@ export const AdminSystemMaintenance = () => {
   const [purging, setPurging] = useState(false);
   const [lastCleanup, setLastCleanup] = useState<{ count: number; timestamp: Date } | null>(null);
   const [lastPurge, setLastPurge] = useState<{ count: number; timestamp: Date } | null>(null);
-  const [dbStats, setDbStats] = useState<{ total: number; expired: number; active: number } | null>(null);
+  const [dbStats, setDbStats] = useState<{ total: number; expired: number; active: number; lastDetected: string | null } | null>(null);
   const [loadingStats, setLoadingStats] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
@@ -23,15 +23,17 @@ export const AdminSystemMaintenance = () => {
   const fetchStats = useCallback(async () => {
     setLoadingStats(true);
     try {
-      const [totalRes, expiredRes, activeRes] = await Promise.all([
+      const [totalRes, expiredRes, activeRes, latestRes] = await Promise.all([
         supabase.from('arbitrage_opportunities').select('*', { count: 'exact', head: true }),
         supabase.from('arbitrage_opportunities').select('*', { count: 'exact', head: true }).or('expires_at.lt.now(),is_active.eq.false'),
         supabase.from('arbitrage_opportunities').select('*', { count: 'exact', head: true }).gt('expires_at', new Date().toISOString()).eq('is_active', true),
+        supabase.from('arbitrage_opportunities').select('detected_at').order('detected_at', { ascending: false }).limit(1),
       ]);
       setDbStats({
         total: totalRes.count ?? 0,
         expired: expiredRes.count ?? 0,
         active: activeRes.count ?? 0,
+        lastDetected: latestRes.data?.[0]?.detected_at ?? null,
       });
     } catch (e) {
       console.error('Failed to fetch db stats:', e);
