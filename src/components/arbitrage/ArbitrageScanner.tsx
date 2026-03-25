@@ -198,18 +198,25 @@ export const ArbitrageScanner = () => {
     autoTradedIdsRef.current.add(opportunity.id);
 
     try {
+      const symbols = opportunity.path.split(/[→>\/\-]/).map(s => s.trim()).filter(Boolean);
+      const baseSymbol = symbols[0] || 'UNKNOWN';
+      const intermediateSymbol = symbols[1] || 'UNKNOWN';
+      const quoteSymbol = symbols[2] || symbols[0] || 'UNKNOWN';
+      const startAmount = opportunity.volume_estimate;
+      const expectedProfit = startAmount * (opportunity.profit_percent / 100);
+
       const slippage = (Math.random() - 0.5) * 0.002;
-      const simulatedProfit = opportunity.profit_amount * (1 + slippage);
-      const simulatedFinalAmount = opportunity.start_amount + simulatedProfit;
+      const simulatedProfit = expectedProfit * (1 + slippage);
+      const simulatedFinalAmount = startAmount + simulatedProfit;
 
       await supabase.from('trade_history').insert({
         user_id: user.id,
         opportunity_id: opportunity.id,
-        base_symbol: opportunity.base_symbol,
-        quote_symbol: opportunity.quote_symbol,
-        intermediate_symbol: opportunity.intermediate_symbol,
-        start_amount: opportunity.start_amount,
-        expected_profit: opportunity.profit_amount,
+        base_symbol: baseSymbol,
+        quote_symbol: quoteSymbol,
+        intermediate_symbol: intermediateSymbol,
+        start_amount: startAmount,
+        expected_profit: expectedProfit,
         actual_profit: simulatedProfit,
         final_amount: simulatedFinalAmount,
         status: 'completed',
@@ -240,8 +247,7 @@ export const ArbitrageScanner = () => {
     // Find new opportunities that haven't been auto-traded yet
     const newOpportunities = opportunities.filter(opp =>
       !autoTradedIdsRef.current.has(opp.id) &&
-      opp.profit_percent > 0 &&
-      new Date(opp.expires_at) > new Date()
+      opp.profit_percent > 0
     );
 
     // Execute paper trades for top 3 new opportunities
