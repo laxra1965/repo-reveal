@@ -167,12 +167,28 @@ export const AdminSystemMaintenance = () => {
               {loadingStats ? (
                 <p className="text-sm text-muted-foreground">Loading...</p>
               ) : dbStats ? (
-                <div className="flex items-center gap-2 mt-1">
+                <div className="flex flex-wrap items-center gap-2 mt-1">
                   <Badge variant="secondary">{dbStats.total.toLocaleString()} total</Badge>
                   <Badge variant="destructive">{dbStats.expired.toLocaleString()} expired</Badge>
                   <Badge className="bg-emerald-600 hover:bg-emerald-700">{dbStats.active.toLocaleString()} active</Badge>
                 </div>
-              ) : null}
+                <div className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground">
+                  <Clock className="h-3 w-3" />
+                  <span>Last written: </span>
+                  {dbStats.lastDetected ? (
+                    <span className="font-medium text-foreground">
+                      {new Date(dbStats.lastDetected).toLocaleString()}
+                      {' '}
+                      <span className={`${(Date.now() - new Date(dbStats.lastDetected).getTime()) > 600000 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                        ({Math.round((Date.now() - new Date(dbStats.lastDetected).getTime()) / 60000)}m ago)
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="text-destructive font-medium">No data — scanner may be offline</span>
+                  )}
+                </div>
+              </div>
+            ) : null}
             </div>
           </div>
           <Button variant="ghost" size="sm" onClick={fetchStats} disabled={loadingStats}>
