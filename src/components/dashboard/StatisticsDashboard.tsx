@@ -60,11 +60,10 @@ export const StatisticsDashboard = () => {
     try {
       setLoading(true);
 
-      // Fetch all opportunities for the user
+      // Fetch all opportunities
       const { data: opportunities, error } = await supabase
-        .from('arbitrage_opportunities')
-        .select('*')
-        .eq('user_id', user.id);
+        .from('opportunities')
+        .select('*');
 
       if (error) throw error;
 

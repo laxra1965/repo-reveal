@@ -24,10 +24,10 @@ export const AdminSystemMaintenance = () => {
     setLoadingStats(true);
     try {
       const [totalRes, expiredRes, activeRes, latestRes] = await Promise.all([
-        supabase.from('arbitrage_opportunities').select('*', { count: 'exact', head: true }),
-        supabase.from('arbitrage_opportunities').select('*', { count: 'exact', head: true }).or('expires_at.lt.now(),is_active.eq.false'),
-        supabase.from('arbitrage_opportunities').select('*', { count: 'exact', head: true }).gt('expires_at', new Date().toISOString()).eq('is_active', true),
-        supabase.from('arbitrage_opportunities').select('detected_at').order('detected_at', { ascending: false }).limit(1),
+        supabase.from('opportunities').select('*', { count: 'exact', head: true }),
+        supabase.from('opportunities').select('*', { count: 'exact', head: true }).neq('status', 'active'),
+        supabase.from('opportunities').select('*', { count: 'exact', head: true }).eq('status', 'active'),
+        supabase.from('opportunities').select('detected_at').order('detected_at', { ascending: false }).limit(1),
       ]);
       setDbStats({
         total: totalRes.count ?? 0,
@@ -72,7 +72,7 @@ export const AdminSystemMaintenance = () => {
         const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
         const { count: existingCount, error: countError } = await supabase
-          .from('arbitrage_opportunities')
+          .from('opportunities')
           .select('*', { count: 'exact', head: true })
           .lt('detected_at', twentyFourHoursAgo);
 
@@ -81,7 +81,7 @@ export const AdminSystemMaintenance = () => {
         recordsToDelete = existingCount || 0;
 
         const { error } = await supabase
-          .from('arbitrage_opportunities')
+          .from('opportunities')
           .delete()
           .lt('detected_at', twentyFourHoursAgo);
 

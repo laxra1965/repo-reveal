@@ -123,11 +123,9 @@ export const ArbitrageScanner = () => {
 
       // Fallback: read directly from Supabase
       const { data, error } = await supabase
-        .from('arbitrage_opportunities')
+        .from('opportunities')
         .select('*')
-        .eq('is_active', true)
-        .eq('is_valid', true)
-        .gt('expires_at', new Date().toISOString())
+        .eq('status', 'active')
         .order('profit_percent', { ascending: false })
         .limit(100);
 
@@ -177,7 +175,7 @@ export const ArbitrageScanner = () => {
           {
             event: '*',
             schema: 'public',
-            table: 'arbitrage_opportunities'
+            table: 'opportunities'
           },
           () => {
             // Debounce rapid updates
