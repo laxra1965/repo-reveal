@@ -60,10 +60,11 @@ export const StatisticsDashboard = () => {
     try {
       setLoading(true);
 
-      // Fetch all opportunities
+      // Only fetch active opportunities (what users actually see on the dashboard)
       const { data: opportunities, error } = await supabase
         .from('opportunities')
-        .select('*');
+        .select('*')
+        .eq('status', 'active');
 
       if (error) throw error;
 
