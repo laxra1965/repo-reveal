@@ -127,7 +127,7 @@ export const AdminSystemMaintenance = () => {
 
       if (error) throw error;
 
-      const deletedCount = data?.[0]?.deleted_count ?? 0;
+      const deletedCount = typeof data === 'number' ? data : 0;
       setLastPurge({ count: deletedCount, timestamp: new Date() });
 
       toast({
