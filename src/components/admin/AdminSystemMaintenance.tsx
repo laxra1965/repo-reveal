@@ -122,8 +122,8 @@ export const AdminSystemMaintenance = () => {
     try {
       setPurging(true);
 
-      // Use the existing DB function to purge all expired opportunities
-      const { data, error } = await supabase.rpc('cleanup_expired_opportunities');
+      // Use the DB function to purge stale opportunities (>2 min old)
+      const { data, error } = await supabase.rpc('cleanup_stale_opportunities');
 
       if (error) throw error;
 
