@@ -80,6 +80,8 @@ export const ArbitrageScanner = () => {
   const loadOpportunitiesFromDB = useCallback(async () => {
     if (!user || !mountedRef.current) return;
 
+    let vpsFetched = false;
+
     try {
       // Primary: fetch from VPS API
       const vpsUrl = import.meta.env.VITE_FUNCTIONS_URL || '';
@@ -107,11 +109,17 @@ export const ArbitrageScanner = () => {
               return hasChanged ? data : prev;
             });
             setLastScanTime(new Date());
-            return;
+            vpsFetched = true;
           }
         }
       }
+    } catch (e) {
+      console.warn('VPS fetch failed, falling back to Supabase:', (e as Error).message);
+    }
 
+    if (vpsFetched) return;
+
+    try {
       // Fallback: read directly from Supabase
       const { data, error } = await supabase
         .from('opportunities')
@@ -134,7 +142,7 @@ export const ArbitrageScanner = () => {
         setLastScanTime(new Date());
       }
     } catch (error) {
-      console.error('Error loading opportunities:', error);
+      console.error('Error loading opportunities from Supabase:', error);
     }
   }, [user]);
 
