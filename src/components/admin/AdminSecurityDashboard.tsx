@@ -31,7 +31,7 @@ export const AdminSecurityDashboard = () => {
     try {
       // Check known tables and their expected RLS status
       const knownTables = [
-        'admin_settings', 'admin_users', 'api_cache', 'arbitrage_opportunities',
+        'admin_settings', 'admin_users', 'api_cache', 'opportunities',
         'auto_trade_queue', 'exchange_credentials', 'ml_features', 'ml_models',
         'ml_predictions', 'profiles', 'scanner_health_metrics', 'scanner_logs',
         'subscription_plans', 'trade_history', 'trade_recovery_state',
