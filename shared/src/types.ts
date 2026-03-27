@@ -104,5 +104,6 @@ export interface Opportunity {
     actions: { symbol: string, side: 'BUY' | 'SELL' }[];
     maxExecutableUSDT: number;
     profitPct: number;
+    estimatedSlippage: number; // fraction 0-1
     timestamp: number;
 }

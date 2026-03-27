@@ -86,6 +86,7 @@ export class SupabaseWriter {
         path: string[];
         actions: { symbol: string; side: 'BUY' | 'SELL' }[];
         profitPct: number;
+        estimatedSlippage: number;
         maxExecutableUSDT: number;
         timestamp: number;
     }) {
@@ -96,37 +97,22 @@ export class SupabaseWriter {
         }
 
         const [assetA, assetB, assetC] = opp.path;
-        const startAmount = 100;
-        const endAmount = startAmount * (1 + opp.profitPct / 100);
-        const profitAmount = endAmount - startAmount;
 
-        const ttlSeconds = opp.profitPct > 1 ? 180 : opp.profitPct > 0.5 ? 120 : 60;
-        const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
-
-        const row: OpportunityRow = {
+        // Write to the new `opportunities` table schema
+        const row: any = {
+            strategy: 'triangular',
+            path: `${assetA}→${assetB}→${assetC}`,
             exchange1: exchange,
             exchange2: exchange,
             exchange3: exchange,
-            base_symbol: assetA,
-            quote_symbol: assetB,
-            intermediate_symbol: assetC,
-            type: 'triangular',
-            step1_action: `${opp.actions[0].side} ${opp.actions[0].symbol}`,
-            step1_price: 0,
-            step1_amount: startAmount,
-            step2_action: `${opp.actions[1].side} ${opp.actions[1].symbol}`,
-            step2_price: 0,
-            step2_amount: 0,
-            step3_action: `${opp.actions[2].side} ${opp.actions[2].symbol}`,
-            step3_price: 0,
-            step3_amount: 0,
-            start_amount: startAmount,
-            end_amount: endAmount,
-            profit_amount: profitAmount,
+            pair1: opp.actions[0]?.symbol || '',
+            pair2: opp.actions[1]?.symbol || '',
+            pair3: opp.actions[2]?.symbol || '',
             profit_percent: opp.profitPct,
-            expires_at: expiresAt,
-            is_valid: true,
-            signal_type: 'arbitrage',
+            liquidity_score: Math.min(100, opp.maxExecutableUSDT / 500),
+            volume_estimate: opp.maxExecutableUSDT,
+            estimated_slippage: opp.estimatedSlippage,
+            status: 'active',
         };
 
         this.writeQueue.push(row);
@@ -143,7 +129,7 @@ export class SupabaseWriter {
     private async insertWithRetry(batch: OpportunityRow[], attempt: number) {
         try {
             const { error } = await this.supabase
-                .from('arbitrage_opportunities')
+                .from('opportunities')
                 .insert(batch);
 
             if (error) {
