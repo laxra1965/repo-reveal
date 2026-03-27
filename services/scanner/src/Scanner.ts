@@ -1,5 +1,6 @@
 
 import { OrderBook, Opportunity } from '@repo-reveal/shared';
+import { getTakerFee, estimateSlippage } from './fees';
 
 export { OrderBook, Opportunity };
 
@@ -8,7 +9,7 @@ export class Scanner {
     private readonly MAX_STALE_MS = 10000; // 10 seconds
 
     private minProfitPct: number;
-    constructor(minProfitPct: number = 0.5) {
+    constructor(minProfitPct: number = 0.75) {
         this.minProfitPct = minProfitPct;
     }
 
@@ -23,7 +24,6 @@ export class Scanner {
         };
 
         for (const s of symbols) {
-            // Support both BTCUSDT and BTC-USDT
             const normalized = s.replace('-', '').replace('_', '');
             for (const q of quoteAssets) {
                 if (normalized.endsWith(q)) {
@@ -53,7 +53,6 @@ export class Scanner {
     }
 
     scan(exchange: string, orderBooks: Map<string, OrderBook>, paths?: string[][]): Opportunity[] {
-        // Use provided paths if available (dynamic), otherwise use cached paths
         const exchangePaths = paths || this.paths.get(exchange) || [];
         const opportunities: Opportunity[] = [];
 
@@ -76,7 +75,8 @@ export class Scanner {
         c: string
     ): Opportunity | null {
 
-        const fee = 0.001;
+        // Use per-exchange taker fee instead of hardcoded 0.1%
+        const fee = getTakerFee(exchange);
         const START = 100;
 
         const leg = (from: string, to: string) => {
@@ -106,25 +106,39 @@ export class Scanner {
 
         let amount = START;
 
-        for (const t of [t1, t2, t3]) {
+        // Estimate aggregate slippage from order book depth
+        let totalSlippage = 0;
+
+        for (let i = 0; i < 3; i++) {
+            const t = [t1, t2, t3][i];
             const ob = orderBooks.get(t.symbol)!;
             const res = ob.simulateMarketOrder(t.side, amount);
             if (!res.filled) return null;
+
+            // Estimate slippage per leg based on depth
+            const depthUSDT = ob.getDepthUSDT ? ob.getDepthUSDT(t.side) : 50000;
+            totalSlippage += estimateSlippage(amount, depthUSDT);
+
             amount = res.output * (1 - fee);
             if (amount <= 0) return null;
         }
 
-        const profitPct = ((amount - START) / START) * 100;
-        if (profitPct <= this.minProfitPct) return null;
+        const grossProfitPct = ((amount - START) / START) * 100;
+        // Net profit = gross - estimated slippage (already deducted fees in simulation)
+        const netProfitPct = grossProfitPct - (totalSlippage * 100);
+
+        if (netProfitPct <= this.minProfitPct) return null;
 
         return {
             exchange,
             path: [a, b, c],
-            profitPct,
+            profitPct: grossProfitPct,
+            estimatedSlippage: totalSlippage,
             maxExecutableUSDT: this.findMaxExecutable(
                 [t1, t2, t3],
                 orderBooks,
-                this.minProfitPct
+                this.minProfitPct,
+                exchange
             ),
             timestamp: now,
             actions: [t1, t2, t3]
@@ -134,16 +148,17 @@ export class Scanner {
     private findMaxExecutable(
         path: { symbol: string; side: 'BUY' | 'SELL' }[],
         orderBooks: Map<string, OrderBook>,
-        minProfitPct: number
+        minProfitPct: number,
+        exchange: string
     ): number {
 
-        let low = 10;       // $10
-        let high = 50_000;  // cap
+        let low = 10;
+        let high = 50_000;
         let best = 0;
 
         for (let i = 0; i < 15; i++) {
             const mid = (low + high) / 2;
-            const profit = this.simulateWithSize(mid, path, orderBooks);
+            const profit = this.simulateWithSize(mid, path, orderBooks, exchange);
 
             if (profit > minProfitPct) {
                 best = mid;
@@ -159,10 +174,11 @@ export class Scanner {
     private simulateWithSize(
         size: number,
         path: { symbol: string; side: 'BUY' | 'SELL' }[],
-        orderBooks: Map<string, OrderBook>
+        orderBooks: Map<string, OrderBook>,
+        exchange: string
     ): number {
 
-        const fee = 0.001;
+        const fee = getTakerFee(exchange);
         let amount = size;
 
         for (const leg of path) {
