@@ -129,7 +129,7 @@ export class SupabaseWriter {
     private async insertWithRetry(batch: OpportunityRow[], attempt: number) {
         try {
             const { error } = await this.supabase
-                .from('arbitrage_opportunities')
+                .from('opportunities')
                 .insert(batch);
 
             if (error) {
