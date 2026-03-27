@@ -198,24 +198,46 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
     return null;
   };
 
+  // Net profit: gross - fees (3 trades × 0.1%) - estimated slippage
+  const tradingFees = 0.3; // 3 legs × 0.1%
+  const slippagePct = opportunity.estimated_slippage * 100;
+  const netProfitPct = opportunity.profit_percent - tradingFees - slippagePct;
+
+  // Staleness: age in seconds
+  const getAgeSeconds = () => {
+    return Math.floor((Date.now() - new Date(opportunity.detected_at).getTime()) / 1000);
+  };
+  const ageSeconds = getAgeSeconds();
+  const stalenessColor = ageSeconds < 15 ? 'text-green-500' : ageSeconds < 45 ? 'text-yellow-500' : 'text-red-500';
+  const stalenessBg = ageSeconds < 15 ? 'bg-green-500/10 border-green-500/20' : ageSeconds < 45 ? 'bg-yellow-500/10 border-yellow-500/20' : 'bg-red-500/10 border-red-500/20';
+  const isStale = ageSeconds > 60;
+
   return (
-    <Card className={`glass-card relative overflow-hidden transition-all duration-300 hover:shadow-2xl hover:scale-[1.01] ${rank === 1 ? 'border-primary/40 ring-1 ring-primary/20' : 'border-primary/10'}`}>
-      {rank === 1 && (
+    <Card className={`glass-card relative overflow-hidden transition-all duration-300 hover:shadow-2xl hover:scale-[1.01] ${isStale ? 'opacity-50' : ''} ${rank === 1 ? 'border-primary/40 ring-1 ring-primary/20' : 'border-primary/10'}`}>
+      {rank === 1 && !isStale && (
         <div className="absolute top-0 right-0">
           <Badge className="rounded-none rounded-bl-lg premium-gradient text-black font-black uppercase text-[10px] tracking-tighter px-3 h-6">
             Top Signal
           </Badge>
         </div>
       )}
+      {isStale && (
+        <div className="absolute top-0 right-0">
+          <Badge variant="destructive" className="rounded-none rounded-bl-lg uppercase text-[10px] tracking-tighter px-3 h-6">
+            <AlertTriangle className="h-3 w-3 mr-1" />
+            Stale
+          </Badge>
+        </div>
+      )}
 
       <CardHeader className="pb-3 border-b border-primary/5">
-        <div className="flex justify-between items-start gap-4">
-          <div className="space-y-3 flex-1">
-            <div className="flex items-center gap-2">
-              <span className="flex items-center justify-center w-6 h-6 rounded bg-primary text-primary-foreground font-black text-[10px]">
+        <div className="flex flex-col sm:flex-row justify-between items-start gap-3">
+          <div className="space-y-2 flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="flex items-center justify-center w-6 h-6 rounded bg-primary text-primary-foreground font-black text-[10px] shrink-0">
                 {rank}
               </span>
-              <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
+              <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px]">
                 <TrendingUp className="h-3 w-3 mr-1" />
                 {opportunity.strategy}
               </Badge>
@@ -226,27 +248,32 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
               )}
             </div>
 
-            <CardTitle className="text-xl font-black tracking-tighter">
+            <CardTitle className="text-lg sm:text-xl font-black tracking-tighter break-all">
               {opportunity.path}
             </CardTitle>
 
-            <div className="flex items-center gap-2 flex-wrap text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            <div className="flex items-center gap-1.5 flex-wrap text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
               {exchanges.map((ex, i) => (
-                <div key={i} className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-muted/50 border border-primary/5">
+                <div key={i} className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted/50 border border-primary/5">
                   <span className="text-foreground">{formatExchange(ex)}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="text-right flex flex-col items-end gap-1">
-            <div className={`text-4xl font-black tracking-tighter tabular-nums ${opportunity.profit_percent > 0 ? 'text-green-500' : 'text-red-500'}`}>
-              {opportunity.profit_percent > 0 ? '+' : ''}{opportunity.profit_percent.toFixed(3)}%
+          <div className="text-left sm:text-right flex flex-row sm:flex-col items-center sm:items-end gap-2 sm:gap-1 w-full sm:w-auto">
+            <div className="flex flex-col items-start sm:items-end">
+              <div className={`text-2xl sm:text-3xl font-black tracking-tighter tabular-nums ${netProfitPct > 0 ? 'text-green-500' : 'text-red-500'}`}>
+                {netProfitPct > 0 ? '+' : ''}{netProfitPct.toFixed(3)}%
+              </div>
+              <span className="text-[9px] text-muted-foreground font-mono">
+                gross {opportunity.profit_percent.toFixed(3)}% − fees {tradingFees.toFixed(1)}% − slip {slippagePct.toFixed(2)}%
+              </span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Est. Volume:</span>
+            <div className="flex items-center gap-1 ml-auto sm:ml-0">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase">Vol:</span>
               <span className="text-sm font-mono font-bold text-foreground">
-                ${opportunity.volume_estimate.toFixed(2)}
+                ${opportunity.volume_estimate.toFixed(0)}
               </span>
             </div>
           </div>
@@ -255,25 +282,28 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
 
       <CardContent className="space-y-4">
         {/* Quick Summary */}
-        <div className="grid grid-cols-3 gap-4 p-3 bg-muted/50 rounded-lg">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 bg-muted/50 rounded-lg">
           <div className="text-center">
-            <div className="text-sm text-muted-foreground">Slippage Est.</div>
-            <div className="font-semibold font-mono">
-              {(opportunity.estimated_slippage * 100).toFixed(2)}%
+            <div className="text-[11px] text-muted-foreground">Net Profit</div>
+            <div className={`font-bold font-mono text-sm ${netProfitPct > 0 ? 'text-green-500' : 'text-red-500'}`}>
+              {netProfitPct > 0 ? '+' : ''}{netProfitPct.toFixed(3)}%
             </div>
           </div>
           <div className="text-center">
-            <div className="text-sm text-muted-foreground">Liquidity</div>
-            <div className="font-semibold">
+            <div className="text-[11px] text-muted-foreground">Slippage</div>
+            <div className="font-semibold font-mono text-sm">
+              {slippagePct.toFixed(2)}%
+            </div>
+          </div>
+          <div className="text-center">
+            <div className="text-[11px] text-muted-foreground">Liquidity</div>
+            <div className="font-semibold text-sm">
               {opportunity.liquidity_score.toFixed(1)}
             </div>
           </div>
           <div className="text-center">
-            <div className="text-sm text-muted-foreground flex items-center justify-center gap-1">
-              <Clock className="h-3 w-3 text-muted-foreground" />
-              Detected
-            </div>
-            <div className="font-semibold">
+            <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-bold ${stalenessBg} ${stalenessColor}`}>
+              <Clock className="h-3 w-3" />
               {getAge()}
             </div>
           </div>
