@@ -12,14 +12,52 @@ console.log('Scanner Service Starting (Phase 3 - All Exchanges)...');
 const writer = new SupabaseWriter();
 
 // Exchange-specific symbol formats
-const binanceSymbols = ['BTCUSDT', 'ETHUSDT', 'ETHBTC', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'LINKUSDT', 'DOTUSDT', 'MATICUSDT'];
-const bybitSymbols  = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'BNBUSDT', 'AVAXUSDT', 'LINKUSDT', 'DOTUSDT'];
-const okxSymbols    = ['BTC-USDT', 'ETH-USDT', 'SOL-USDT', 'XRP-USDT', 'DOGE-USDT', 'ADA-USDT', 'AVAX-USDT', 'LINK-USDT', 'DOT-USDT'];
-const gateSymbols   = ['BTC_USDT', 'ETH_USDT', 'SOL_USDT', 'XRP_USDT', 'DOGE_USDT', 'ADA_USDT', 'AVAX_USDT', 'LINK_USDT', 'DOT_USDT'];
-const mexcSymbols   = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'LINKUSDT', 'DOTUSDT'];
-const kucoinSymbols = ['BTC-USDT', 'ETH-USDT', 'SOL-USDT', 'XRP-USDT', 'DOGE-USDT', 'ADA-USDT', 'AVAX-USDT', 'LINK-USDT', 'DOT-USDT'];
-const htxSymbols    = ['btcusdt', 'ethusdt', 'solusdt', 'xrpusdt', 'dogeusdt', 'adausdt', 'avaxusdt', 'linkusdt', 'dotusdt'];
-const bitgetSymbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'LINKUSDT', 'DOTUSDT'];
+// USDT pairs + cross-pairs (BTC/ETH/BNB quoted) for triangular arbitrage
+const binanceSymbols = [
+    // USDT pairs
+    'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'LINKUSDT', 'DOTUSDT', 'MATICUSDT',
+    // BTC cross-pairs
+    'ETHBTC', 'BNBBTC', 'SOLBTC', 'XRPBTC', 'ADABTC', 'DOGEBTC', 'AVAXBTC', 'LINKBTC', 'DOTBTC',
+    // ETH cross-pairs
+    'BNBETH', 'SOLETH', 'XRPETH', 'ADAETH', 'LINKETH', 'DOTETH',
+    // BNB cross-pairs
+    'ADABNB', 'XRPBNB', 'DOTBNB',
+];
+const bybitSymbols = [
+    'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'BNBUSDT', 'AVAXUSDT', 'LINKUSDT', 'DOTUSDT',
+    'ETHBTC', 'SOLBTC', 'XRPBTC', 'ADABTC', 'DOGEBTC', 'AVAXBTC', 'LINKBTC', 'DOTBTC',
+    'SOLETH', 'ADAETH', 'LINKETH',
+];
+const okxSymbols = [
+    'BTC-USDT', 'ETH-USDT', 'SOL-USDT', 'XRP-USDT', 'DOGE-USDT', 'ADA-USDT', 'AVAX-USDT', 'LINK-USDT', 'DOT-USDT',
+    'ETH-BTC', 'SOL-BTC', 'XRP-BTC', 'ADA-BTC', 'DOGE-BTC', 'AVAX-BTC', 'LINK-BTC', 'DOT-BTC',
+    'SOL-ETH', 'ADA-ETH', 'LINK-ETH',
+];
+const gateSymbols = [
+    'BTC_USDT', 'ETH_USDT', 'SOL_USDT', 'XRP_USDT', 'DOGE_USDT', 'ADA_USDT', 'AVAX_USDT', 'LINK_USDT', 'DOT_USDT',
+    'ETH_BTC', 'SOL_BTC', 'XRP_BTC', 'ADA_BTC', 'DOGE_BTC', 'AVAX_BTC', 'LINK_BTC', 'DOT_BTC',
+    'SOL_ETH', 'ADA_ETH', 'LINK_ETH',
+];
+const mexcSymbols = [
+    'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'LINKUSDT', 'DOTUSDT',
+    'ETHBTC', 'SOLBTC', 'XRPBTC', 'ADABTC', 'DOGEBTC', 'AVAXBTC', 'LINKBTC', 'DOTBTC',
+    'SOLETH', 'ADAETH',
+];
+const kucoinSymbols = [
+    'BTC-USDT', 'ETH-USDT', 'SOL-USDT', 'XRP-USDT', 'DOGE-USDT', 'ADA-USDT', 'AVAX-USDT', 'LINK-USDT', 'DOT-USDT',
+    'ETH-BTC', 'SOL-BTC', 'XRP-BTC', 'ADA-BTC', 'DOGE-BTC', 'AVAX-BTC', 'LINK-BTC', 'DOT-BTC',
+    'SOL-ETH', 'ADA-ETH', 'LINK-ETH',
+];
+const htxSymbols = [
+    'btcusdt', 'ethusdt', 'solusdt', 'xrpusdt', 'dogeusdt', 'adausdt', 'avaxusdt', 'linkusdt', 'dotusdt',
+    'ethbtc', 'solbtc', 'xrpbtc', 'adabtc', 'dogebtc', 'avaxbtc', 'linkbtc', 'dotbtc',
+    'soleth', 'adaeth',
+];
+const bitgetSymbols = [
+    'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'LINKUSDT', 'DOTUSDT',
+    'ETHBTC', 'SOLBTC', 'XRPBTC', 'ADABTC', 'DOGEBTC', 'AVAXBTC', 'LINKBTC', 'DOTBTC',
+    'SOLETH', 'ADAETH',
+];
 
 const exchanges = [
     { name: 'binance', symbols: binanceSymbols },
