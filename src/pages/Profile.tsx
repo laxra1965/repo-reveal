@@ -6,6 +6,7 @@ import { ProfileSection } from '@/components/profile/ProfileSection';
 import { ExchangeCredentialsManager } from '@/components/profile/ExchangeCredentialsManager';
 import { EnabledExchangesManager } from '@/components/profile/EnabledExchangesManager';
 import { CredentialsMigrationPanel } from '@/components/profile/CredentialsMigrationPanel';
+import { TradingConfigCard } from '@/components/profile/TradingConfigCard';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ArrowLeft } from 'lucide-react';
@@ -69,6 +70,8 @@ const Profile = () => {
 
         <div className="space-y-8">
           <ProfileSection subscription={subscription} />
+
+          <TradingConfigCard />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="space-y-8">
