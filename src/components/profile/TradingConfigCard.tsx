@@ -7,36 +7,52 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { Settings2, DollarSign, Percent, Save } from 'lucide-react';
+import { Settings2, DollarSign, Percent, Save, TrendingDown, Shield } from 'lucide-react';
+
+interface TradingConfig {
+  tradeAmount: number;
+  minProfitPercent: number;
+  slippageBuffer: number;
+  maxPositionSize: number;
+}
+
+const DEFAULTS: TradingConfig = {
+  tradeAmount: 10,
+  minProfitPercent: 0.05,
+  slippageBuffer: 0.5,
+  maxPositionSize: 1000,
+};
 
 export const TradingConfigCard = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [tradeAmount, setTradeAmount] = useState(10);
-  const [minProfitPercent, setMinProfitPercent] = useState(0.05);
+  const [config, setConfig] = useState<TradingConfig>({ ...DEFAULTS });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
-  const [original, setOriginal] = useState({ tradeAmount: 10, minProfitPercent: 0.05 });
+  const [original, setOriginal] = useState<TradingConfig>({ ...DEFAULTS });
 
   const loadSettings = useCallback(async () => {
     if (!user?.id) return;
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('user_settings')
-        .select('trade_amount, min_profit_percent')
+      const { data, error } = await (supabase
+        .from('user_settings') as any)
+        .select('trade_amount, min_profit_percent, slippage_buffer, max_position_size')
         .eq('user_id', user.id)
         .maybeSingle();
 
       if (error && error.code !== 'PGRST116') throw error;
 
       if (data) {
-        const ta = parseFloat(data.trade_amount?.toString() || '10');
-        const mp = parseFloat(data.min_profit_percent?.toString() || '0.0005') * 100;
-        setTradeAmount(ta);
-        setMinProfitPercent(mp);
-        setOriginal({ tradeAmount: ta, minProfitPercent: mp });
+        const loaded: TradingConfig = {
+          tradeAmount: parseFloat(data.trade_amount?.toString() || '10'),
+          minProfitPercent: parseFloat(data.min_profit_percent?.toString() || '0.0005') * 100,
+          slippageBuffer: parseFloat(data.slippage_buffer?.toString() || '0.5'),
+          maxPositionSize: parseFloat(data.max_position_size?.toString() || '1000'),
+        };
+        setConfig(loaded);
+        setOriginal(loaded);
       }
     } catch (err) {
       console.error('Failed to load trading config:', err);
@@ -51,32 +67,37 @@ export const TradingConfigCard = () => {
 
   useEffect(() => {
     setHasChanges(
-      tradeAmount !== original.tradeAmount || minProfitPercent !== original.minProfitPercent
+      config.tradeAmount !== original.tradeAmount ||
+      config.minProfitPercent !== original.minProfitPercent ||
+      config.slippageBuffer !== original.slippageBuffer ||
+      config.maxPositionSize !== original.maxPositionSize
     );
-  }, [tradeAmount, minProfitPercent, original]);
+  }, [config, original]);
 
   const handleSave = async () => {
     if (!user?.id) return;
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('user_settings')
+      const { error } = await (supabase
+        .from('user_settings') as any)
         .upsert(
           {
             user_id: user.id,
-            trade_amount: tradeAmount,
-            min_profit_percent: minProfitPercent / 100,
+            trade_amount: config.tradeAmount,
+            min_profit_percent: config.minProfitPercent / 100,
+            slippage_buffer: config.slippageBuffer,
+            max_position_size: config.maxPositionSize,
           },
           { onConflict: 'user_id' }
         );
 
       if (error) throw error;
 
-      setOriginal({ tradeAmount, minProfitPercent });
+      setOriginal({ ...config });
       setHasChanges(false);
       toast({
         title: 'Trading Config Saved',
-        description: `Trade amount: $${tradeAmount} | Min profit: ${minProfitPercent}%`,
+        description: `Amount: $${config.tradeAmount} | Profit: ${config.minProfitPercent}% | Slippage: ${config.slippageBuffer}% | Max Position: $${config.maxPositionSize}`,
       });
     } catch (err: any) {
       toast({
@@ -87,6 +108,10 @@ export const TradingConfigCard = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const updateField = (field: keyof TradingConfig, value: string, fallback: number) => {
+    setConfig(prev => ({ ...prev, [field]: parseFloat(value) || fallback }));
   };
 
   return (
@@ -119,8 +144,8 @@ export const TradingConfigCard = () => {
                   type="number"
                   min={1}
                   step={1}
-                  value={tradeAmount}
-                  onChange={(e) => setTradeAmount(parseFloat(e.target.value) || 10)}
+                  value={config.tradeAmount}
+                  onChange={(e) => updateField('tradeAmount', e.target.value, 10)}
                   className="h-9"
                 />
                 <p className="text-[10px] text-muted-foreground">
@@ -136,12 +161,46 @@ export const TradingConfigCard = () => {
                   type="number"
                   min={0.01}
                   step={0.01}
-                  value={minProfitPercent}
-                  onChange={(e) => setMinProfitPercent(parseFloat(e.target.value) || 0.05)}
+                  value={config.minProfitPercent}
+                  onChange={(e) => updateField('minProfitPercent', e.target.value, 0.05)}
                   className="h-9"
                 />
                 <p className="text-[10px] text-muted-foreground">
                   Only execute if net profit exceeds this
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium flex items-center gap-1.5">
+                  <TrendingDown className="h-3 w-3 text-muted-foreground" />
+                  Slippage Buffer (%)
+                </Label>
+                <Input
+                  type="number"
+                  min={0.01}
+                  step={0.1}
+                  value={config.slippageBuffer}
+                  onChange={(e) => updateField('slippageBuffer', e.target.value, 0.5)}
+                  className="h-9"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Price slippage tolerance per leg
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium flex items-center gap-1.5">
+                  <Shield className="h-3 w-3 text-muted-foreground" />
+                  Max Position Size (USDT)
+                </Label>
+                <Input
+                  type="number"
+                  min={10}
+                  step={10}
+                  value={config.maxPositionSize}
+                  onChange={(e) => updateField('maxPositionSize', e.target.value, 1000)}
+                  className="h-9"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Maximum USD per trade leg
                 </p>
               </div>
             </div>

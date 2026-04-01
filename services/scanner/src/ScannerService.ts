@@ -136,9 +136,21 @@ export class ScannerService {
                 // Publish to Redis (existing behavior)
                 this.redis.publish(`opportunity:${this.exchange}`, JSON.stringify(validOpps));
 
-                // Write to Supabase database
+                // Apply admin filters before writing to Supabase
                 for (const opp of validOpps) {
-                    this.supabaseWriter.enqueue(this.exchange, opp);
+                    const filterResult = await this.filterManager.checkOpportunity({
+                        profitPct: opp.profitPct,
+                        path: opp.path || [],
+                        exchange: this.exchange,
+                        maxExecutableUSDT: opp.maxExecutableUSDT,
+                        estimatedSlippage: opp.estimatedSlippage,
+                        liquidityScore: opp.liquidityScore,
+                        strategy: opp.strategy,
+                    });
+
+                    if (filterResult.passed) {
+                        this.supabaseWriter.enqueue(this.exchange, opp);
+                    }
                 }
             }
         }

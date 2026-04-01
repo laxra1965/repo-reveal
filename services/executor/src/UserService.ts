@@ -34,13 +34,17 @@ export class UserService {
             if (error || !data) return [];
 
             return data.map(u => ({
-                userId: u.id,
-                tier: u.tier as TierLevel,
-                balances: u.balances || {},
+                userId: u.user_id,
+                tier: 'starter' as TierLevel,
+                balances: {},
                 enabledExchanges: u.enabled_exchanges || [],
-                tradingEnabled: u.trading_enabled,
-                currentDailyLoss: u.current_daily_loss || 0,
-                currentOpenPositions: 0 // Tracked in memory or another table
+                tradingEnabled: u.auto_trade ?? false,
+                tradeAmount: u.trade_amount ?? 10,
+                minProfitPercent: u.min_profit_percent ?? 0.0005,
+                slippageBuffer: u.slippage_buffer ?? 0.5,
+                maxPositionSize: u.max_position_size ?? 1000,
+                currentDailyLoss: 0,
+                currentOpenPositions: 0
             }));
         } catch (e) {
             console.error('[UserService] Failed to fetch users', e);
