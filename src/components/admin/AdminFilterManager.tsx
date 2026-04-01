@@ -327,7 +327,7 @@ export const AdminFilterManager = () => {
           </Button>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button size="sm" onClick={openCreateDialog} className="gap-2">
+              <Button size="sm" onClick={() => openCreateDialog()} className="gap-2">
                 <Plus className="h-3.5 w-3.5" />
                 New Filter
               </Button>
