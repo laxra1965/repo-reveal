@@ -446,6 +446,23 @@ export const AdminFilterManager = () => {
         </div>
       </div>
 
+      {/* Preset Templates */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-muted-foreground font-medium">Quick Create:</span>
+        {PRESETS.map(({ label, icon: Icon, preset }) => (
+          <Button
+            key={label}
+            variant="outline"
+            size="sm"
+            className="gap-1.5 text-xs"
+            onClick={() => openCreateDialog(preset)}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {label}
+          </Button>
+        ))}
+      </div>
+
       {/* Filter Cards */}
       {loading ? (
         <div className="text-center py-8 text-muted-foreground">Loading filters...</div>
