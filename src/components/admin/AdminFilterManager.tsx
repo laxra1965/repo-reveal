@@ -243,7 +243,7 @@ export const AdminFilterManager = () => {
         action: 'delete',
         previous_config: filter as unknown as Record<string, unknown>,
         new_config: null,
-      } as Record<string, unknown>);
+      });
 
       toast.success('Filter deleted');
       fetchFilters();
