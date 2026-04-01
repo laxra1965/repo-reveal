@@ -211,13 +211,13 @@ export const AdminFilterManager = () => {
     if (error) {
       toast.error('Failed to toggle filter');
     } else {
-      await supabase.from('filter_audit_log').insert({
+      await (supabase.from('filter_audit_log') as any).insert({
         filter_id: filter.id,
         admin_id: user?.id || '',
         action: newState ? 'enable' : 'disable',
         previous_config: { is_active: filter.is_active },
         new_config: { is_active: newState },
-      } as Record<string, unknown>);
+      });
 
       toast.success(`Filter ${newState ? 'enabled' : 'disabled'}`);
       fetchFilters();
