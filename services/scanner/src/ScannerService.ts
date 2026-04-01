@@ -25,6 +25,7 @@ export class ScannerService {
         this.symbols = symbols;
         this.exchange = exchange;
         this.supabaseWriter = writer || new SupabaseWriter();
+        this.filterManager = createFilterManager();
     }
 
     async start() {
