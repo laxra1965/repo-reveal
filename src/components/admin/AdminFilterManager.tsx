@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Filter, Plus, Pencil, Trash2, History, RefreshCw, Power, PowerOff } from 'lucide-react';
+import { Filter, Plus, Pencil, Trash2, History, RefreshCw, Power, PowerOff, Zap, ShieldCheck, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface OpportunityFilter {
