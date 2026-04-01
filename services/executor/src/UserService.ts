@@ -16,18 +16,19 @@ export class UserService {
     async getEligibleUsers(exchange: string): Promise<UserContext[]> {
         try {
             // Fetch users who are enabled and have the specified exchange enabled
+            // Fetch user settings with trading config
             const { data, error } = await this.supabase
-                .from('users') // Assuming 'users' table
+                .from('user_settings')
                 .select(`
-                    id, 
-                    tier, 
-                    trading_enabled, 
-                    balances, 
-                    enabled_exchanges,
-                    daily_loss_limit,
-                    current_daily_loss
+                    user_id, 
+                    trade_amount,
+                    min_profit_percent,
+                    slippage_buffer,
+                    max_position_size,
+                    auto_trade, 
+                    enabled_exchanges
                 `)
-                .eq('trading_enabled', true)
+                .eq('auto_trade', true)
                 .contains('enabled_exchanges', [exchange.toLowerCase()]);
 
             if (error || !data) return [];
