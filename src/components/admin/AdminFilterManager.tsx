@@ -237,7 +237,7 @@ export const AdminFilterManager = () => {
     if (error) {
       toast.error('Failed to delete filter');
     } else {
-      await supabase.from('filter_audit_log').insert({
+      await (supabase.from('filter_audit_log') as any).insert({
         filter_id: null,
         admin_id: user?.id || '',
         action: 'delete',
