@@ -162,8 +162,8 @@ export const AdminFilterManager = () => {
 
         toast.success('Filter updated');
       } else {
-        const { error } = await supabase
-          .from('opportunity_filters')
+        const { error } = await (supabase
+          .from('opportunity_filters') as any)
           .insert({
             name: editingFilter.name,
             description: editingFilter.description || null,
