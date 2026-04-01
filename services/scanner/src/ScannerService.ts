@@ -5,6 +5,7 @@ import { initMoversSubscription } from './movers';
 import { generateDynamicPaths } from './pathGenerator';
 import { SupabaseWriter } from './SupabaseWriter';
 import { getSnapshotConfig } from './snapshotUrls';
+import { FilterManager, createFilterManager } from './FilterManager';
 
 export class ScannerService {
     private redis: Redis;
@@ -14,6 +15,7 @@ export class ScannerService {
     private symbols: string[];
     private exchange: string;
     private supabaseWriter: SupabaseWriter;
+    private filterManager: FilterManager;
 
     constructor(minProfitPct: number = 0.5, symbols: string[], exchange: string = 'binance', redisInstance?: Redis, subInstance?: Redis, writer?: SupabaseWriter) {
         this.redis = redisInstance || new Redis();
@@ -23,6 +25,7 @@ export class ScannerService {
         this.symbols = symbols;
         this.exchange = exchange;
         this.supabaseWriter = writer || new SupabaseWriter();
+        this.filterManager = createFilterManager();
     }
 
     async start() {
@@ -133,9 +136,21 @@ export class ScannerService {
                 // Publish to Redis (existing behavior)
                 this.redis.publish(`opportunity:${this.exchange}`, JSON.stringify(validOpps));
 
-                // Write to Supabase database
+                // Apply admin filters before writing to Supabase
                 for (const opp of validOpps) {
-                    this.supabaseWriter.enqueue(this.exchange, opp);
+                    const filterResult = await this.filterManager.checkOpportunity({
+                        profitPct: opp.profitPct,
+                        path: opp.path || [],
+                        exchange: this.exchange,
+                        maxExecutableUSDT: opp.maxExecutableUSDT,
+                        estimatedSlippage: opp.estimatedSlippage,
+                        liquidityScore: opp.liquidityScore,
+                        strategy: opp.strategy,
+                    });
+
+                    if (filterResult.passed) {
+                        this.supabaseWriter.enqueue(this.exchange, opp);
+                    }
                 }
             }
         }

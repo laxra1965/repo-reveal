@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Filter, Plus, Pencil, Trash2, History, RefreshCw, Power, PowerOff } from 'lucide-react';
+import { Filter, Plus, Pencil, Trash2, History, RefreshCw, Power, PowerOff, Zap, ShieldCheck, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface OpportunityFilter {
@@ -106,10 +106,49 @@ export const AdminFilterManager = () => {
     fetchFilters();
   }, [fetchFilters]);
 
-  const openCreateDialog = () => {
-    setEditingFilter({ ...EMPTY_FILTER });
+  const openCreateDialog = (preset?: Partial<OpportunityFilter>) => {
+    setEditingFilter({ ...EMPTY_FILTER, ...(preset || {}) });
     setDialogOpen(true);
   };
+
+  const PRESETS = [
+    {
+      label: 'Default',
+      icon: Settings,
+      preset: {
+        name: 'Default Filter',
+        description: 'Balanced filter — standard profit and liquidity thresholds',
+        min_profit_percent: 0.3,
+        min_liquidity_score: 0.5,
+        min_volume_estimate: 1000,
+        max_estimated_slippage: 2.0,
+      },
+    },
+    {
+      label: 'Conservative',
+      icon: ShieldCheck,
+      preset: {
+        name: 'Conservative',
+        description: 'Conservative filter — fewer, safer trades',
+        min_profit_percent: 0.5,
+        min_liquidity_score: 0.7,
+        min_volume_estimate: 5000,
+        max_estimated_slippage: 1.0,
+      },
+    },
+    {
+      label: 'Aggressive',
+      icon: Zap,
+      preset: {
+        name: 'Aggressive',
+        description: 'Aggressive filter — more trades, higher risk',
+        min_profit_percent: 0.15,
+        min_liquidity_score: 0.3,
+        min_volume_estimate: 500,
+        max_estimated_slippage: 3.0,
+      },
+    },
+  ];
 
   const openEditDialog = (filter: OpportunityFilter) => {
     setEditingFilter({ ...filter });
@@ -288,7 +327,7 @@ export const AdminFilterManager = () => {
           </Button>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button size="sm" onClick={openCreateDialog} className="gap-2">
+              <Button size="sm" onClick={() => openCreateDialog()} className="gap-2">
                 <Plus className="h-3.5 w-3.5" />
                 New Filter
               </Button>
@@ -405,6 +444,23 @@ export const AdminFilterManager = () => {
             </DialogContent>
           </Dialog>
         </div>
+      </div>
+
+      {/* Preset Templates */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-muted-foreground font-medium">Quick Create:</span>
+        {PRESETS.map(({ label, icon: Icon, preset }) => (
+          <Button
+            key={label}
+            variant="outline"
+            size="sm"
+            className="gap-1.5 text-xs"
+            onClick={() => openCreateDialog(preset)}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {label}
+          </Button>
+        ))}
       </div>
 
       {/* Filter Cards */}

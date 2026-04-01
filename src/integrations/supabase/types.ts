@@ -741,9 +741,11 @@ export type Database = {
             | null
           filter_profitable: boolean | null
           id: string
+          max_position_size: number | null
           max_profit_percent: number | null
           min_profit_percent: number | null
           refresh_rate: number | null
+          slippage_buffer: number | null
           trade_amount: number | null
           updated_at: string | null
           user_id: string
@@ -759,9 +761,11 @@ export type Database = {
             | null
           filter_profitable?: boolean | null
           id?: string
+          max_position_size?: number | null
           max_profit_percent?: number | null
           min_profit_percent?: number | null
           refresh_rate?: number | null
+          slippage_buffer?: number | null
           trade_amount?: number | null
           updated_at?: string | null
           user_id: string
@@ -777,9 +781,11 @@ export type Database = {
             | null
           filter_profitable?: boolean | null
           id?: string
+          max_position_size?: number | null
           max_profit_percent?: number | null
           min_profit_percent?: number | null
           refresh_rate?: number | null
+          slippage_buffer?: number | null
           trade_amount?: number | null
           updated_at?: string | null
           user_id?: string
