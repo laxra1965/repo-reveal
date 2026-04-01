@@ -197,6 +197,76 @@ export type Database = {
         }
         Relationships: []
       }
+      filter_audit_log: {
+        Row: {
+          action: string
+          admin_id: string
+          filter_id: string | null
+          id: string
+          new_config: Json | null
+          previous_config: Json | null
+          timestamp: string
+        }
+        Insert: {
+          action: string
+          admin_id: string
+          filter_id?: string | null
+          id?: string
+          new_config?: Json | null
+          previous_config?: Json | null
+          timestamp?: string
+        }
+        Update: {
+          action?: string
+          admin_id?: string
+          filter_id?: string | null
+          id?: string
+          new_config?: Json | null
+          previous_config?: Json | null
+          timestamp?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "filter_audit_log_filter_id_fkey"
+            columns: ["filter_id"]
+            isOneToOne: false
+            referencedRelation: "opportunity_filters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      filter_templates: {
+        Row: {
+          created_at: string
+          description: string | null
+          filter_id: string | null
+          id: string
+          template_name: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          filter_id?: string | null
+          id?: string
+          template_name: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          filter_id?: string | null
+          id?: string
+          template_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "filter_templates_filter_id_fkey"
+            columns: ["filter_id"]
+            isOneToOne: false
+            referencedRelation: "opportunity_filters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ml_features: {
         Row: {
           created_at: string | null
@@ -334,6 +404,75 @@ export type Database = {
           status?: string
           strategy?: string
           volume_estimate?: number
+        }
+        Relationships: []
+      }
+      opportunity_filters: {
+        Row: {
+          allowed_exchanges: string[] | null
+          allowed_strategies: string[] | null
+          allowed_symbols: string[] | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          excluded_symbols: string[] | null
+          id: string
+          is_active: boolean
+          max_estimated_slippage: number | null
+          max_liquidity_score: number | null
+          max_profit_percent: number | null
+          max_volume_estimate: number | null
+          min_liquidity_score: number | null
+          min_profit_percent: number | null
+          min_volume_estimate: number | null
+          name: string
+          path_length: number | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          allowed_exchanges?: string[] | null
+          allowed_strategies?: string[] | null
+          allowed_symbols?: string[] | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          excluded_symbols?: string[] | null
+          id?: string
+          is_active?: boolean
+          max_estimated_slippage?: number | null
+          max_liquidity_score?: number | null
+          max_profit_percent?: number | null
+          max_volume_estimate?: number | null
+          min_liquidity_score?: number | null
+          min_profit_percent?: number | null
+          min_volume_estimate?: number | null
+          name: string
+          path_length?: number | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          allowed_exchanges?: string[] | null
+          allowed_strategies?: string[] | null
+          allowed_symbols?: string[] | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          excluded_symbols?: string[] | null
+          id?: string
+          is_active?: boolean
+          max_estimated_slippage?: number | null
+          max_liquidity_score?: number | null
+          max_profit_percent?: number | null
+          max_volume_estimate?: number | null
+          min_liquidity_score?: number | null
+          min_profit_percent?: number | null
+          min_volume_estimate?: number | null
+          name?: string
+          path_length?: number | null
+          updated_at?: string
+          updated_by?: string | null
         }
         Relationships: []
       }
