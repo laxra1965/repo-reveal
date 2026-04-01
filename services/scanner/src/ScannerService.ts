@@ -5,6 +5,7 @@ import { initMoversSubscription } from './movers';
 import { generateDynamicPaths } from './pathGenerator';
 import { SupabaseWriter } from './SupabaseWriter';
 import { getSnapshotConfig } from './snapshotUrls';
+import { FilterManager, createFilterManager } from './FilterManager';
 
 export class ScannerService {
     private redis: Redis;
