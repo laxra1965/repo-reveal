@@ -15,6 +15,7 @@ export class ScannerService {
     private symbols: string[];
     private exchange: string;
     private supabaseWriter: SupabaseWriter;
+    private filterManager: FilterManager;
 
     constructor(minProfitPct: number = 0.5, symbols: string[], exchange: string = 'binance', redisInstance?: Redis, subInstance?: Redis, writer?: SupabaseWriter) {
         this.redis = redisInstance || new Redis();
