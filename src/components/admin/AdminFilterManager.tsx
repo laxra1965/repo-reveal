@@ -106,10 +106,49 @@ export const AdminFilterManager = () => {
     fetchFilters();
   }, [fetchFilters]);
 
-  const openCreateDialog = () => {
-    setEditingFilter({ ...EMPTY_FILTER });
+  const openCreateDialog = (preset?: Partial<OpportunityFilter>) => {
+    setEditingFilter({ ...EMPTY_FILTER, ...(preset || {}) });
     setDialogOpen(true);
   };
+
+  const PRESETS = [
+    {
+      label: 'Default',
+      icon: Settings,
+      preset: {
+        name: 'Default Filter',
+        description: 'Balanced filter — standard profit and liquidity thresholds',
+        min_profit_percent: 0.3,
+        min_liquidity_score: 0.5,
+        min_volume_estimate: 1000,
+        max_estimated_slippage: 2.0,
+      },
+    },
+    {
+      label: 'Conservative',
+      icon: ShieldCheck,
+      preset: {
+        name: 'Conservative',
+        description: 'Conservative filter — fewer, safer trades',
+        min_profit_percent: 0.5,
+        min_liquidity_score: 0.7,
+        min_volume_estimate: 5000,
+        max_estimated_slippage: 1.0,
+      },
+    },
+    {
+      label: 'Aggressive',
+      icon: Zap,
+      preset: {
+        name: 'Aggressive',
+        description: 'Aggressive filter — more trades, higher risk',
+        min_profit_percent: 0.15,
+        min_liquidity_score: 0.3,
+        min_volume_estimate: 500,
+        max_estimated_slippage: 3.0,
+      },
+    },
+  ];
 
   const openEditDialog = (filter: OpportunityFilter) => {
     setEditingFilter({ ...filter });
