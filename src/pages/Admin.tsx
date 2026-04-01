@@ -11,6 +11,7 @@ import { AdminPlanManagement } from '@/components/admin/AdminPlanManagement';
 import { AdminSystemConfig } from '@/components/admin/AdminSystemConfig';
 import { AdminSecurityDashboard } from '@/components/admin/AdminSecurityDashboard';
 import { AdminOnboardingTour } from '@/components/admin/AdminOnboardingTour';
+import { AdminFilterManager } from '@/components/admin/AdminFilterManager';
 import { SystemHealthStatus } from '@/components/dashboard/SystemHealthStatus';
 import { LiveMetricsPanel } from '@/components/dashboard/LiveMetricsPanel';
 import { VPSHealthMonitor } from '@/components/dashboard/VPSHealthMonitor';
