@@ -182,7 +182,7 @@ export const AdminFilterManager = () => {
             allowed_strategies: editingFilter.allowed_strategies,
             created_by: user?.id || null,
             updated_by: user?.id || null,
-          } as Record<string, unknown>);
+          });
 
         if (error) throw error;
         toast.success('Filter created');
