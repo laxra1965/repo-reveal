@@ -153,12 +153,12 @@ export const AdminFilterManager = () => {
         if (error) throw error;
 
         // Log audit
-        await supabase.from('filter_audit_log').insert({
+        await (supabase.from('filter_audit_log') as any).insert({
           filter_id: editingFilter.id!,
           admin_id: user?.id || '',
           action: 'update',
           new_config: editingFilter as unknown as Record<string, unknown>,
-        } as Record<string, unknown>);
+        });
 
         toast.success('Filter updated');
       } else {
