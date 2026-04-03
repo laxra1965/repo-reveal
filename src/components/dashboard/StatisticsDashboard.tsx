@@ -243,7 +243,7 @@ export const StatisticsDashboard = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, [user, userSettings]);
 
   // Clear data function - tries Edge Function first, falls back to direct queries
   const clearData = async (action: string, days?: number) => {
