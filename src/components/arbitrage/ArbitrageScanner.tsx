@@ -126,13 +126,23 @@ export const ArbitrageScanner = () => {
     if (vpsFetched) return;
 
     try {
-      // Fallback: read directly from Supabase
-      const { data, error } = await supabase
+      // Fallback: read directly from Supabase with user-config filters
+      let query = supabase
         .from('opportunities')
         .select('*')
         .eq('status', 'active')
         .order('profit_percent', { ascending: false })
         .limit(100);
+
+      // Apply user's min profit filter at the DB level
+      if (userSettings.min_profit_percent != null) {
+        query = query.gte('profit_percent', userSettings.min_profit_percent);
+      }
+      if (userSettings.max_profit_percent != null) {
+        query = query.lte('profit_percent', userSettings.max_profit_percent);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
