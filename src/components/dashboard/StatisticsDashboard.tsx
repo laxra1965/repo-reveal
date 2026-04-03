@@ -103,6 +103,7 @@ export const StatisticsDashboard = () => {
 
       if (!opportunities || opportunities.length === 0) {
         setStats([]);
+        setFilteredIds([]);
         setTotalStats({
           totalOpportunities: 0,
           avgProfit: 0,
@@ -113,6 +114,22 @@ export const StatisticsDashboard = () => {
         setLoading(false);
         return;
       }
+
+      // Apply client-side filters for exchanges, strategies, slippage
+      const filtered = opportunities.filter(opp => {
+        if (userSettings.enabled_exchanges?.length) {
+          const oppExchanges = [opp.exchange1, opp.exchange2, opp.exchange3].filter(Boolean);
+          if (!oppExchanges.some(ex => userSettings.enabled_exchanges!.includes((ex as string).toLowerCase()))) return false;
+        }
+        if (userSettings.arbitrage_types?.length) {
+          if (opp.strategy && !userSettings.arbitrage_types.includes(opp.strategy)) return false;
+        }
+        if (userSettings.slippage_buffer != null && Number(opp.estimated_slippage) > userSettings.slippage_buffer) return false;
+        return true;
+      });
+
+      // Track IDs of filtered opportunities for scoped delete
+      setFilteredIds(filtered.map(o => o.id));
 
       // Calculate statistics by exchange
       const exchangeMap = new Map<string, {
