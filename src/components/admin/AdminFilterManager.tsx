@@ -7,10 +7,17 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { Filter, Plus, Pencil, Trash2, History, RefreshCw, Power, PowerOff, Zap, ShieldCheck, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+const STRATEGY_OPTIONS = [
+  { value: 'triangular-arbitrage', label: 'Triangular Arbitrage', description: 'Same-exchange 3-leg cycles (e.g. USDT→BTC→ETH→USDT)' },
+  { value: 'cross_exchange', label: 'Cross-Exchange Arbitrage', description: 'Price differences across multiple exchanges' },
+  { value: 'triangular_arbitrage', label: 'Triangular Arbitrage (legacy)', description: 'Legacy strategy key — underscore variant' },
+] as const;
 
 interface OpportunityFilter {
   id: string;
