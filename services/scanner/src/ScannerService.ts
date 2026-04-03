@@ -114,7 +114,7 @@ export class ScannerService {
         }
     }
 
-    private runScan(symbol: string) {
+    private async runScan(symbol: string) {
         const ob = this.orderBooks.get(symbol);
         if (!ob) return;
 
@@ -138,17 +138,24 @@ export class ScannerService {
 
                 // Apply admin filters before writing to Supabase
                 for (const opp of validOpps) {
-                    const filterResult = await this.filterManager.checkOpportunity({
-                        profitPct: opp.profitPct,
-                        path: opp.path || [],
-                        exchange: this.exchange,
-                        maxExecutableUSDT: opp.maxExecutableUSDT,
-                        estimatedSlippage: opp.estimatedSlippage,
-                        liquidityScore: opp.liquidityScore,
-                        strategy: opp.strategy,
-                    });
+                    try {
+                        const filterResult = await this.filterManager.checkOpportunity({
+                            profitPct: opp.profitPct,
+                            path: opp.path || [],
+                            exchange: this.exchange,
+                            maxExecutableUSDT: opp.maxExecutableUSDT,
+                            estimatedSlippage: opp.estimatedSlippage,
+                            liquidityScore: Math.min(100, (opp.maxExecutableUSDT || 0) / 500),
+                            strategy: 'triangular-arbitrage',
+                        });
 
-                    if (filterResult.passed) {
+                        if (filterResult.passed) {
+                            this.supabaseWriter.enqueue(this.exchange, opp);
+                        } else {
+                            console.log(`[FilterManager:${this.exchange}] Blocked: ${opp.path?.join('→')} — ${filterResult.reasons.join(', ')}`);
+                        }
+                    } catch (err: any) {
+                        console.error(`[FilterManager:${this.exchange}] Filter check failed, writing anyway: ${err.message}`);
                         this.supabaseWriter.enqueue(this.exchange, opp);
                     }
                 }
