@@ -514,8 +514,8 @@ export const StatisticsDashboard = () => {
                     <div className="space-y-2">
                       <p>This will permanently delete:</p>
                       <ul className="list-disc list-inside space-y-1 ml-4">
-                        <li>All opportunities ({totalStats.totalOpportunities})</li>
-                        <li>All scan logs</li>
+                        <li>Opportunities matching your config ({totalStats.totalOpportunities})</li>
+                        <li>Your scan logs</li>
                       </ul>
                       <p className="font-semibold text-destructive mt-2">
                         This action cannot be undone!
