@@ -294,15 +294,23 @@ export const StatisticsDashboard = () => {
         
         switch (action) {
           case 'clear_opportunities_all': {
-            let countQuery = supabase.from('opportunities').select('id', { count: 'exact', head: true });
-            const { count } = await countQuery;
-            const recordsToDelete = count || 0;
+            // Only delete opportunities matching user's config filters
+            if (filteredIds.length === 0) {
+              deletedCount = 0;
+              details.opportunities = 0;
+              break;
+            }
 
-            let deleteQuery = supabase.from('opportunities').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-            const { error } = await deleteQuery;
+            // Delete in batches of 50 IDs (Supabase .in() limit)
+            let totalDeleted = 0;
+            for (let i = 0; i < filteredIds.length; i += 50) {
+              const batch = filteredIds.slice(i, i + 50);
+              const { error } = await supabase.from('opportunities').delete().in('id', batch);
+              if (error) throw error;
+              totalDeleted += batch.length;
+            }
 
-            if (error) throw error;
-            deletedCount = recordsToDelete;
+            deletedCount = totalDeleted;
             details.opportunities = deletedCount;
             break;
           }
