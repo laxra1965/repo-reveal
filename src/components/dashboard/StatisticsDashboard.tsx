@@ -52,6 +52,30 @@ export const StatisticsDashboard = () => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [clearDays, setClearDays] = useState(30);
+  const [userSettings, setUserSettings] = useState<{
+    min_profit_percent?: number;
+    max_profit_percent?: number;
+    enabled_exchanges?: string[];
+    arbitrage_types?: string[];
+    slippage_buffer?: number;
+  }>({});
+  const [filteredIds, setFilteredIds] = useState<string[]>([]);
+
+  // Load user settings
+  useEffect(() => {
+    if (!user) return;
+    supabase.from('user_settings').select('min_profit_percent, max_profit_percent, enabled_exchanges, arbitrage_types, slippage_buffer').eq('user_id', user.id).maybeSingle().then(({ data }) => {
+      if (data) {
+        setUserSettings({
+          min_profit_percent: data.min_profit_percent != null ? Number(data.min_profit_percent) : undefined,
+          max_profit_percent: data.max_profit_percent != null ? Number(data.max_profit_percent) : undefined,
+          enabled_exchanges: data.enabled_exchanges || undefined,
+          arbitrage_types: data.arbitrage_types || undefined,
+          slippage_buffer: data.slippage_buffer != null ? Number(data.slippage_buffer) : undefined,
+        });
+      }
+    });
+  }, [user]);
 
   // Fetch stats function (extracted for reuse)
   const fetchStats = async () => {
@@ -60,11 +84,20 @@ export const StatisticsDashboard = () => {
     try {
       setLoading(true);
 
-      // Only fetch active opportunities (what users actually see on the dashboard)
-      const { data: opportunities, error } = await supabase
+      // Fetch active opportunities
+      let query = supabase
         .from('opportunities')
         .select('*')
         .eq('status', 'active');
+
+      if (userSettings.min_profit_percent != null) {
+        query = query.gte('profit_percent', userSettings.min_profit_percent);
+      }
+      if (userSettings.max_profit_percent != null) {
+        query = query.lte('profit_percent', userSettings.max_profit_percent);
+      }
+
+      const { data: opportunities, error } = await query;
 
       if (error) throw error;
 
