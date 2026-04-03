@@ -454,8 +454,8 @@ export const StatisticsDashboard = () => {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Clear All Opportunities</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will permanently delete ALL opportunities ({totalStats.totalOpportunities}).
-                    This action cannot be undone. Are you sure you want to continue?
+                    This will permanently delete the {totalStats.totalOpportunities} opportunities matching your config filters.
+                    Other users' views are not affected. This action cannot be undone.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
