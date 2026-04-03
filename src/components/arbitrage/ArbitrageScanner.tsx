@@ -160,7 +160,7 @@ export const ArbitrageScanner = () => {
     } catch (error) {
       console.error('Error loading opportunities from Supabase:', error);
     }
-  }, [user]);
+  }, [user, userSettings]);
 
   const loadUserSettings = useCallback(async () => {
     if (!user) return;
