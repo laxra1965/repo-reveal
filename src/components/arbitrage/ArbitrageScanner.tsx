@@ -55,6 +55,12 @@ export const ArbitrageScanner = () => {
   const [autoPaperTradeCount, setAutoPaperTradeCount] = useState(0);
   
   const [activeArbTypes, setActiveArbTypes] = useState<string[]>(['triangular', 'cross_exchange']);
+  const [userSettings, setUserSettings] = useState<{
+    min_profit_percent?: number;
+    max_profit_percent?: number;
+    enabled_exchanges?: string[];
+    slippage_buffer?: number;
+  }>({});
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
