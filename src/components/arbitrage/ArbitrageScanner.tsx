@@ -330,20 +330,38 @@ export const ArbitrageScanner = () => {
     isScanningRef.current = false;
   }, []);
 
-  // Filter and sort opportunities
+  // Filter and sort opportunities using user config
   const filteredOpportunities = useMemo(() => {
     return opportunities
-      .filter(opp =>
-        opp.status === 'active' &&
-        (!opp.strategy || activeArbTypes.includes(opp.strategy))
-      )
+      .filter(opp => {
+        if (opp.status !== 'active') return false;
+        if (opp.strategy && !activeArbTypes.includes(opp.strategy)) return false;
+        
+        // Apply user's min/max profit filters (client-side for VPS-fetched data)
+        if (userSettings.min_profit_percent != null && opp.profit_percent < userSettings.min_profit_percent) return false;
+        if (userSettings.max_profit_percent != null && opp.profit_percent > userSettings.max_profit_percent) return false;
+        
+        // Filter by user's enabled exchanges
+        if (userSettings.enabled_exchanges?.length) {
+          const oppExchanges = [opp.exchange1, opp.exchange2, opp.exchange3].filter(Boolean);
+          const hasEnabledExchange = oppExchanges.some(ex => 
+            userSettings.enabled_exchanges!.includes(ex!.toLowerCase())
+          );
+          if (!hasEnabledExchange) return false;
+        }
+        
+        // Filter by slippage buffer
+        if (userSettings.slippage_buffer != null && opp.estimated_slippage > userSettings.slippage_buffer) return false;
+        
+        return true;
+      })
       .sort((a, b) => {
         if (a.liquidity_score !== b.liquidity_score) {
           return b.liquidity_score - a.liquidity_score;
         }
         return b.profit_percent - a.profit_percent;
       });
-  }, [opportunities, activeArbTypes]);
+  }, [opportunities, activeArbTypes, userSettings]);
 
   // Update total pages whenever filtered opportunities change
   useEffect(() => {
