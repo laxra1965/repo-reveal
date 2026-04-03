@@ -147,7 +147,7 @@ export const StatisticsDashboard = () => {
       let totalProfitable = 0;
       let globalMaxProfit = 0;
 
-      opportunities.forEach(opp => {
+      filtered.forEach(opp => {
         const exchanges = [opp.exchange1, opp.exchange2, opp.exchange3]
           .filter((val, idx, arr) => arr.indexOf(val) === idx);
 
