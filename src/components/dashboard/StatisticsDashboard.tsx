@@ -336,28 +336,29 @@ export const StatisticsDashboard = () => {
           }
 
           case 'clear_all': {
-            // Count opportunities
-            let oppCountQuery = supabase.from('opportunities').select('id', { count: 'exact', head: true });
-            const { count: oppCount } = await oppCountQuery;
+            // Delete only filtered opportunities
+            let oppDeleted = 0;
+            if (filteredIds.length > 0) {
+              for (let i = 0; i < filteredIds.length; i += 50) {
+                const batch = filteredIds.slice(i, i + 50);
+                const { error: oppError } = await supabase.from('opportunities').delete().in('id', batch);
+                if (oppError) throw oppError;
+                oppDeleted += batch.length;
+              }
+            }
 
-            // Count logs
+            // Delete user's own logs
             let logCountQuery = supabase.from('scanner_logs').select('id', { count: 'exact', head: true });
             if (!isAdmin) logCountQuery = logCountQuery.eq('user_id', user.id);
             const { count: logCount } = await logCountQuery;
 
-            // Delete opportunities
-            let delOppQuery = supabase.from('opportunities').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-            const { error: oppError } = await delOppQuery;
-            if (oppError) throw oppError;
-
-            // Delete logs
             let delLogQuery = supabase.from('scanner_logs').delete();
             if (!isAdmin) delLogQuery = delLogQuery.eq('user_id', user.id);
             const { error: logError } = await delLogQuery;
             if (logError) throw logError;
 
-            deletedCount = (oppCount || 0) + (logCount || 0);
-            details.opportunities = oppCount || 0;
+            deletedCount = oppDeleted + (logCount || 0);
+            details.opportunities = oppDeleted;
             details.scan_logs = logCount || 0;
             break;
           }
