@@ -55,6 +55,12 @@ export const ArbitrageScanner = () => {
   const [autoPaperTradeCount, setAutoPaperTradeCount] = useState(0);
   
   const [activeArbTypes, setActiveArbTypes] = useState<string[]>(['triangular', 'cross_exchange']);
+  const [userSettings, setUserSettings] = useState<{
+    min_profit_percent?: number;
+    max_profit_percent?: number;
+    enabled_exchanges?: string[];
+    slippage_buffer?: number;
+  }>({});
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -120,13 +126,23 @@ export const ArbitrageScanner = () => {
     if (vpsFetched) return;
 
     try {
-      // Fallback: read directly from Supabase
-      const { data, error } = await supabase
+      // Fallback: read directly from Supabase with user-config filters
+      let query = supabase
         .from('opportunities')
         .select('*')
         .eq('status', 'active')
         .order('profit_percent', { ascending: false })
         .limit(100);
+
+      // Apply user's min profit filter at the DB level
+      if (userSettings.min_profit_percent != null) {
+        query = query.gte('profit_percent', userSettings.min_profit_percent);
+      }
+      if (userSettings.max_profit_percent != null) {
+        query = query.lte('profit_percent', userSettings.max_profit_percent);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -144,14 +160,20 @@ export const ArbitrageScanner = () => {
     } catch (error) {
       console.error('Error loading opportunities from Supabase:', error);
     }
-  }, [user]);
+  }, [user, userSettings]);
 
   const loadUserSettings = useCallback(async () => {
     if (!user) return;
     try {
-      const { data } = await supabase.from('user_settings').select('arbitrage_types').eq('user_id', user.id).maybeSingle();
-      if (data?.arbitrage_types) {
-        setActiveArbTypes(data.arbitrage_types);
+      const { data } = await supabase.from('user_settings').select('arbitrage_types, min_profit_percent, max_profit_percent, enabled_exchanges, slippage_buffer').eq('user_id', user.id).maybeSingle();
+      if (data) {
+        if (data.arbitrage_types) setActiveArbTypes(data.arbitrage_types);
+        setUserSettings({
+          min_profit_percent: data.min_profit_percent != null ? Number(data.min_profit_percent) : undefined,
+          max_profit_percent: data.max_profit_percent != null ? Number(data.max_profit_percent) : undefined,
+          enabled_exchanges: data.enabled_exchanges || undefined,
+          slippage_buffer: data.slippage_buffer != null ? Number(data.slippage_buffer) : undefined,
+        });
       }
     } catch (e) { }
   }, [user]);
@@ -308,20 +330,38 @@ export const ArbitrageScanner = () => {
     isScanningRef.current = false;
   }, []);
 
-  // Filter and sort opportunities
+  // Filter and sort opportunities using user config
   const filteredOpportunities = useMemo(() => {
     return opportunities
-      .filter(opp =>
-        opp.status === 'active' &&
-        (!opp.strategy || activeArbTypes.includes(opp.strategy))
-      )
+      .filter(opp => {
+        if (opp.status !== 'active') return false;
+        if (opp.strategy && !activeArbTypes.includes(opp.strategy)) return false;
+        
+        // Apply user's min/max profit filters (client-side for VPS-fetched data)
+        if (userSettings.min_profit_percent != null && opp.profit_percent < userSettings.min_profit_percent) return false;
+        if (userSettings.max_profit_percent != null && opp.profit_percent > userSettings.max_profit_percent) return false;
+        
+        // Filter by user's enabled exchanges
+        if (userSettings.enabled_exchanges?.length) {
+          const oppExchanges = [opp.exchange1, opp.exchange2, opp.exchange3].filter(Boolean);
+          const hasEnabledExchange = oppExchanges.some(ex => 
+            userSettings.enabled_exchanges!.includes(ex!.toLowerCase())
+          );
+          if (!hasEnabledExchange) return false;
+        }
+        
+        // Filter by slippage buffer
+        if (userSettings.slippage_buffer != null && opp.estimated_slippage > userSettings.slippage_buffer) return false;
+        
+        return true;
+      })
       .sort((a, b) => {
         if (a.liquidity_score !== b.liquidity_score) {
           return b.liquidity_score - a.liquidity_score;
         }
         return b.profit_percent - a.profit_percent;
       });
-  }, [opportunities, activeArbTypes]);
+  }, [opportunities, activeArbTypes, userSettings]);
 
   // Update total pages whenever filtered opportunities change
   useEffect(() => {

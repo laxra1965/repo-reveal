@@ -52,6 +52,30 @@ export const StatisticsDashboard = () => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [clearDays, setClearDays] = useState(30);
+  const [userSettings, setUserSettings] = useState<{
+    min_profit_percent?: number;
+    max_profit_percent?: number;
+    enabled_exchanges?: string[];
+    arbitrage_types?: string[];
+    slippage_buffer?: number;
+  }>({});
+  const [filteredIds, setFilteredIds] = useState<string[]>([]);
+
+  // Load user settings
+  useEffect(() => {
+    if (!user) return;
+    supabase.from('user_settings').select('min_profit_percent, max_profit_percent, enabled_exchanges, arbitrage_types, slippage_buffer').eq('user_id', user.id).maybeSingle().then(({ data }) => {
+      if (data) {
+        setUserSettings({
+          min_profit_percent: data.min_profit_percent != null ? Number(data.min_profit_percent) : undefined,
+          max_profit_percent: data.max_profit_percent != null ? Number(data.max_profit_percent) : undefined,
+          enabled_exchanges: data.enabled_exchanges || undefined,
+          arbitrage_types: data.arbitrage_types || undefined,
+          slippage_buffer: data.slippage_buffer != null ? Number(data.slippage_buffer) : undefined,
+        });
+      }
+    });
+  }, [user]);
 
   // Fetch stats function (extracted for reuse)
   const fetchStats = async () => {
@@ -60,16 +84,26 @@ export const StatisticsDashboard = () => {
     try {
       setLoading(true);
 
-      // Only fetch active opportunities (what users actually see on the dashboard)
-      const { data: opportunities, error } = await supabase
+      // Fetch active opportunities
+      let query = supabase
         .from('opportunities')
         .select('*')
         .eq('status', 'active');
+
+      if (userSettings.min_profit_percent != null) {
+        query = query.gte('profit_percent', userSettings.min_profit_percent);
+      }
+      if (userSettings.max_profit_percent != null) {
+        query = query.lte('profit_percent', userSettings.max_profit_percent);
+      }
+
+      const { data: opportunities, error } = await query;
 
       if (error) throw error;
 
       if (!opportunities || opportunities.length === 0) {
         setStats([]);
+        setFilteredIds([]);
         setTotalStats({
           totalOpportunities: 0,
           avgProfit: 0,
@@ -80,6 +114,22 @@ export const StatisticsDashboard = () => {
         setLoading(false);
         return;
       }
+
+      // Apply client-side filters for exchanges, strategies, slippage
+      const filtered = opportunities.filter(opp => {
+        if (userSettings.enabled_exchanges?.length) {
+          const oppExchanges = [opp.exchange1, opp.exchange2, opp.exchange3].filter(Boolean);
+          if (!oppExchanges.some(ex => userSettings.enabled_exchanges!.includes((ex as string).toLowerCase()))) return false;
+        }
+        if (userSettings.arbitrage_types?.length) {
+          if (opp.strategy && !userSettings.arbitrage_types.includes(opp.strategy)) return false;
+        }
+        if (userSettings.slippage_buffer != null && Number(opp.estimated_slippage) > userSettings.slippage_buffer) return false;
+        return true;
+      });
+
+      // Track IDs of filtered opportunities for scoped delete
+      setFilteredIds(filtered.map(o => o.id));
 
       // Calculate statistics by exchange
       const exchangeMap = new Map<string, {
@@ -97,7 +147,7 @@ export const StatisticsDashboard = () => {
       let totalProfitable = 0;
       let globalMaxProfit = 0;
 
-      opportunities.forEach(opp => {
+      filtered.forEach(opp => {
         const exchanges = [opp.exchange1, opp.exchange2, opp.exchange3]
           .filter((val, idx, arr) => arr.indexOf(val) === idx);
 
@@ -193,7 +243,7 @@ export const StatisticsDashboard = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, [user, userSettings]);
 
   // Clear data function - tries Edge Function first, falls back to direct queries
   const clearData = async (action: string, days?: number) => {
@@ -244,15 +294,23 @@ export const StatisticsDashboard = () => {
         
         switch (action) {
           case 'clear_opportunities_all': {
-            let countQuery = supabase.from('opportunities').select('id', { count: 'exact', head: true });
-            const { count } = await countQuery;
-            const recordsToDelete = count || 0;
+            // Only delete opportunities matching user's config filters
+            if (filteredIds.length === 0) {
+              deletedCount = 0;
+              details.opportunities = 0;
+              break;
+            }
 
-            let deleteQuery = supabase.from('opportunities').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-            const { error } = await deleteQuery;
+            // Delete in batches of 50 IDs (Supabase .in() limit)
+            let totalDeleted = 0;
+            for (let i = 0; i < filteredIds.length; i += 50) {
+              const batch = filteredIds.slice(i, i + 50);
+              const { error } = await supabase.from('opportunities').delete().in('id', batch);
+              if (error) throw error;
+              totalDeleted += batch.length;
+            }
 
-            if (error) throw error;
-            deletedCount = recordsToDelete;
+            deletedCount = totalDeleted;
             details.opportunities = deletedCount;
             break;
           }
@@ -278,28 +336,29 @@ export const StatisticsDashboard = () => {
           }
 
           case 'clear_all': {
-            // Count opportunities
-            let oppCountQuery = supabase.from('opportunities').select('id', { count: 'exact', head: true });
-            const { count: oppCount } = await oppCountQuery;
+            // Delete only filtered opportunities
+            let oppDeleted = 0;
+            if (filteredIds.length > 0) {
+              for (let i = 0; i < filteredIds.length; i += 50) {
+                const batch = filteredIds.slice(i, i + 50);
+                const { error: oppError } = await supabase.from('opportunities').delete().in('id', batch);
+                if (oppError) throw oppError;
+                oppDeleted += batch.length;
+              }
+            }
 
-            // Count logs
+            // Delete user's own logs
             let logCountQuery = supabase.from('scanner_logs').select('id', { count: 'exact', head: true });
             if (!isAdmin) logCountQuery = logCountQuery.eq('user_id', user.id);
             const { count: logCount } = await logCountQuery;
 
-            // Delete opportunities
-            let delOppQuery = supabase.from('opportunities').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-            const { error: oppError } = await delOppQuery;
-            if (oppError) throw oppError;
-
-            // Delete logs
             let delLogQuery = supabase.from('scanner_logs').delete();
             if (!isAdmin) delLogQuery = delLogQuery.eq('user_id', user.id);
             const { error: logError } = await delLogQuery;
             if (logError) throw logError;
 
-            deletedCount = (oppCount || 0) + (logCount || 0);
-            details.opportunities = oppCount || 0;
+            deletedCount = oppDeleted + (logCount || 0);
+            details.opportunities = oppDeleted;
             details.scan_logs = logCount || 0;
             break;
           }
@@ -395,8 +454,8 @@ export const StatisticsDashboard = () => {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Clear All Opportunities</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will permanently delete ALL opportunities ({totalStats.totalOpportunities}).
-                    This action cannot be undone. Are you sure you want to continue?
+                    This will permanently delete the {totalStats.totalOpportunities} opportunities matching your config filters.
+                    Other users' views are not affected. This action cannot be undone.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -455,8 +514,8 @@ export const StatisticsDashboard = () => {
                     <div className="space-y-2">
                       <p>This will permanently delete:</p>
                       <ul className="list-disc list-inside space-y-1 ml-4">
-                        <li>All opportunities ({totalStats.totalOpportunities})</li>
-                        <li>All scan logs</li>
+                        <li>Opportunities matching your config ({totalStats.totalOpportunities})</li>
+                        <li>Your scan logs</li>
                       </ul>
                       <p className="font-semibold text-destructive mt-2">
                         This action cannot be undone!
