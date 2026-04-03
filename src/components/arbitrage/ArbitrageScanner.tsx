@@ -155,9 +155,15 @@ export const ArbitrageScanner = () => {
   const loadUserSettings = useCallback(async () => {
     if (!user) return;
     try {
-      const { data } = await supabase.from('user_settings').select('arbitrage_types').eq('user_id', user.id).maybeSingle();
-      if (data?.arbitrage_types) {
-        setActiveArbTypes(data.arbitrage_types);
+      const { data } = await supabase.from('user_settings').select('arbitrage_types, min_profit_percent, max_profit_percent, enabled_exchanges, slippage_buffer').eq('user_id', user.id).maybeSingle();
+      if (data) {
+        if (data.arbitrage_types) setActiveArbTypes(data.arbitrage_types);
+        setUserSettings({
+          min_profit_percent: data.min_profit_percent != null ? Number(data.min_profit_percent) : undefined,
+          max_profit_percent: data.max_profit_percent != null ? Number(data.max_profit_percent) : undefined,
+          enabled_exchanges: data.enabled_exchanges || undefined,
+          slippage_buffer: data.slippage_buffer != null ? Number(data.slippage_buffer) : undefined,
+        });
       }
     } catch (e) { }
   }, [user]);
