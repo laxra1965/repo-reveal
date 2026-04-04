@@ -24,3 +24,6 @@ verify_jwt = true
 
 [functions.encrypt-api-keys]
 verify_jwt = false
+
+[functions.ml-analysis]
+verify_jwt = false
