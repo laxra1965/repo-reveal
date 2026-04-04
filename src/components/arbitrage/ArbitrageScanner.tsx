@@ -331,11 +331,15 @@ export const ArbitrageScanner = () => {
   }, []);
 
   // Filter and sort opportunities using user config
+  // Normalize strategy names for matching (handles triangular vs triangular_arbitrage vs triangular-arbitrage)
+  const normalizeStrategy = (s: string) => s.replace(/[-_]arbitrage$/i, '').replace(/[-_]/g, '_').toLowerCase();
+
   const filteredOpportunities = useMemo(() => {
+    const normalizedActiveTypes = new Set(activeArbTypes.map(normalizeStrategy));
     return opportunities
       .filter(opp => {
         if (opp.status !== 'active') return false;
-        if (opp.strategy && !activeArbTypes.includes(opp.strategy)) return false;
+        if (opp.strategy && !normalizedActiveTypes.has(normalizeStrategy(opp.strategy))) return false;
         
         // Apply user's min/max profit filters (client-side for VPS-fetched data)
         if (userSettings.min_profit_percent != null && opp.profit_percent < userSettings.min_profit_percent) return false;
