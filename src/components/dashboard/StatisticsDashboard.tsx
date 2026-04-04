@@ -115,6 +115,9 @@ export const StatisticsDashboard = () => {
         return;
       }
 
+      // Normalize strategy names for matching
+      const normalizeStrategy = (s: string) => s.replace(/[-_]arbitrage$/i, '').replace(/[-_]/g, '_').toLowerCase();
+
       // Apply client-side filters for exchanges, strategies, slippage
       const filtered = opportunities.filter(opp => {
         if (userSettings.enabled_exchanges?.length) {
@@ -122,7 +125,7 @@ export const StatisticsDashboard = () => {
           if (!oppExchanges.some(ex => userSettings.enabled_exchanges!.includes((ex as string).toLowerCase()))) return false;
         }
         if (userSettings.arbitrage_types?.length) {
-          if (opp.strategy && !userSettings.arbitrage_types.includes(opp.strategy)) return false;
+          if (opp.strategy && !userSettings.arbitrage_types.map(normalizeStrategy).includes(normalizeStrategy(opp.strategy))) return false;
         }
         if (userSettings.slippage_buffer != null && Number(opp.estimated_slippage) > userSettings.slippage_buffer) return false;
         return true;
