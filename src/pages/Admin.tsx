@@ -16,7 +16,7 @@ import { AdminMLDashboard } from '@/components/admin/AdminMLDashboard';
 import { SystemHealthStatus } from '@/components/dashboard/SystemHealthStatus';
 import { LiveMetricsPanel } from '@/components/dashboard/LiveMetricsPanel';
 import { VPSHealthMonitor } from '@/components/dashboard/VPSHealthMonitor';
-import { ArrowLeft, Settings, CreditCard, Users, Shield, UserCog, Wrench, Package, Cpu, ShieldCheck, Activity, RefreshCw, Filter } from 'lucide-react';
+import { ArrowLeft, Settings, CreditCard, Users, Shield, UserCog, Wrench, Package, Cpu, ShieldCheck, Activity, RefreshCw, Filter, Brain } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const Admin = () => {
