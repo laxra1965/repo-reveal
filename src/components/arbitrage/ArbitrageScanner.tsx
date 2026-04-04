@@ -54,7 +54,7 @@ export const ArbitrageScanner = () => {
   const [autoPaperTrade, setAutoPaperTrade] = useState(false);
   const [autoPaperTradeCount, setAutoPaperTradeCount] = useState(0);
   
-  const [activeArbTypes, setActiveArbTypes] = useState<string[]>(['triangular', 'cross_exchange']);
+  const [activeArbTypes, setActiveArbTypes] = useState<string[]>(['triangular', 'cross_exchange', 'triangular_arbitrage', 'triangular-arbitrage']);
   const [userSettings, setUserSettings] = useState<{
     min_profit_percent?: number;
     max_profit_percent?: number;
