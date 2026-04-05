@@ -8,7 +8,7 @@ import { AdminSubscriptionList } from '@/components/admin/AdminSubscriptionList'
 import { AdminUsersList } from '@/components/admin/AdminUsersList';
 import { AdminSystemMaintenance } from '@/components/admin/AdminSystemMaintenance';
 import { AdminPlanManagement } from '@/components/admin/AdminPlanManagement';
-import { AdminSystemConfig } from '@/components/admin/AdminSystemConfig';
+// AdminSystemConfig merged into AdminFilterManager
 import { AdminSecurityDashboard } from '@/components/admin/AdminSecurityDashboard';
 import { AdminOnboardingTour } from '@/components/admin/AdminOnboardingTour';
 import { AdminFilterManager } from '@/components/admin/AdminFilterManager';
@@ -16,7 +16,7 @@ import { AdminMLDashboard } from '@/components/admin/AdminMLDashboard';
 import { SystemHealthStatus } from '@/components/dashboard/SystemHealthStatus';
 import { LiveMetricsPanel } from '@/components/dashboard/LiveMetricsPanel';
 import { VPSHealthMonitor } from '@/components/dashboard/VPSHealthMonitor';
-import { ArrowLeft, Settings, CreditCard, Users, Shield, UserCog, Wrench, Package, Cpu, ShieldCheck, Activity, RefreshCw, Filter, Brain } from 'lucide-react';
+import { ArrowLeft, Settings, CreditCard, Users, Shield, UserCog, Wrench, Package, ShieldCheck, Activity, RefreshCw, Filter, Brain } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const Admin = () => {
