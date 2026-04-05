@@ -530,33 +530,14 @@ export const AdminFilterManager = () => {
                         <Input value={editingFilter.excluded_symbols?.join(', ') || ''} onChange={e => updateField('excluded_symbols', parseArrayInput(e.target.value))} placeholder="DOGE, SHIB" />
                       </div>
                       <div className="space-y-1.5">
-                      <Label>Allowed Strategies</Label>
-                      <div className="grid grid-cols-1 gap-2 mt-1">
-                        {STRATEGY_OPTIONS.map(opt => {
-                          const selected = editingFilter.allowed_strategies || [];
-                          const isChecked = selected.includes(opt.value);
-                          return (
-                            <label key={opt.value} className="flex items-start gap-2 p-2 rounded-md border cursor-pointer hover:bg-accent/50 transition-colors">
-                              <Checkbox
-                                checked={isChecked}
-                                onCheckedChange={(checked) => {
-                                  const current = editingFilter.allowed_strategies || [];
-                                  const next = checked
-                                    ? [...current, opt.value]
-                                    : current.filter(s => s !== opt.value);
-                                  updateField('allowed_strategies', next.length > 0 ? next : null);
-                                }}
-                                className="mt-0.5"
-                              />
-                              <div>
-                                <span className="text-sm font-medium">{opt.label}</span>
-                                <p className="text-xs text-muted-foreground">{opt.description}</p>
-                              </div>
-                            </label>
-                          );
-                        })}
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">Leave all unchecked to allow any strategy</p>
+                        <Label>Allowed Strategies</Label>
+                        <MultiSelect
+                          options={STRATEGY_OPTIONS}
+                          selected={editingFilter.allowed_strategies || []}
+                          onChange={(val) => updateField('allowed_strategies', val.length > 0 ? val : null)}
+                          placeholder="All strategies (no filter)"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">Leave empty to allow any strategy</p>
                       </div>
                     </div>
                   </div>
