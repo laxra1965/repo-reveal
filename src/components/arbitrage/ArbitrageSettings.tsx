@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { MultiSelect } from '@/components/ui/multi-select';
 import { useToast } from '@/hooks/use-toast';
 
 interface ArbitrageSettingsProps {
@@ -18,8 +19,19 @@ interface ArbitrageSettingsProps {
 
 type ExchangeName = Database['public']['Enums']['exchange_name'];
 
-const AVAILABLE_EXCHANGES: ExchangeName[] = [
-  'binance', 'bybit', 'okx', 'kucoin', 'gate', 'mexc'
+const EXCHANGE_OPTIONS = [
+  { value: 'binance', label: 'Binance' },
+  { value: 'bybit', label: 'Bybit' },
+  { value: 'okx', label: 'OKX' },
+  { value: 'kucoin', label: 'KuCoin' },
+  { value: 'gate', label: 'Gate.io' },
+  { value: 'mexc', label: 'MEXC' },
+];
+
+const ARB_TYPE_OPTIONS = [
+  { value: 'triangular', label: 'Triangular', description: '3-step trades on same exchange' },
+  { value: 'cross_exchange', label: 'Cross Exchange', description: 'Buy on one, sell on another' },
+  { value: 'short', label: 'Short Signals', description: 'Short-selling opportunities' },
 ];
 
 export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) => {
@@ -32,7 +44,7 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
     max_profit_percent: 50,
     filter_profitable: true,
     auto_trade: false,
-    enabled_exchanges: ['binance', 'bybit', 'okx'] as ExchangeName[],
+    enabled_exchanges: ['binance', 'bybit', 'okx'] as string[],
     arbitrage_types: ['triangular', 'cross_exchange'] as string[],
     custom_pairs: '' as string,
     enable_ml_filtering: false,
@@ -69,7 +81,7 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
           max_profit_percent: parseFloat(data.max_profit_percent.toString()),
           filter_profitable: data.filter_profitable,
           auto_trade: data.auto_trade,
-          enabled_exchanges: data.enabled_exchanges || (['binance', 'bybit', 'okx'] as ExchangeName[]),
+          enabled_exchanges: (data.enabled_exchanges || ['binance', 'bybit', 'okx']) as string[],
           arbitrage_types: data.arbitrage_types || ['triangular', 'cross_exchange'],
           custom_pairs: (data.custom_pairs || []).join(', '),
           enable_ml_filtering: data.enable_ml_filtering || false,
@@ -188,27 +200,12 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
               <CardTitle className="text-base">Enabled Exchanges</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                {AVAILABLE_EXCHANGES.map((exchange) => (
-                  <div key={exchange} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`exchange-${exchange}`}
-                      checked={settings.enabled_exchanges.includes(exchange)}
-                      onCheckedChange={(checked) => {
-                        const current = settings.enabled_exchanges;
-                        const updated = checked
-                          ? [...current, exchange]
-                          : current.filter(e => e !== exchange);
-
-                        setSettings(prev => ({ ...prev, enabled_exchanges: updated }));
-                      }}
-                    />
-                    <Label htmlFor={`exchange-${exchange}`} className="capitalize font-medium text-sm">
-                      {exchange}
-                    </Label>
-                  </div>
-                ))}
-              </div>
+              <MultiSelect
+                options={EXCHANGE_OPTIONS}
+                selected={settings.enabled_exchanges}
+                onChange={(val) => setSettings(prev => ({ ...prev, enabled_exchanges: val }))}
+                placeholder="Select exchanges..."
+              />
             </CardContent>
           </Card>
 
@@ -273,46 +270,14 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
                 </div>
               </div>
 
-              <div className="space-y-3 pt-2">
+              <div className="space-y-2 pt-2">
                 <Label className="text-sm font-medium">Arbitrage Types</Label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="type-triangular"
-                      checked={settings.arbitrage_types.includes('triangular')}
-                      onCheckedChange={(checked) => {
-                        const current = settings.arbitrage_types;
-                        const updated = checked ? [...current, 'triangular'] : current.filter(t => t !== 'triangular');
-                        setSettings(prev => ({ ...prev, arbitrage_types: updated }));
-                      }}
-                    />
-                    <Label htmlFor="type-triangular" className="text-xs">Triangular</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="type-cross-exchange"
-                      checked={settings.arbitrage_types.includes('cross_exchange')}
-                      onCheckedChange={(checked) => {
-                        const current = settings.arbitrage_types;
-                        const updated = checked ? [...current, 'cross_exchange'] : current.filter(t => t !== 'cross_exchange');
-                        setSettings(prev => ({ ...prev, arbitrage_types: updated }));
-                      }}
-                    />
-                    <Label htmlFor="type-cross-exchange" className="text-xs">Cross Exchange</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="type-short"
-                      checked={settings.arbitrage_types.includes('short')}
-                      onCheckedChange={(checked) => {
-                        const current = settings.arbitrage_types;
-                        const updated = checked ? [...current, 'short'] : current.filter(t => t !== 'short');
-                        setSettings(prev => ({ ...prev, arbitrage_types: updated }));
-                      }}
-                    />
-                    <Label htmlFor="type-short" className="text-xs">Short Signals</Label>
-                  </div>
-                </div>
+                <MultiSelect
+                  options={ARB_TYPE_OPTIONS}
+                  selected={settings.arbitrage_types}
+                  onChange={(val) => setSettings(prev => ({ ...prev, arbitrage_types: val }))}
+                  placeholder="Select arbitrage types..."
+                />
               </div>
 
               <div className="space-y-2 pt-2">
@@ -386,6 +351,6 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
           </Button>
         </div>
       </DialogContent>
-    </Dialog >
+    </Dialog>
   );
 };

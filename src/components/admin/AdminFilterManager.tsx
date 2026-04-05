@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,15 +9,31 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { MultiSelect } from '@/components/ui/multi-select';
 import { toast } from 'sonner';
-import { Filter, Plus, Pencil, Trash2, History, RefreshCw, Power, PowerOff, Zap, ShieldCheck, Settings } from 'lucide-react';
+import { Filter, Plus, Pencil, Trash2, History, RefreshCw, Power, PowerOff, Zap, ShieldCheck, Settings, Save, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const STRATEGY_OPTIONS = [
   { value: 'triangular-arbitrage', label: 'Triangular Arbitrage', description: 'Same-exchange 3-leg cycles (e.g. USDT→BTC→ETH→USDT)' },
   { value: 'cross_exchange', label: 'Cross-Exchange Arbitrage', description: 'Price differences across multiple exchanges' },
   { value: 'triangular_arbitrage', label: 'Triangular Arbitrage (legacy)', description: 'Legacy strategy key — underscore variant' },
-] as const;
+];
+
+const EXCHANGE_OPTIONS = [
+  { value: 'binance', label: 'Binance' },
+  { value: 'bybit', label: 'Bybit' },
+  { value: 'okx', label: 'OKX' },
+  { value: 'kucoin', label: 'KuCoin' },
+  { value: 'gate', label: 'Gate.io' },
+  { value: 'mexc', label: 'MEXC' },
+];
+
+const ARB_TYPE_OPTIONS = [
+  { value: 'triangular', label: 'Triangular', description: '3-step trades on same exchange' },
+  { value: 'cross_exchange', label: 'Cross Exchange', description: 'Buy on one, sell on another' },
+  { value: 'short', label: 'Short Signals', description: 'Short-selling opportunities' },
+];
 
 interface OpportunityFilter {
   id: string;
