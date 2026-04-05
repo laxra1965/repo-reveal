@@ -138,7 +138,10 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
 
       await supabase
         .from('user_settings')
-        .upsert(settingsData, { onConflict: 'user_id' });
+        .upsert({
+          ...settingsData,
+          enabled_exchanges: settingsData.enabled_exchanges as any,
+        } as any, { onConflict: 'user_id' });
 
       for (const exchange of settings.enabled_exchanges) {
         const apiKey = settings.apiKeys[exchange];
