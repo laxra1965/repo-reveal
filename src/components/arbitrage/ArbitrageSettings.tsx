@@ -162,7 +162,7 @@ export const ArbitrageSettings = ({ isOpen, onClose }: ArbitrageSettingsProps) =
             .from('exchange_credentials')
             .select('id')
             .eq('user_id', user.id)
-            .eq('exchange', exchange)
+            .eq('exchange', exchange as any)
             .single();
 
           if (existing) {
