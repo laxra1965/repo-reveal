@@ -2,16 +2,15 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Save } from 'lucide-react';
+import { MultiSelect } from '@/components/ui/multi-select';
 import type { Database } from '@/integrations/supabase/types';
 
 type ExchangeName = Database['public']['Enums']['exchange_name'];
 
-const AVAILABLE_EXCHANGES: { value: ExchangeName; label: string }[] = [
+const EXCHANGE_OPTIONS = [
     { value: 'binance', label: 'Binance' },
     { value: 'bybit', label: 'Bybit' },
     { value: 'okx', label: 'OKX' },
@@ -22,7 +21,7 @@ const AVAILABLE_EXCHANGES: { value: ExchangeName; label: string }[] = [
 
 export function EnabledExchangesManager() {
     const { user } = useAuth();
-    const [enabledExchanges, setEnabledExchanges] = useState<ExchangeName[]>(['binance', 'bybit', 'okx']);
+    const [enabledExchanges, setEnabledExchanges] = useState<string[]>(['binance', 'bybit', 'okx']);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
@@ -44,7 +43,7 @@ export function EnabledExchangesManager() {
             }
 
             if (data?.enabled_exchanges) {
-                setEnabledExchanges(data.enabled_exchanges as ExchangeName[]);
+                setEnabledExchanges(data.enabled_exchanges as string[]);
             }
         } catch (error) {
             console.error('Error loading enabled exchanges:', error);
@@ -58,16 +57,6 @@ export function EnabledExchangesManager() {
         loadEnabledExchanges();
     }, [loadEnabledExchanges]);
 
-    const handleToggleExchange = (exchange: ExchangeName) => {
-        setEnabledExchanges((prev) => {
-            if (prev.includes(exchange)) {
-                return prev.filter((ex) => ex !== exchange);
-            } else {
-                return [...prev, exchange];
-            }
-        });
-    };
-
     const handleSave = async () => {
         if (!user?.id) return;
 
@@ -78,7 +67,7 @@ export function EnabledExchangesManager() {
                 .upsert(
                     {
                         user_id: user.id,
-                        enabled_exchanges: enabledExchanges,
+                        enabled_exchanges: enabledExchanges as ExchangeName[],
                     },
                     { onConflict: 'user_id' }
                 );
@@ -117,30 +106,12 @@ export function EnabledExchangesManager() {
                     Configure active surveillance nodes
                 </p>
 
-                <div className="grid grid-cols-2 gap-3">
-                    {AVAILABLE_EXCHANGES.map((exchange) => (
-                        <div
-                            key={exchange.value}
-                            className={`flex items-center space-x-3 p-3 rounded-lg border transition-all ${enabledExchanges.includes(exchange.value)
-                                    ? 'border-primary/30 bg-primary/5'
-                                    : 'border-primary/10 bg-muted/20'
-                                }`}
-                        >
-                            <Checkbox
-                                id={`exchange-${exchange.value}`}
-                                checked={enabledExchanges.includes(exchange.value)}
-                                onCheckedChange={() => handleToggleExchange(exchange.value)}
-                                className="data-[state=checked]:bg-primary"
-                            />
-                            <Label
-                                htmlFor={`exchange-${exchange.value}`}
-                                className="text-xs font-bold cursor-pointer uppercase tracking-wider"
-                            >
-                                {exchange.label}
-                            </Label>
-                        </div>
-                    ))}
-                </div>
+                <MultiSelect
+                    options={EXCHANGE_OPTIONS}
+                    selected={enabledExchanges}
+                    onChange={setEnabledExchanges}
+                    placeholder="Select exchanges..."
+                />
 
                 <div className="flex justify-end pt-2">
                     <Button

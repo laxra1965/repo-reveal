@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,15 +9,31 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { MultiSelect } from '@/components/ui/multi-select';
 import { toast } from 'sonner';
-import { Filter, Plus, Pencil, Trash2, History, RefreshCw, Power, PowerOff, Zap, ShieldCheck, Settings } from 'lucide-react';
+import { Filter, Plus, Pencil, Trash2, History, RefreshCw, Power, PowerOff, Zap, ShieldCheck, Settings, Save, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const STRATEGY_OPTIONS = [
   { value: 'triangular-arbitrage', label: 'Triangular Arbitrage', description: 'Same-exchange 3-leg cycles (e.g. USDT→BTC→ETH→USDT)' },
   { value: 'cross_exchange', label: 'Cross-Exchange Arbitrage', description: 'Price differences across multiple exchanges' },
   { value: 'triangular_arbitrage', label: 'Triangular Arbitrage (legacy)', description: 'Legacy strategy key — underscore variant' },
-] as const;
+];
+
+const EXCHANGE_OPTIONS = [
+  { value: 'binance', label: 'Binance' },
+  { value: 'bybit', label: 'Bybit' },
+  { value: 'okx', label: 'OKX' },
+  { value: 'kucoin', label: 'KuCoin' },
+  { value: 'gate', label: 'Gate.io' },
+  { value: 'mexc', label: 'MEXC' },
+];
+
+const ARB_TYPE_OPTIONS = [
+  { value: 'triangular', label: 'Triangular', description: '3-step trades on same exchange' },
+  { value: 'cross_exchange', label: 'Cross Exchange', description: 'Buy on one, sell on another' },
+  { value: 'short', label: 'Short Signals', description: 'Short-selling opportunities' },
+];
 
 interface OpportunityFilter {
   id: string;
@@ -311,8 +327,92 @@ export const AdminFilterManager = () => {
     return trimmed.split(',').map(s => s.trim()).filter(Boolean);
   };
 
+  // Global config state
+  const [enabledTypes, setEnabledTypes] = useState<string[]>([]);
+  const [configLoading, setConfigLoading] = useState(true);
+  const [configSaving, setConfigSaving] = useState(false);
+
+  const loadGlobalConfig = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('admin_settings')
+        .select('key, value')
+        .eq('key', 'enabled_arbitrage_types')
+        .maybeSingle();
+      if (error) throw error;
+      if (data) {
+        setEnabledTypes(data.value.split(',').filter(Boolean));
+      } else {
+        setEnabledTypes(['triangular', 'cross_exchange', 'short']);
+      }
+    } catch (error) {
+      console.error('Error loading config:', error);
+    } finally {
+      setConfigLoading(false);
+    }
+  }, []);
+
+  const handleSaveGlobalConfig = async () => {
+    setConfigSaving(true);
+    try {
+      const { error } = await supabase
+        .from('admin_settings')
+        .upsert({
+          key: 'enabled_arbitrage_types',
+          value: enabledTypes.join(','),
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'key' });
+      if (error) throw error;
+      toast.success('Global arbitrage config saved');
+    } catch (error) {
+      toast.error('Failed to save global config');
+    } finally {
+      setConfigSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    loadGlobalConfig();
+  }, [loadGlobalConfig]);
+
   return (
     <div className="space-y-6">
+      {/* Global Arbitrage Control */}
+      <Card className="border-primary/20 bg-card/50 backdrop-blur-sm">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Power className="h-5 w-5 text-primary" />
+            Global Arbitrage Control
+          </CardTitle>
+          <CardDescription>
+            Enable or disable arbitrage types system-wide. Disabling a type prevents ALL users from scanning or trading it.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {configLoading ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            </div>
+          ) : (
+            <>
+              <MultiSelect
+                options={ARB_TYPE_OPTIONS}
+                selected={enabledTypes}
+                onChange={setEnabledTypes}
+                placeholder="Select enabled arbitrage types..."
+              />
+              <div className="flex justify-end">
+                <Button onClick={handleSaveGlobalConfig} disabled={configSaving} size="sm" className="gap-2">
+                  {configSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  Save Global Config
+                </Button>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Filter Manager Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-bold tracking-tight flex items-center gap-2">
@@ -413,8 +513,13 @@ export const AdminFilterManager = () => {
                     <h4 className="text-sm font-semibold mb-2">Exchange & Symbol Filters</h4>
                     <div className="space-y-3">
                       <div className="space-y-1.5">
-                        <Label>Allowed Exchanges (comma-separated)</Label>
-                        <Input value={editingFilter.allowed_exchanges?.join(', ') || ''} onChange={e => updateField('allowed_exchanges', parseArrayInput(e.target.value))} placeholder="binance, bybit, okx" />
+                        <Label>Allowed Exchanges</Label>
+                        <MultiSelect
+                          options={EXCHANGE_OPTIONS}
+                          selected={editingFilter.allowed_exchanges || []}
+                          onChange={(val) => updateField('allowed_exchanges', val.length > 0 ? val : null)}
+                          placeholder="All exchanges (no filter)"
+                        />
                       </div>
                       <div className="space-y-1.5">
                         <Label>Allowed Symbols (comma-separated)</Label>
@@ -425,33 +530,14 @@ export const AdminFilterManager = () => {
                         <Input value={editingFilter.excluded_symbols?.join(', ') || ''} onChange={e => updateField('excluded_symbols', parseArrayInput(e.target.value))} placeholder="DOGE, SHIB" />
                       </div>
                       <div className="space-y-1.5">
-                      <Label>Allowed Strategies</Label>
-                      <div className="grid grid-cols-1 gap-2 mt-1">
-                        {STRATEGY_OPTIONS.map(opt => {
-                          const selected = editingFilter.allowed_strategies || [];
-                          const isChecked = selected.includes(opt.value);
-                          return (
-                            <label key={opt.value} className="flex items-start gap-2 p-2 rounded-md border cursor-pointer hover:bg-accent/50 transition-colors">
-                              <Checkbox
-                                checked={isChecked}
-                                onCheckedChange={(checked) => {
-                                  const current = editingFilter.allowed_strategies || [];
-                                  const next = checked
-                                    ? [...current, opt.value]
-                                    : current.filter(s => s !== opt.value);
-                                  updateField('allowed_strategies', next.length > 0 ? next : null);
-                                }}
-                                className="mt-0.5"
-                              />
-                              <div>
-                                <span className="text-sm font-medium">{opt.label}</span>
-                                <p className="text-xs text-muted-foreground">{opt.description}</p>
-                              </div>
-                            </label>
-                          );
-                        })}
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">Leave all unchecked to allow any strategy</p>
+                        <Label>Allowed Strategies</Label>
+                        <MultiSelect
+                          options={STRATEGY_OPTIONS}
+                          selected={editingFilter.allowed_strategies || []}
+                          onChange={(val) => updateField('allowed_strategies', val.length > 0 ? val : null)}
+                          placeholder="All strategies (no filter)"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">Leave empty to allow any strategy</p>
                       </div>
                     </div>
                   </div>

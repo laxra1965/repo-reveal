@@ -8,7 +8,7 @@ import { AdminSubscriptionList } from '@/components/admin/AdminSubscriptionList'
 import { AdminUsersList } from '@/components/admin/AdminUsersList';
 import { AdminSystemMaintenance } from '@/components/admin/AdminSystemMaintenance';
 import { AdminPlanManagement } from '@/components/admin/AdminPlanManagement';
-import { AdminSystemConfig } from '@/components/admin/AdminSystemConfig';
+// AdminSystemConfig merged into AdminFilterManager
 import { AdminSecurityDashboard } from '@/components/admin/AdminSecurityDashboard';
 import { AdminOnboardingTour } from '@/components/admin/AdminOnboardingTour';
 import { AdminFilterManager } from '@/components/admin/AdminFilterManager';
@@ -16,7 +16,7 @@ import { AdminMLDashboard } from '@/components/admin/AdminMLDashboard';
 import { SystemHealthStatus } from '@/components/dashboard/SystemHealthStatus';
 import { LiveMetricsPanel } from '@/components/dashboard/LiveMetricsPanel';
 import { VPSHealthMonitor } from '@/components/dashboard/VPSHealthMonitor';
-import { ArrowLeft, Settings, CreditCard, Users, Shield, UserCog, Wrench, Package, Cpu, ShieldCheck, Activity, RefreshCw, Filter, Brain } from 'lucide-react';
+import { ArrowLeft, Settings, CreditCard, Users, Shield, UserCog, Wrench, Package, ShieldCheck, Activity, RefreshCw, Filter, Brain } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const Admin = () => {
@@ -137,10 +137,9 @@ const Admin = () => {
     { id: 'transactions', label: 'Transactions', icon: CreditCard, component: AdminTransactionList },
     { id: 'monitoring', label: 'Monitoring', icon: Activity, component: AdminMonitoring },
     { id: 'ml', label: 'ML Analysis', icon: Brain, component: AdminMLDashboard },
-    { id: 'filters', label: 'Filters', icon: Filter, component: AdminFilterManager },
+    { id: 'filters', label: 'Filters & Config', icon: Filter, component: AdminFilterManager },
     { id: 'security', label: 'Security', icon: ShieldCheck, component: AdminSecurityDashboard },
     { id: 'maintenance', label: 'Maintenance', icon: Wrench, component: AdminSystemMaintenance },
-    { id: 'config', label: 'Config', icon: Cpu, component: AdminSystemConfig },
   ];
 
   const handleTabChange = (tabId: string) => {
