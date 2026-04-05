@@ -137,10 +137,9 @@ const Admin = () => {
     { id: 'transactions', label: 'Transactions', icon: CreditCard, component: AdminTransactionList },
     { id: 'monitoring', label: 'Monitoring', icon: Activity, component: AdminMonitoring },
     { id: 'ml', label: 'ML Analysis', icon: Brain, component: AdminMLDashboard },
-    { id: 'filters', label: 'Filters', icon: Filter, component: AdminFilterManager },
+    { id: 'filters', label: 'Filters & Config', icon: Filter, component: AdminFilterManager },
     { id: 'security', label: 'Security', icon: ShieldCheck, component: AdminSecurityDashboard },
     { id: 'maintenance', label: 'Maintenance', icon: Wrench, component: AdminSystemMaintenance },
-    { id: 'config', label: 'Config', icon: Cpu, component: AdminSystemConfig },
   ];
 
   const handleTabChange = (tabId: string) => {
