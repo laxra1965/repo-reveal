@@ -5,9 +5,11 @@ import { SupabaseClient } from '@supabase/supabase-js';
 const router = Router();
 
 interface TradeRequest {
-  opportunities: any[];
+  opportunities?: any[];
   userId?: string;
-  action?: 'validate' | 'execute' | 'simulate';
+  action?: 'validate' | 'execute' | 'simulate' | 'execute_single';
+  tradeId?: string;
+  opportunityId?: string;
 }
 
 interface ExchangeCredentials {
