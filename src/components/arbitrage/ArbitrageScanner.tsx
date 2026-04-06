@@ -513,22 +513,32 @@ export const ArbitrageScanner = () => {
 
       {/* Opportunities with Pagination */}
       <div className="space-y-4">
-        {paginatedOpportunities.length === 0 && isScanning && (
+        {paginatedOpportunities.length === 0 && (
           <Card>
             <CardContent className="pt-6 text-center">
-              <div className="animate-pulse">
-                <p>Scanning for high-quality arbitrage opportunities...</p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {paginatedOpportunities.length === 0 && !isScanning && (
-          <Card>
-            <CardContent className="pt-6 text-center">
-              <p className="text-muted-foreground mb-4">
-                No opportunities found. Click "Start" to begin scanning.
-              </p>
+              {isScanning ? (
+                <div className="animate-pulse">
+                  <p>Scanning for high-quality arbitrage opportunities...</p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {opportunities.length > 0
+                      ? `${opportunities.length} raw opportunities found, but none match your current filters. Check your settings.`
+                      : 'Waiting for data from scanner...'}
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-muted-foreground mb-2">
+                    {opportunities.length > 0
+                      ? `${opportunities.length} opportunities loaded, but none match your filter settings.`
+                      : 'No opportunities found. Click "Initiate Scan" to begin.'}
+                  </p>
+                  {opportunities.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Try adjusting your arbitrage types, exchanges, or profit thresholds in Config.
+                    </p>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}

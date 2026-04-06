@@ -2,10 +2,13 @@ import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Brain, TrendingUp, Shield, Settings2, Loader2, BarChart3 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, AreaChart, Area, Legend
+} from 'recharts';
 
 type AnalysisType = 'comprehensive' | 'pattern' | 'risk' | 'optimization';
 
@@ -20,8 +23,20 @@ interface DatasetSummary {
   strategyDistribution: Record<string, number>;
   profitDistribution: Record<string, number>;
   exchangeDistribution: Record<string, number>;
+  hourlyDistribution: Record<string, number>;
   topPaths: Array<{ path: string; count: number; avgProfit: number }>;
 }
+
+const CHART_COLORS = [
+  'hsl(var(--primary))',
+  'hsl(142, 71%, 45%)',
+  'hsl(217, 91%, 60%)',
+  'hsl(47, 96%, 53%)',
+  'hsl(280, 87%, 65%)',
+  'hsl(0, 84%, 60%)',
+  'hsl(180, 70%, 50%)',
+  'hsl(330, 80%, 60%)',
+];
 
 export const AdminMLDashboard = () => {
   const [analysisType, setAnalysisType] = useState<AnalysisType>('comprehensive');
@@ -57,6 +72,28 @@ export const AdminMLDashboard = () => {
     { value: 'risk', label: 'Risk Assessment', icon: Shield, desc: 'Evaluate risk factors' },
     { value: 'optimization', label: 'Optimization', icon: Settings2, desc: 'Strategy recommendations' },
   ];
+
+  // Prepare chart data from summary
+  const profitChartData = summary
+    ? Object.entries(summary.profitDistribution).map(([range, count]) => ({ range, count }))
+    : [];
+
+  const exchangeChartData = summary
+    ? Object.entries(summary.exchangeDistribution)
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, value]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), value }))
+    : [];
+
+  const hourlyChartData = summary?.hourlyDistribution
+    ? Array.from({ length: 24 }, (_, h) => ({
+        hour: `${h.toString().padStart(2, '0')}:00`,
+        count: summary.hourlyDistribution[h] || 0,
+      }))
+    : [];
+
+  const strategyChartData = summary
+    ? Object.entries(summary.strategyDistribution).map(([name, value]) => ({ name, value }))
+    : [];
 
   return (
     <div className="space-y-6">
@@ -117,7 +154,7 @@ export const AdminMLDashboard = () => {
         </CardContent>
       </Card>
 
-      {/* Dataset Summary */}
+      {/* Dataset Summary Stats */}
       {summary && (
         <Card>
           <CardHeader className="pb-3">
@@ -145,47 +182,169 @@ export const AdminMLDashboard = () => {
                 <p className="text-xs text-muted-foreground">Avg Profit</p>
               </div>
             </div>
+          </CardContent>
+        </Card>
+      )}
 
-            {/* Strategy & Exchange Distribution */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs font-medium mb-2">Strategy Distribution</p>
-                <div className="flex flex-wrap gap-1">
-                  {Object.entries(summary.strategyDistribution).map(([strategy, count]) => (
-                    <Badge key={strategy} variant="secondary" className="text-xs">
-                      {strategy}: {count}
-                    </Badge>
-                  ))}
-                </div>
+      {/* Charts */}
+      {summary && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Profit Distribution Bar Chart */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Profit Distribution</CardTitle>
+              <CardDescription className="text-xs">Breakdown of opportunity profit ranges</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={profitChartData}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <XAxis dataKey="range" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                    <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--card))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                      }}
+                    />
+                    <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
-              <div>
-                <p className="text-xs font-medium mb-2">Exchange Distribution</p>
-                <div className="flex flex-wrap gap-1">
-                  {Object.entries(summary.exchangeDistribution).map(([exchange, count]) => (
-                    <Badge key={exchange} variant="outline" className="text-xs">
-                      {exchange}: {count}
-                    </Badge>
-                  ))}
-                </div>
+            </CardContent>
+          </Card>
+
+          {/* Exchange Performance Pie Chart */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Exchange Distribution</CardTitle>
+              <CardDescription className="text-xs">Opportunities per exchange</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={exchangeChartData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={90}
+                      dataKey="value"
+                      nameKey="name"
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      labelLine={false}
+                    >
+                      {exchangeChartData.map((_, i) => (
+                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--card))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Hourly Patterns Area Chart */}
+          <Card className="lg:col-span-2">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Hourly Activity Patterns (UTC)</CardTitle>
+              <CardDescription className="text-xs">When arbitrage opportunities are most frequently detected</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={hourlyChartData}>
+                    <defs>
+                      <linearGradient id="hourlyGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <XAxis dataKey="hour" tick={{ fontSize: 10 }} interval={2} className="fill-muted-foreground" />
+                    <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--card))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                      }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="count"
+                      stroke="hsl(var(--primary))"
+                      strokeWidth={2}
+                      fill="url(#hourlyGradient)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Strategy Distribution */}
+          {strategyChartData.length > 0 && (
+            <Card className="lg:col-span-2">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Strategy Performance</CardTitle>
+                <CardDescription className="text-xs">Distribution of arbitrage strategies detected</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={strategyChartData} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                      <XAxis type="number" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                      <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={120} className="fill-muted-foreground" />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'hsl(var(--card))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px',
+                          fontSize: '12px',
+                        }}
+                      />
+                      <Bar dataKey="value" fill="hsl(142, 71%, 45%)" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* Top Paths */}
+      {summary?.topPaths && summary.topPaths.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm">Top Trading Paths</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1 max-h-40 overflow-y-auto">
+              {summary.topPaths.slice(0, 5).map((p, i) => (
+                <div key={i} className="flex justify-between items-center text-xs p-2 bg-muted/30 rounded">
+                  <span className="font-mono truncate max-w-[60%]">{p.path}</span>
+                  <span className="text-muted-foreground">
+                    {p.count}x · avg {p.avgProfit.toFixed(3)}%
+                  </span>
+                </div>
+              ))}
             </div>
-
-            {/* Top Paths */}
-            {summary.topPaths && summary.topPaths.length > 0 && (
-              <div className="mt-4">
-                <p className="text-xs font-medium mb-2">Top Trading Paths</p>
-                <div className="space-y-1 max-h-40 overflow-y-auto">
-                  {summary.topPaths.slice(0, 5).map((p, i) => (
-                    <div key={i} className="flex justify-between items-center text-xs p-2 bg-muted/30 rounded">
-                      <span className="font-mono truncate max-w-[60%]">{p.path}</span>
-                      <span className="text-muted-foreground">
-                        {p.count}x · avg {p.avgProfit.toFixed(3)}%
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </CardContent>
         </Card>
       )}
