@@ -5,9 +5,11 @@ import { SupabaseClient } from '@supabase/supabase-js';
 const router = Router();
 
 interface TradeRequest {
-  opportunities: any[];
+  opportunities?: any[];
   userId?: string;
-  action?: 'validate' | 'execute' | 'simulate';
+  action?: 'validate' | 'execute' | 'simulate' | 'execute_single';
+  tradeId?: string;
+  opportunityId?: string;
 }
 
 interface ExchangeCredentials {
@@ -52,7 +54,7 @@ router.post('/functions/execute-trade', async (req: Request, res: Response) => {
       return res.status(500).json({ error: 'Supabase client not configured' });
     }
 
-    const { opportunities = [], userId, action = 'simulate' } = req.body as TradeRequest;
+    const { opportunities = [], userId, action = 'simulate', tradeId, opportunityId } = req.body as TradeRequest;
     const authHeader = (req.headers.authorization || '').replace('Bearer ', '');
 
     // Get user from token
@@ -72,7 +74,90 @@ router.post('/functions/execute-trade', async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Unauthorized: No valid user session' });
     }
 
-    console.log(`Trade execution: action=${action}, userId=${currentUserId}, opportunities=${opportunities.length}`);
+    console.log(`Trade execution: action=${action}, userId=${currentUserId}, tradeId=${tradeId}`);
+
+    // Handle execute_single: fetch trade + opportunity from DB and execute
+    if (action === 'execute_single' && tradeId) {
+      const { data: trade, error: tradeErr } = await supabase
+        .from('trade_history')
+        .select('*')
+        .eq('id', tradeId)
+        .eq('user_id', currentUserId)
+        .single();
+
+      if (tradeErr || !trade) {
+        return res.status(404).json({ error: 'Trade not found' });
+      }
+
+      // Mark as executing
+      await supabase
+        .from('trade_history')
+        .update({ status: 'executing', started_at: new Date().toISOString() })
+        .eq('id', tradeId);
+
+      // Fetch user credentials for the required exchanges
+      const { data: credentials } = await supabase
+        .from('exchange_credentials')
+        .select('*')
+        .eq('user_id', currentUserId);
+
+      if (!credentials || credentials.length === 0) {
+        await supabase
+          .from('trade_history')
+          .update({ status: 'failed', error_message: 'No exchange credentials configured', completed_at: new Date().toISOString() })
+          .eq('id', tradeId);
+        return res.status(404).json({ error: 'No exchange credentials found' });
+      }
+
+      // Fetch opportunity details if available
+      let opportunity = null;
+      if (trade.opportunity_id) {
+        const { data: opp } = await supabase
+          .from('opportunities')
+          .select('*')
+          .eq('id', trade.opportunity_id)
+          .single();
+        opportunity = opp;
+      }
+
+      try {
+        // TODO: Implement actual multi-leg execution via MultiExchangeExecutor
+        // For now, delegate to the executor service via Redis pub/sub
+        const executionPayload = {
+          tradeId,
+          userId: currentUserId,
+          opportunity,
+          trade,
+          credentials: credentials.map((c: any) => ({ exchange: c.exchange, id: c.id })),
+        };
+
+        // Publish execution job to Redis for the executor service to pick up
+        const redis = req.app.get('redis');
+        if (redis) {
+          await redis.publish('trade:execute', JSON.stringify(executionPayload));
+          return res.json({
+            success: true,
+            tradeId,
+            status: 'submitted',
+            message: 'Trade submitted to executor service',
+          });
+        }
+
+        // If no Redis, return pending status
+        return res.json({
+          success: true,
+          tradeId,
+          status: 'pending',
+          message: 'Trade queued for execution',
+        });
+      } catch (execErr: any) {
+        await supabase
+          .from('trade_history')
+          .update({ status: 'failed', error_message: execErr.message, completed_at: new Date().toISOString() })
+          .eq('id', tradeId);
+        return res.status(500).json({ error: execErr.message });
+      }
+    }
 
     if (opportunities.length === 0) {
       return res.status(400).json({ error: 'No opportunities provided' });

@@ -80,6 +80,7 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
       const intermediateSymbol = symbols[1] || 'UNKNOWN';
       const quoteSymbol = symbols[2] || symbols[0] || 'UNKNOWN';
 
+      // 1. Insert trade record into Supabase
       const { data: tradeEntry, error: insertError } = await supabase
         .from('trade_history')
         .insert({
@@ -100,19 +101,51 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
       if (insertError) throw insertError;
 
       const { data: { session } } = await supabase.auth.getSession();
-      const functionsUrl = import.meta.env.VITE_FUNCTIONS_URL || 'http://localhost:3001';
-      const fetchResponse = await fetch(`${functionsUrl}/functions/execute-trade`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ action: 'execute_single', tradeId: tradeEntry.id, userId: user.id })
-      });
+      const payload = {
+        action: 'execute_single',
+        tradeId: tradeEntry.id,
+        userId: user.id,
+        opportunityId: opportunity.id,
+      };
+      const headers = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session?.access_token}`,
+      };
 
-      const responseData = await fetchResponse.json();
-      if (!fetchResponse.ok) throw { message: responseData?.message || 'Trade execution failed' };
+      let responseData: any;
+
+      // 2. Try VPS executor first
+      const vpsUrl = import.meta.env.VITE_FUNCTIONS_URL;
+      if (vpsUrl) {
+        try {
+          const vpsResponse = await fetch(`${vpsUrl}/functions/execute-trade`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(payload),
+            signal: AbortSignal.timeout(15000),
+          });
+          responseData = await vpsResponse.json();
+          if (!vpsResponse.ok) throw new Error(responseData?.message || 'VPS execution failed');
+        } catch (vpsErr) {
+          console.warn('VPS execution failed, falling back to edge function:', (vpsErr as Error).message);
+          responseData = null;
+        }
+      }
+
+      // 3. Fallback to Supabase edge function
+      if (!responseData) {
+        const { data, error } = await supabase.functions.invoke('execute-trade', {
+          body: payload,
+        });
+        if (error) throw error;
+        responseData = data;
+      }
 
       toast({
         title: "Trade Executed",
-        description: responseData?.success ? `Trade completed! Profit: ${responseData.actualProfit?.toFixed(4) || 'N/A'}` : "Trade submitted for execution",
+        description: responseData?.success
+          ? `Trade completed! Profit: ${responseData.actualProfit?.toFixed(4) || 'N/A'}`
+          : "Trade submitted for execution",
       });
     } catch (error: any) {
       console.error('Trade execution error:', error);

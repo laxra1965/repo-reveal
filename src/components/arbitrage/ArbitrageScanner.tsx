@@ -336,9 +336,23 @@ export const ArbitrageScanner = () => {
 
   const filteredOpportunities = useMemo(() => {
     const normalizedActiveTypes = new Set(activeArbTypes.map(normalizeStrategy));
+    const now = Date.now();
+    const STALE_THRESHOLD_MS = 60_000; // 60 seconds
+    const TRADING_FEES_PCT = 0.3; // 3 legs × 0.1%
+
     return opportunities
       .filter(opp => {
         if (opp.status !== 'active') return false;
+
+        // Exclude stale opportunities (older than 60s)
+        const ageMs = now - new Date(opp.detected_at).getTime();
+        if (ageMs > STALE_THRESHOLD_MS) return false;
+
+        // Exclude negative net-profit opportunities
+        const slippagePct = opp.estimated_slippage * 100;
+        const netProfitPct = opp.profit_percent - TRADING_FEES_PCT - slippagePct;
+        if (netProfitPct <= 0) return false;
+
         if (opp.strategy && !normalizedActiveTypes.has(normalizeStrategy(opp.strategy))) return false;
         
         // Apply user's min/max profit filters (client-side for VPS-fetched data)
