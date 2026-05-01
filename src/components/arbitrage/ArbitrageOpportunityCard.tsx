@@ -206,6 +206,14 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
 
     setIsPaperExecuting(true);
     try {
+      // Idempotency key for paper trade — prevents duplicate rows on rapid clicks.
+      if (!paperIdempotencyKey.current) {
+        paperIdempotencyKey.current =
+          (globalThis.crypto?.randomUUID?.() ??
+            `idem_paper_${user.id}_${opportunity.id}_${Date.now()}`);
+      }
+      const idempotencyKey = paperIdempotencyKey.current;
+
       const symbols = opportunity.path.split(/[→>\/\-]/).map(s => s.trim()).filter(Boolean);
       const baseSymbol = symbols[0] || 'UNKNOWN';
       const intermediateSymbol = symbols[1] || 'UNKNOWN';
@@ -214,38 +222,58 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
       const startAmount = opportunity.volume_estimate;
       const expectedProfit = startAmount * (opportunity.profit_percent / 100);
 
-      // 1. Insert paper trade record
-      const { data: tradeEntry, error: insertError } = await supabase
+      // 1. Reuse existing paper trade row for this idempotency key, otherwise create one.
+      const { data: existingRows } = await supabase
         .from('trade_history')
-        .insert({
-          user_id: user.id,
-          opportunity_id: opportunity.id,
-          base_symbol: baseSymbol,
-          quote_symbol: quoteSymbol,
-          intermediate_symbol: intermediateSymbol,
-          start_amount: startAmount,
-          expected_profit: expectedProfit,
-          status: 'pending',
-          total_steps: 3,
-          completed_steps: 0,
-          execution_details: { is_paper_trade: true },
-        })
-        .select()
-        .single();
+        .select('id, status')
+        .eq('user_id', user.id)
+        .eq('opportunity_id', opportunity.id)
+        .filter('execution_details->>idempotency_key', 'eq', idempotencyKey)
+        .limit(1);
 
-      if (insertError) throw insertError;
+      let tradeEntry = existingRows?.[0] as { id: string; status?: string } | undefined;
+
+      if (!tradeEntry) {
+        const { data: inserted, error: insertError } = await supabase
+          .from('trade_history')
+          .insert({
+            user_id: user.id,
+            opportunity_id: opportunity.id,
+            base_symbol: baseSymbol,
+            quote_symbol: quoteSymbol,
+            intermediate_symbol: intermediateSymbol,
+            start_amount: startAmount,
+            expected_profit: expectedProfit,
+            status: 'pending',
+            total_steps: 3,
+            completed_steps: 0,
+            execution_details: { is_paper_trade: true, idempotency_key: idempotencyKey, mode: 'paper' },
+          })
+          .select()
+          .single();
+        if (insertError) throw insertError;
+        tradeEntry = inserted;
+      } else if (tradeEntry.status && tradeEntry.status !== 'pending') {
+        toast({
+          title: 'Already Submitted',
+          description: `This paper trade was already ${tradeEntry.status}.`,
+        });
+        return;
+      }
 
       const { data: { session } } = await supabase.auth.getSession();
       const payload = {
         action: 'execute_single',
-        tradeId: tradeEntry.id,
+        tradeId: tradeEntry!.id,
         userId: user.id,
         opportunityId: opportunity.id,
         paperTrade: true,
+        idempotencyKey,
       };
       const headers = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session?.access_token}`,
+        'x-idempotency-key': idempotencyKey,
       };
 
       let responseData: any = null;
