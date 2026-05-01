@@ -479,9 +479,12 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
             </div>
           </div>
           <div className="text-center">
-            <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-bold ${stalenessBg} ${stalenessColor}`}>
+            <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-bold tabular-nums ${stalenessBg} ${stalenessColor}`}>
               <Clock className="h-3 w-3" />
-              {getAge()}
+              {isStale ? 'Stale' : `${secondsToStale}s to stale`}
+            </div>
+            <div className="text-[9px] text-muted-foreground mt-0.5">
+              detected {getAge()}
             </div>
           </div>
         </div>
