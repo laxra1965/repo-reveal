@@ -363,13 +363,16 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
 
   const formatExchange = (exchange: string) => exchange.charAt(0).toUpperCase() + exchange.slice(1);
 
+  // Live age (recomputed every second via the nowMs tick)
+  const detectedMs = new Date(opportunity.detected_at).getTime();
+  const ageSeconds = Math.max(0, Math.floor((nowMs - detectedMs) / 1000));
+  const secondsToStale = Math.max(0, STALE_THRESHOLD_SECONDS - ageSeconds);
+  const isStale = ageSeconds >= STALE_THRESHOLD_SECONDS;
+
   const getAge = () => {
-    const detected = new Date(opportunity.detected_at);
-    const now = new Date();
-    const seconds = Math.floor((now.getTime() - detected.getTime()) / 1000);
-    if (seconds < 60) return `${seconds}s ago`;
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-    return `${Math.floor(seconds / 3600)}h ago`;
+    if (ageSeconds < 60) return `${ageSeconds}s ago`;
+    if (ageSeconds < 3600) return `${Math.floor(ageSeconds / 60)}m ago`;
+    return `${Math.floor(ageSeconds / 3600)}h ago`;
   };
 
   const getRankIcon = () => {
@@ -383,14 +386,8 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
   const slippagePct = opportunity.estimated_slippage * 100;
   const netProfitPct = opportunity.profit_percent - tradingFees - slippagePct;
 
-  // Staleness: age in seconds
-  const getAgeSeconds = () => {
-    return Math.floor((Date.now() - new Date(opportunity.detected_at).getTime()) / 1000);
-  };
-  const ageSeconds = getAgeSeconds();
-  const stalenessColor = ageSeconds < 15 ? 'text-green-500' : ageSeconds < 45 ? 'text-yellow-500' : 'text-red-500';
-  const stalenessBg = ageSeconds < 15 ? 'bg-green-500/10 border-green-500/20' : ageSeconds < 45 ? 'bg-yellow-500/10 border-yellow-500/20' : 'bg-red-500/10 border-red-500/20';
-  const isStale = ageSeconds > 60;
+  const stalenessColor = secondsToStale > 45 ? 'text-green-500' : secondsToStale > 15 ? 'text-yellow-500' : 'text-red-500';
+  const stalenessBg = secondsToStale > 45 ? 'bg-green-500/10 border-green-500/20' : secondsToStale > 15 ? 'bg-yellow-500/10 border-yellow-500/20' : 'bg-red-500/10 border-red-500/20';
 
   return (
     <Card className={`glass-card relative overflow-hidden transition-all duration-300 hover:shadow-2xl hover:scale-[1.01] ${isStale ? 'opacity-50' : ''} ${rank === 1 ? 'border-primary/40 ring-1 ring-primary/20' : 'border-primary/10'}`}>
