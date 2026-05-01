@@ -85,42 +85,73 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
 
     setIsExecuting(true);
     try {
+      // Idempotency key: stable per (user × opportunity × card mount).
+      // Repeated clicks reuse the same key so we never create duplicates.
+      if (!liveIdempotencyKey.current) {
+        liveIdempotencyKey.current =
+          (globalThis.crypto?.randomUUID?.() ??
+            `idem_${user.id}_${opportunity.id}_${Date.now()}`);
+      }
+      const idempotencyKey = liveIdempotencyKey.current;
+
       // Parse path for symbols (e.g. "BTC→ETH→USDT")
       const symbols = opportunity.path.split(/[→>\/\-]/).map(s => s.trim()).filter(Boolean);
       const baseSymbol = symbols[0] || 'UNKNOWN';
       const intermediateSymbol = symbols[1] || 'UNKNOWN';
       const quoteSymbol = symbols[2] || symbols[0] || 'UNKNOWN';
 
-      // 1. Insert trade record into Supabase
-      const { data: tradeEntry, error: insertError } = await supabase
+      // 1. Reuse existing trade row for this idempotency key, otherwise create one.
+      const { data: existingRows } = await supabase
         .from('trade_history')
-        .insert({
-          user_id: user.id,
-          opportunity_id: opportunity.id,
-          base_symbol: baseSymbol,
-          quote_symbol: quoteSymbol,
-          intermediate_symbol: intermediateSymbol,
-          start_amount: opportunity.volume_estimate,
-          expected_profit: opportunity.volume_estimate * (opportunity.profit_percent / 100),
-          status: 'pending',
-          total_steps: 3,
-          completed_steps: 0
-        })
-        .select()
-        .single();
+        .select('id, status, actual_profit')
+        .eq('user_id', user.id)
+        .eq('opportunity_id', opportunity.id)
+        .filter('execution_details->>idempotency_key', 'eq', idempotencyKey)
+        .limit(1);
 
-      if (insertError) throw insertError;
+      let tradeEntry = existingRows?.[0] as { id: string; status?: string; actual_profit?: number | null } | undefined;
+
+      if (!tradeEntry) {
+        const { data: inserted, error: insertError } = await supabase
+          .from('trade_history')
+          .insert({
+            user_id: user.id,
+            opportunity_id: opportunity.id,
+            base_symbol: baseSymbol,
+            quote_symbol: quoteSymbol,
+            intermediate_symbol: intermediateSymbol,
+            start_amount: opportunity.volume_estimate,
+            expected_profit: opportunity.volume_estimate * (opportunity.profit_percent / 100),
+            status: 'pending',
+            total_steps: 3,
+            completed_steps: 0,
+            execution_details: { idempotency_key: idempotencyKey, mode: 'live' },
+          })
+          .select()
+          .single();
+
+        if (insertError) throw insertError;
+        tradeEntry = inserted;
+      } else if (tradeEntry.status && tradeEntry.status !== 'pending') {
+        toast({
+          title: 'Already Submitted',
+          description: `This trade was already ${tradeEntry.status}. Refresh to load a new opportunity before retrying.`,
+        });
+        return;
+      }
 
       const { data: { session } } = await supabase.auth.getSession();
       const payload = {
         action: 'execute_single',
-        tradeId: tradeEntry.id,
+        tradeId: tradeEntry!.id,
         userId: user.id,
         opportunityId: opportunity.id,
+        idempotencyKey,
       };
       const headers = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session?.access_token}`,
+        'x-idempotency-key': idempotencyKey,
       };
 
       let responseData: any;
@@ -147,6 +178,7 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
       if (!responseData) {
         const { data, error } = await supabase.functions.invoke('execute-trade', {
           body: payload,
+          headers: { 'x-idempotency-key': idempotencyKey },
         });
         if (error) throw error;
         responseData = data;
