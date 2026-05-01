@@ -37,11 +37,20 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
   const [isExecuting, setIsExecuting] = useState(false);
   const [isPaperExecuting, setIsPaperExecuting] = useState(false);
   const [hasCredentials, setHasCredentials] = useState<boolean | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const liveIdempotencyKey = useRef<string | null>(null);
+  const paperIdempotencyKey = useRef<string | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
 
   const exchanges = [opportunity.exchange1, opportunity.exchange2, opportunity.exchange3].filter(Boolean) as string[];
   const pairs = [opportunity.pair1, opportunity.pair2, opportunity.pair3].filter(Boolean) as string[];
+
+  // 1Hz tick to drive the live countdown / staleness color
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // Check if user has credentials for required exchanges
   useEffect(() => {
