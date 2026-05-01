@@ -169,12 +169,10 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
       const quoteSymbol = symbols[2] || symbols[0] || 'UNKNOWN';
 
       const startAmount = opportunity.volume_estimate;
-      const slippage = (Math.random() - 0.5) * 0.002;
       const expectedProfit = startAmount * (opportunity.profit_percent / 100);
-      const simulatedProfit = expectedProfit * (1 + slippage);
-      const simulatedFinalAmount = startAmount + simulatedProfit;
 
-      const { error: insertError } = await supabase
+      // 1. Insert paper trade record
+      const { data: tradeEntry, error: insertError } = await supabase
         .from('trade_history')
         .insert({
           user_id: user.id,
@@ -184,27 +182,100 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
           intermediate_symbol: intermediateSymbol,
           start_amount: startAmount,
           expected_profit: expectedProfit,
-          actual_profit: simulatedProfit,
-          final_amount: simulatedFinalAmount,
-          status: 'completed',
+          status: 'pending',
           total_steps: 3,
-          completed_steps: 3,
-          execution_details: {
-            is_paper_trade: true,
-            log: [
-              { step: 1, success: true, isPaperTrade: true, orderId: `PAPER_${Date.now()}_1`, timestamp: new Date().toISOString() },
-              { step: 2, success: true, isPaperTrade: true, orderId: `PAPER_${Date.now()}_2`, timestamp: new Date().toISOString() },
-              { step: 3, success: true, isPaperTrade: true, orderId: `PAPER_${Date.now()}_3`, timestamp: new Date().toISOString() }
-            ],
-            simulated_slippage: slippage
-          }
-        });
+          completed_steps: 0,
+          execution_details: { is_paper_trade: true },
+        })
+        .select()
+        .single();
 
       if (insertError) throw insertError;
 
+      const { data: { session } } = await supabase.auth.getSession();
+      const payload = {
+        action: 'execute_single',
+        tradeId: tradeEntry.id,
+        userId: user.id,
+        opportunityId: opportunity.id,
+        paperTrade: true,
+      };
+      const headers = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session?.access_token}`,
+      };
+
+      let responseData: any = null;
+      let routedVia: 'vps' | 'edge' | 'local' = 'local';
+
+      // 2. Try VPS executor first
+      const vpsUrl = import.meta.env.VITE_FUNCTIONS_URL;
+      if (vpsUrl) {
+        try {
+          const vpsResponse = await fetch(`${vpsUrl}/functions/execute-trade`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(payload),
+            signal: AbortSignal.timeout(15000),
+          });
+          responseData = await vpsResponse.json();
+          if (!vpsResponse.ok) throw new Error(responseData?.message || 'VPS paper execution failed');
+          routedVia = 'vps';
+        } catch (vpsErr) {
+          console.warn('VPS paper execution failed, falling back to edge function:', (vpsErr as Error).message);
+          responseData = null;
+        }
+      }
+
+      // 3. Fallback to Supabase edge function
+      if (!responseData) {
+        try {
+          const { data, error } = await supabase.functions.invoke('execute-trade', { body: payload });
+          if (error) throw error;
+          responseData = data;
+          routedVia = 'edge';
+        } catch (edgeErr) {
+          console.warn('Edge paper execution failed, falling back to local simulation:', (edgeErr as Error).message);
+        }
+      }
+
+      // 4. Final fallback: local simulation (keeps UX working even with no backend)
+      if (!responseData) {
+        const slippage = (Math.random() - 0.5) * 0.002;
+        const simulatedProfit = expectedProfit * (1 + slippage);
+        const simulatedFinalAmount = startAmount + simulatedProfit;
+
+        const { error: updateError } = await supabase
+          .from('trade_history')
+          .update({
+            actual_profit: simulatedProfit,
+            final_amount: simulatedFinalAmount,
+            status: 'completed',
+            completed_steps: 3,
+            execution_details: {
+              is_paper_trade: true,
+              routed_via: 'local',
+              simulated_slippage: slippage,
+              log: [
+                { step: 1, success: true, isPaperTrade: true, orderId: `PAPER_${Date.now()}_1`, timestamp: new Date().toISOString() },
+                { step: 2, success: true, isPaperTrade: true, orderId: `PAPER_${Date.now()}_2`, timestamp: new Date().toISOString() },
+                { step: 3, success: true, isPaperTrade: true, orderId: `PAPER_${Date.now()}_3`, timestamp: new Date().toISOString() }
+              ],
+            },
+          })
+          .eq('id', tradeEntry.id);
+        if (updateError) throw updateError;
+
+        responseData = { success: true, actualProfit: simulatedProfit };
+      }
+
       toast({
-        title: "Paper Trade Completed",
-        description: `Simulated profit: $${simulatedProfit.toFixed(4)} (${opportunity.profit_percent.toFixed(4)}%)`,
+        title: "Paper Trade Submitted",
+        description: `Routed via ${routedVia.toUpperCase()}${
+          responseData?.actualProfit != null
+            ? ` · Profit: ${Number(responseData.actualProfit).toFixed(4)}`
+            : ''
+        }`,
       });
     } catch (error: any) {
       console.error('Paper trade error:', error);
