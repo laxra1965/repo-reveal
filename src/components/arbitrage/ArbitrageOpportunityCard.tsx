@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -6,6 +6,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { ArrowRight, TrendingUp, Clock, Eye, EyeOff, Zap, AlertTriangle, Target, Loader2, TestTube } from 'lucide-react';
+
+const STALE_THRESHOLD_SECONDS = 60;
 
 export interface Opportunity {
   id: string;
@@ -35,11 +37,20 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
   const [isExecuting, setIsExecuting] = useState(false);
   const [isPaperExecuting, setIsPaperExecuting] = useState(false);
   const [hasCredentials, setHasCredentials] = useState<boolean | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const liveIdempotencyKey = useRef<string | null>(null);
+  const paperIdempotencyKey = useRef<string | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
 
   const exchanges = [opportunity.exchange1, opportunity.exchange2, opportunity.exchange3].filter(Boolean) as string[];
   const pairs = [opportunity.pair1, opportunity.pair2, opportunity.pair3].filter(Boolean) as string[];
+
+  // 1Hz tick to drive the live countdown / staleness color
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // Check if user has credentials for required exchanges
   useEffect(() => {
@@ -74,42 +85,73 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
 
     setIsExecuting(true);
     try {
+      // Idempotency key: stable per (user × opportunity × card mount).
+      // Repeated clicks reuse the same key so we never create duplicates.
+      if (!liveIdempotencyKey.current) {
+        liveIdempotencyKey.current =
+          (globalThis.crypto?.randomUUID?.() ??
+            `idem_${user.id}_${opportunity.id}_${Date.now()}`);
+      }
+      const idempotencyKey = liveIdempotencyKey.current;
+
       // Parse path for symbols (e.g. "BTC→ETH→USDT")
       const symbols = opportunity.path.split(/[→>\/\-]/).map(s => s.trim()).filter(Boolean);
       const baseSymbol = symbols[0] || 'UNKNOWN';
       const intermediateSymbol = symbols[1] || 'UNKNOWN';
       const quoteSymbol = symbols[2] || symbols[0] || 'UNKNOWN';
 
-      // 1. Insert trade record into Supabase
-      const { data: tradeEntry, error: insertError } = await supabase
+      // 1. Reuse existing trade row for this idempotency key, otherwise create one.
+      const { data: existingRows } = await supabase
         .from('trade_history')
-        .insert({
-          user_id: user.id,
-          opportunity_id: opportunity.id,
-          base_symbol: baseSymbol,
-          quote_symbol: quoteSymbol,
-          intermediate_symbol: intermediateSymbol,
-          start_amount: opportunity.volume_estimate,
-          expected_profit: opportunity.volume_estimate * (opportunity.profit_percent / 100),
-          status: 'pending',
-          total_steps: 3,
-          completed_steps: 0
-        })
-        .select()
-        .single();
+        .select('id, status, actual_profit')
+        .eq('user_id', user.id)
+        .eq('opportunity_id', opportunity.id)
+        .filter('execution_details->>idempotency_key', 'eq', idempotencyKey)
+        .limit(1);
 
-      if (insertError) throw insertError;
+      let tradeEntry = existingRows?.[0] as { id: string; status?: string; actual_profit?: number | null } | undefined;
+
+      if (!tradeEntry) {
+        const { data: inserted, error: insertError } = await supabase
+          .from('trade_history')
+          .insert({
+            user_id: user.id,
+            opportunity_id: opportunity.id,
+            base_symbol: baseSymbol,
+            quote_symbol: quoteSymbol,
+            intermediate_symbol: intermediateSymbol,
+            start_amount: opportunity.volume_estimate,
+            expected_profit: opportunity.volume_estimate * (opportunity.profit_percent / 100),
+            status: 'pending',
+            total_steps: 3,
+            completed_steps: 0,
+            execution_details: { idempotency_key: idempotencyKey, mode: 'live' },
+          })
+          .select()
+          .single();
+
+        if (insertError) throw insertError;
+        tradeEntry = inserted;
+      } else if (tradeEntry.status && tradeEntry.status !== 'pending') {
+        toast({
+          title: 'Already Submitted',
+          description: `This trade was already ${tradeEntry.status}. Refresh to load a new opportunity before retrying.`,
+        });
+        return;
+      }
 
       const { data: { session } } = await supabase.auth.getSession();
       const payload = {
         action: 'execute_single',
-        tradeId: tradeEntry.id,
+        tradeId: tradeEntry!.id,
         userId: user.id,
         opportunityId: opportunity.id,
+        idempotencyKey,
       };
       const headers = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session?.access_token}`,
+        'x-idempotency-key': idempotencyKey,
       };
 
       let responseData: any;
@@ -136,6 +178,7 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
       if (!responseData) {
         const { data, error } = await supabase.functions.invoke('execute-trade', {
           body: payload,
+          headers: { 'x-idempotency-key': idempotencyKey },
         });
         if (error) throw error;
         responseData = data;
@@ -163,6 +206,14 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
 
     setIsPaperExecuting(true);
     try {
+      // Idempotency key for paper trade — prevents duplicate rows on rapid clicks.
+      if (!paperIdempotencyKey.current) {
+        paperIdempotencyKey.current =
+          (globalThis.crypto?.randomUUID?.() ??
+            `idem_paper_${user.id}_${opportunity.id}_${Date.now()}`);
+      }
+      const idempotencyKey = paperIdempotencyKey.current;
+
       const symbols = opportunity.path.split(/[→>\/\-]/).map(s => s.trim()).filter(Boolean);
       const baseSymbol = symbols[0] || 'UNKNOWN';
       const intermediateSymbol = symbols[1] || 'UNKNOWN';
@@ -171,38 +222,58 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
       const startAmount = opportunity.volume_estimate;
       const expectedProfit = startAmount * (opportunity.profit_percent / 100);
 
-      // 1. Insert paper trade record
-      const { data: tradeEntry, error: insertError } = await supabase
+      // 1. Reuse existing paper trade row for this idempotency key, otherwise create one.
+      const { data: existingRows } = await supabase
         .from('trade_history')
-        .insert({
-          user_id: user.id,
-          opportunity_id: opportunity.id,
-          base_symbol: baseSymbol,
-          quote_symbol: quoteSymbol,
-          intermediate_symbol: intermediateSymbol,
-          start_amount: startAmount,
-          expected_profit: expectedProfit,
-          status: 'pending',
-          total_steps: 3,
-          completed_steps: 0,
-          execution_details: { is_paper_trade: true },
-        })
-        .select()
-        .single();
+        .select('id, status')
+        .eq('user_id', user.id)
+        .eq('opportunity_id', opportunity.id)
+        .filter('execution_details->>idempotency_key', 'eq', idempotencyKey)
+        .limit(1);
 
-      if (insertError) throw insertError;
+      let tradeEntry = existingRows?.[0] as { id: string; status?: string } | undefined;
+
+      if (!tradeEntry) {
+        const { data: inserted, error: insertError } = await supabase
+          .from('trade_history')
+          .insert({
+            user_id: user.id,
+            opportunity_id: opportunity.id,
+            base_symbol: baseSymbol,
+            quote_symbol: quoteSymbol,
+            intermediate_symbol: intermediateSymbol,
+            start_amount: startAmount,
+            expected_profit: expectedProfit,
+            status: 'pending',
+            total_steps: 3,
+            completed_steps: 0,
+            execution_details: { is_paper_trade: true, idempotency_key: idempotencyKey, mode: 'paper' },
+          })
+          .select()
+          .single();
+        if (insertError) throw insertError;
+        tradeEntry = inserted;
+      } else if (tradeEntry.status && tradeEntry.status !== 'pending') {
+        toast({
+          title: 'Already Submitted',
+          description: `This paper trade was already ${tradeEntry.status}.`,
+        });
+        return;
+      }
 
       const { data: { session } } = await supabase.auth.getSession();
       const payload = {
         action: 'execute_single',
-        tradeId: tradeEntry.id,
+        tradeId: tradeEntry!.id,
         userId: user.id,
         opportunityId: opportunity.id,
         paperTrade: true,
+        idempotencyKey,
       };
       const headers = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session?.access_token}`,
+        'x-idempotency-key': idempotencyKey,
       };
 
       let responseData: any = null;
@@ -230,7 +301,10 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
       // 3. Fallback to Supabase edge function
       if (!responseData) {
         try {
-          const { data, error } = await supabase.functions.invoke('execute-trade', { body: payload });
+          const { data, error } = await supabase.functions.invoke('execute-trade', {
+            body: payload,
+            headers: { 'x-idempotency-key': idempotencyKey },
+          });
           if (error) throw error;
           responseData = data;
           routedVia = 'edge';
@@ -254,6 +328,8 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
             completed_steps: 3,
             execution_details: {
               is_paper_trade: true,
+              idempotency_key: idempotencyKey,
+              mode: 'paper',
               routed_via: 'local',
               simulated_slippage: slippage,
               log: [
@@ -263,7 +339,7 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
               ],
             },
           })
-          .eq('id', tradeEntry.id);
+          .eq('id', tradeEntry!.id);
         if (updateError) throw updateError;
 
         responseData = { success: true, actualProfit: simulatedProfit };
@@ -287,13 +363,16 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
 
   const formatExchange = (exchange: string) => exchange.charAt(0).toUpperCase() + exchange.slice(1);
 
+  // Live age (recomputed every second via the nowMs tick)
+  const detectedMs = new Date(opportunity.detected_at).getTime();
+  const ageSeconds = Math.max(0, Math.floor((nowMs - detectedMs) / 1000));
+  const secondsToStale = Math.max(0, STALE_THRESHOLD_SECONDS - ageSeconds);
+  const isStale = ageSeconds >= STALE_THRESHOLD_SECONDS;
+
   const getAge = () => {
-    const detected = new Date(opportunity.detected_at);
-    const now = new Date();
-    const seconds = Math.floor((now.getTime() - detected.getTime()) / 1000);
-    if (seconds < 60) return `${seconds}s ago`;
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-    return `${Math.floor(seconds / 3600)}h ago`;
+    if (ageSeconds < 60) return `${ageSeconds}s ago`;
+    if (ageSeconds < 3600) return `${Math.floor(ageSeconds / 60)}m ago`;
+    return `${Math.floor(ageSeconds / 3600)}h ago`;
   };
 
   const getRankIcon = () => {
@@ -307,14 +386,8 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
   const slippagePct = opportunity.estimated_slippage * 100;
   const netProfitPct = opportunity.profit_percent - tradingFees - slippagePct;
 
-  // Staleness: age in seconds
-  const getAgeSeconds = () => {
-    return Math.floor((Date.now() - new Date(opportunity.detected_at).getTime()) / 1000);
-  };
-  const ageSeconds = getAgeSeconds();
-  const stalenessColor = ageSeconds < 15 ? 'text-green-500' : ageSeconds < 45 ? 'text-yellow-500' : 'text-red-500';
-  const stalenessBg = ageSeconds < 15 ? 'bg-green-500/10 border-green-500/20' : ageSeconds < 45 ? 'bg-yellow-500/10 border-yellow-500/20' : 'bg-red-500/10 border-red-500/20';
-  const isStale = ageSeconds > 60;
+  const stalenessColor = secondsToStale > 45 ? 'text-green-500' : secondsToStale > 15 ? 'text-yellow-500' : 'text-red-500';
+  const stalenessBg = secondsToStale > 45 ? 'bg-green-500/10 border-green-500/20' : secondsToStale > 15 ? 'bg-yellow-500/10 border-yellow-500/20' : 'bg-red-500/10 border-red-500/20';
 
   return (
     <Card className={`glass-card relative overflow-hidden transition-all duration-300 hover:shadow-2xl hover:scale-[1.01] ${isStale ? 'opacity-50' : ''} ${rank === 1 ? 'border-primary/40 ring-1 ring-primary/20' : 'border-primary/10'}`}>
@@ -406,9 +479,12 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
             </div>
           </div>
           <div className="text-center">
-            <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-bold ${stalenessBg} ${stalenessColor}`}>
+            <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-bold tabular-nums ${stalenessBg} ${stalenessColor}`}>
               <Clock className="h-3 w-3" />
-              {getAge()}
+              {isStale ? 'Stale' : `${secondsToStale}s to stale`}
+            </div>
+            <div className="text-[9px] text-muted-foreground mt-0.5">
+              detected {getAge()}
             </div>
           </div>
         </div>

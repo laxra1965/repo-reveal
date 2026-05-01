@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Crown, History, Bot, Zap } from 'lucide-react';
+import { ExecutionRouteIndicator } from '@/components/dashboard/ExecutionRouteIndicator';
 
 const Dashboard = () => {
   const { user, loading: authLoading, signOut } = useAuth();
@@ -100,6 +101,9 @@ const Dashboard = () => {
           </div>
 
           <div className="flex items-center gap-3">
+            <div className="hidden md:block">
+              <ExecutionRouteIndicator />
+            </div>
             <nav className="hidden lg:flex items-center gap-1 mr-4">
               <Button variant="ghost" size="sm" onClick={() => navigate('/auto-trade')} className="text-[11px] font-bold uppercase tracking-wider gap-2">
                 <Bot className="h-4 w-4" />
