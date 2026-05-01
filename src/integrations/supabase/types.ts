@@ -267,6 +267,63 @@ export type Database = {
           },
         ]
       }
+      futures_trades: {
+        Row: {
+          created_at: string
+          entry_price: number
+          exchange: string
+          exit_price: number | null
+          id: string
+          leverage: number
+          margin_type: string
+          notes: string | null
+          pnl: number | null
+          side: string
+          size: number
+          status: string
+          symbol: string
+          trade_source: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          entry_price: number
+          exchange: string
+          exit_price?: number | null
+          id?: string
+          leverage?: number
+          margin_type?: string
+          notes?: string | null
+          pnl?: number | null
+          side: string
+          size: number
+          status?: string
+          symbol: string
+          trade_source?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          entry_price?: number
+          exchange?: string
+          exit_price?: number | null
+          id?: string
+          leverage?: number
+          margin_type?: string
+          notes?: string | null
+          pnl?: number | null
+          side?: string
+          size?: number
+          status?: string
+          symbol?: string
+          trade_source?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       ml_features: {
         Row: {
           created_at: string | null
@@ -473,6 +530,54 @@ export type Database = {
           path_length?: number | null
           updated_at?: string
           updated_by?: string | null
+        }
+        Relationships: []
+      }
+      paper_trades: {
+        Row: {
+          closed_at: string | null
+          created_at: string | null
+          entry_price: number
+          exit_price: number | null
+          id: string
+          opened_at: string | null
+          pnl: number | null
+          quantity: number
+          status: string | null
+          symbol: string
+          trade_type: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          closed_at?: string | null
+          created_at?: string | null
+          entry_price: number
+          exit_price?: number | null
+          id?: string
+          opened_at?: string | null
+          pnl?: number | null
+          quantity: number
+          status?: string | null
+          symbol: string
+          trade_type?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          closed_at?: string | null
+          created_at?: string | null
+          entry_price?: number
+          exit_price?: number | null
+          id?: string
+          opened_at?: string | null
+          pnl?: number | null
+          quantity?: number
+          status?: string | null
+          symbol?: string
+          trade_type?: string | null
+          updated_at?: string | null
+          user_id?: string
         }
         Relationships: []
       }
@@ -873,6 +978,20 @@ export type Database = {
     }
     Functions: {
       cleanup_stale_opportunities: { Args: never; Returns: number }
+      create_demo_paper_trades: {
+        Args: { p_user_id: string }
+        Returns: {
+          message: string
+          status: string
+        }[]
+      }
+      create_paper_trade_from_opportunity: {
+        Args: { p_opp_id: string; p_user_id: string }
+        Returns: {
+          message: string
+          status: string
+        }[]
+      }
       get_auto_trade_status: {
         Args: never
         Returns: {
@@ -885,6 +1004,16 @@ export type Database = {
         }[]
       }
       get_cached: { Args: { key: string }; Returns: Json }
+      get_futures_config: {
+        Args: never
+        Returns: {
+          futures_enabled: boolean
+          margin_type: string
+          max_leverage: number
+          min_leverage: number
+          trading_mode: string
+        }[]
+      }
       is_credentials_encrypted: {
         Args: { credential_id: string }
         Returns: boolean
@@ -902,6 +1031,19 @@ export type Database = {
         Returns: {
           trades_queued: number
           users_processed: number
+        }[]
+      }
+      queue_futures_auto_trades: {
+        Args: never
+        Returns: {
+          trades_queued: number
+          users_processed: number
+        }[]
+      }
+      queue_paper_trades_from_opportunities: {
+        Args: { p_user_id: string }
+        Returns: {
+          trades_created: number
         }[]
       }
       set_cache: {
