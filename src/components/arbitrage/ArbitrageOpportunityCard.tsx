@@ -301,7 +301,10 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
       // 3. Fallback to Supabase edge function
       if (!responseData) {
         try {
-          const { data, error } = await supabase.functions.invoke('execute-trade', { body: payload });
+          const { data, error } = await supabase.functions.invoke('execute-trade', {
+            body: payload,
+            headers: { 'x-idempotency-key': idempotencyKey },
+          });
           if (error) throw error;
           responseData = data;
           routedVia = 'edge';
@@ -325,6 +328,8 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
             completed_steps: 3,
             execution_details: {
               is_paper_trade: true,
+              idempotency_key: idempotencyKey,
+              mode: 'paper',
               routed_via: 'local',
               simulated_slippage: slippage,
               log: [
@@ -334,7 +339,7 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
               ],
             },
           })
-          .eq('id', tradeEntry.id);
+          .eq('id', tradeEntry!.id);
         if (updateError) throw updateError;
 
         responseData = { success: true, actualProfit: simulatedProfit };
