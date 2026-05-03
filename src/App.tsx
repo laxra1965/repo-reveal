@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { Suspense, lazy } from "react";
 
 // Lazy Load Pages for Performance
@@ -42,10 +43,10 @@ const App = () => (
               <Suspense fallback={<Loading />}>
                 <Routes>
                   <Route path="/" element={<Index />} />
-                  <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/profile" element={<Profile />} />
-                  <Route path="/trade-history" element={<TradeHistory />} />
-                  <Route path="/auto-trade" element={<AutoTrade />} />
+                  <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+                  <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                  <Route path="/trade-history" element={<ProtectedRoute><TradeHistory /></ProtectedRoute>} />
+                  <Route path="/auto-trade" element={<ProtectedRoute><AutoTrade /></ProtectedRoute>} />
                   <Route path="/auth" element={<Auth />} />
                   <Route path="/admin-login" element={<AdminAuth />} />
                   <Route path="/payment/:transactionId" element={<Payment />} />
