@@ -23,6 +23,8 @@ interface PaperTrade {
   completed_steps: number;
   total_steps: number;
   execution_details: Record<string, unknown> | null;
+  opportunity_id: string | null;
+  exchanges?: string;
 }
 
 interface PaperTradeStats {
@@ -70,8 +72,26 @@ export const PaperTradeHistory = () => {
                (trade.status === 'completed' && log?.some(l => l.orderId?.startsWith('PAPER_')));
       }) as PaperTrade[];
 
-      setTrades(paperTrades);
-      calculateStats(paperTrades);
+      // Fetch exchange names from related opportunities
+      const oppIds = Array.from(new Set(paperTrades.map(t => t.opportunity_id).filter(Boolean))) as string[];
+      let oppMap: Record<string, string> = {};
+      if (oppIds.length > 0) {
+        const { data: opps } = await supabase
+          .from('opportunities')
+          .select('id, exchange1, exchange2, exchange3')
+          .in('id', oppIds);
+        (opps || []).forEach(o => {
+          const exs = Array.from(new Set([o.exchange1, o.exchange2, o.exchange3].filter(Boolean)));
+          oppMap[o.id] = exs.join(' → ');
+        });
+      }
+      const enriched = paperTrades.map(t => ({
+        ...t,
+        exchanges: t.opportunity_id ? oppMap[t.opportunity_id] || '—' : '—',
+      }));
+
+      setTrades(enriched);
+      calculateStats(enriched);
     } catch (error) {
       console.error('Error fetching paper trades:', error);
     } finally {
@@ -200,6 +220,7 @@ export const PaperTradeHistory = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Date</TableHead>
+                  <TableHead>Exchange</TableHead>
                   <TableHead>Path</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Start</TableHead>
@@ -213,6 +234,9 @@ export const PaperTradeHistory = () => {
                   <TableRow key={trade.id}>
                     <TableCell className="whitespace-nowrap text-xs">
                       {format(new Date(trade.started_at), 'MMM dd, HH:mm')}
+                    </TableCell>
+                    <TableCell className="text-xs capitalize">
+                      <Badge variant="outline">{trade.exchanges || '—'}</Badge>
                     </TableCell>
                     <TableCell className="font-mono text-xs">
                       {trade.quote_symbol} → {trade.base_symbol} → {trade.intermediate_symbol}
