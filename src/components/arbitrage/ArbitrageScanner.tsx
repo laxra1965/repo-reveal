@@ -337,7 +337,7 @@ export const ArbitrageScanner = () => {
   const filteredOpportunities = useMemo(() => {
     const normalizedActiveTypes = new Set(activeArbTypes.map(normalizeStrategy));
     const now = Date.now();
-    const STALE_THRESHOLD_MS = 60_000; // 60 seconds
+    const STALE_THRESHOLD_MS = 5 * 60_000; // 5 minutes (VPS scanner cadence ~1-2 min)
     const TRADING_FEES_PCT = 0.3; // 3 legs × 0.1%
 
     return opportunities
