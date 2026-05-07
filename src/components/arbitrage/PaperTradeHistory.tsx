@@ -55,43 +55,13 @@ export const PaperTradeHistory = () => {
     setIsRefreshing(true);
     try {
       const { data, error } = await supabase
-        .from('trade_history')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('started_at', { ascending: false })
-        .limit(50);
+        .rpc('get_paper_trades_with_exchanges', { p_user_id: user.id, p_limit: 50 });
 
       if (error) throw error;
 
-      // Filter paper trades - those with is_paper_trade flag or simulated execution
-      const paperTrades = (data || []).filter(trade => {
-        const details = trade.execution_details as Record<string, unknown> | null;
-        const log = details?.log as Array<{ isPaperTrade?: boolean; orderId?: string }> | undefined;
-        return details?.is_paper_trade || 
-               log?.some(l => l.isPaperTrade) ||
-               (trade.status === 'completed' && log?.some(l => l.orderId?.startsWith('PAPER_')));
-      }) as PaperTrade[];
-
-      // Fetch exchange names from related opportunities
-      const oppIds = Array.from(new Set(paperTrades.map(t => t.opportunity_id).filter(Boolean))) as string[];
-      let oppMap: Record<string, string> = {};
-      if (oppIds.length > 0) {
-        const { data: opps } = await supabase
-          .from('opportunities')
-          .select('id, exchange1, exchange2, exchange3')
-          .in('id', oppIds);
-        (opps || []).forEach(o => {
-          const exs = Array.from(new Set([o.exchange1, o.exchange2, o.exchange3].filter(Boolean)));
-          oppMap[o.id] = exs.join(' → ');
-        });
-      }
-      const enriched = paperTrades.map(t => ({
-        ...t,
-        exchanges: t.opportunity_id ? oppMap[t.opportunity_id] || '—' : '—',
-      }));
-
-      setTrades(enriched);
-      calculateStats(enriched);
+      const trades = (data || []) as PaperTrade[];
+      setTrades(trades);
+      calculateStats(trades);
     } catch (error) {
       console.error('Error fetching paper trades:', error);
     } finally {

@@ -1014,6 +1014,27 @@ export type Database = {
           trading_mode: string
         }[]
       }
+      get_paper_trades_with_exchanges: {
+        Args: { p_limit?: number; p_user_id: string }
+        Returns: {
+          actual_profit: number
+          base_symbol: string
+          completed_at: string
+          completed_steps: number
+          exchanges: string
+          execution_details: Json
+          expected_profit: number
+          final_amount: number
+          id: string
+          intermediate_symbol: string
+          opportunity_id: string
+          quote_symbol: string
+          start_amount: number
+          started_at: string
+          status: Database["public"]["Enums"]["trade_status"]
+          total_steps: number
+        }[]
+      }
       is_credentials_encrypted: {
         Args: { credential_id: string }
         Returns: boolean
