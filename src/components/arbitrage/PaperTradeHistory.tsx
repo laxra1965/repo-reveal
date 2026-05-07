@@ -220,22 +220,6 @@ export const PaperTradeHistory = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Date</TableHead>
-                  <TableHead>Path</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Start</TableHead>
-                  <TableHead className="text-right">Final</TableHead>
-                  <TableHead className="text-right">P&L</TableHead>
-                  <TableHead>Progress</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {trades.map((trade) => (
-                  <TableRow key={trade.id}>
-                    <TableCell className="whitespace-nowrap text-xs">
-                      {format(new Date(trade.started_at), 'MMM dd, HH:mm')}
-                    </TableCell>
-                <TableRow>
-                  <TableHead>Date</TableHead>
                   <TableHead>Exchange</TableHead>
                   <TableHead>Path</TableHead>
                   <TableHead>Status</TableHead>
