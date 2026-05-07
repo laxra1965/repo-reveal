@@ -23,6 +23,8 @@ interface PaperTrade {
   completed_steps: number;
   total_steps: number;
   execution_details: Record<string, unknown> | null;
+  opportunity_id: string | null;
+  exchanges?: string;
 }
 
 interface PaperTradeStats {
