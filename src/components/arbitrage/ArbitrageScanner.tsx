@@ -51,8 +51,27 @@ export const ArbitrageScanner = () => {
   const [lastScanTime, setLastScanTime] = useState<Date | null>(null);
   const [scanCount, setScanCount] = useState(0);
   const [isInitializing, setIsInitializing] = useState(false);
-  const [autoPaperTrade, setAutoPaperTrade] = useState(false);
+  const autoPaperStorageKey = user ? `autoPaperTrade:${user.id}` : 'autoPaperTrade';
+  const [autoPaperTrade, setAutoPaperTrade] = useState<boolean>(() => {
+    try { return localStorage.getItem('autoPaperTrade:last') === 'true'; } catch { return false; }
+  });
   const [autoPaperTradeCount, setAutoPaperTradeCount] = useState(0);
+
+  // Load per-user preference once user is known, and persist on changes
+  useEffect(() => {
+    if (!user) return;
+    try {
+      const v = localStorage.getItem(autoPaperStorageKey);
+      if (v !== null) setAutoPaperTrade(v === 'true');
+    } catch { /* ignore */ }
+  }, [user, autoPaperStorageKey]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('autoPaperTrade:last', String(autoPaperTrade));
+      if (user) localStorage.setItem(autoPaperStorageKey, String(autoPaperTrade));
+    } catch { /* ignore */ }
+  }, [autoPaperTrade, user, autoPaperStorageKey]);
   
   const [activeArbTypes, setActiveArbTypes] = useState<string[]>(['triangular', 'cross_exchange', 'triangular_arbitrage', 'triangular-arbitrage']);
   const [userSettings, setUserSettings] = useState<{
