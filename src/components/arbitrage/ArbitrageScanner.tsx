@@ -51,27 +51,44 @@ export const ArbitrageScanner = () => {
   const [lastScanTime, setLastScanTime] = useState<Date | null>(null);
   const [scanCount, setScanCount] = useState(0);
   const [isInitializing, setIsInitializing] = useState(false);
-  const autoPaperStorageKey = user ? `autoPaperTrade:${user.id}` : 'autoPaperTrade';
-  const [autoPaperTrade, setAutoPaperTrade] = useState<boolean>(() => {
-    try { return localStorage.getItem('autoPaperTrade:last') === 'true'; } catch { return false; }
-  });
+  const [autoPaperTrade, setAutoPaperTradeState] = useState<boolean>(false);
+  const [autoPaperTradeLoaded, setAutoPaperTradeLoaded] = useState(false);
   const [autoPaperTradeCount, setAutoPaperTradeCount] = useState(0);
 
-  // Load per-user preference once user is known, and persist on changes
+  // Load auto-simulate preference from DB so it persists across devices and logouts
   useEffect(() => {
+    if (!user) { setAutoPaperTradeLoaded(false); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('user_settings')
+          .select('auto_paper_trade')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (!cancelled) {
+          setAutoPaperTradeState(Boolean(data?.auto_paper_trade));
+          setAutoPaperTradeLoaded(true);
+        }
+      } catch {
+        if (!cancelled) setAutoPaperTradeLoaded(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
+
+  // Wrapper that persists changes to DB immediately
+  const setAutoPaperTrade = useCallback(async (next: boolean) => {
+    setAutoPaperTradeState(next);
     if (!user) return;
     try {
-      const v = localStorage.getItem(autoPaperStorageKey);
-      if (v !== null) setAutoPaperTrade(v === 'true');
-    } catch { /* ignore */ }
-  }, [user, autoPaperStorageKey]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('autoPaperTrade:last', String(autoPaperTrade));
-      if (user) localStorage.setItem(autoPaperStorageKey, String(autoPaperTrade));
-    } catch { /* ignore */ }
-  }, [autoPaperTrade, user, autoPaperStorageKey]);
+      await supabase
+        .from('user_settings')
+        .upsert({ user_id: user.id, auto_paper_trade: next }, { onConflict: 'user_id' });
+    } catch (e) {
+      console.error('Failed to persist auto_paper_trade:', e);
+    }
+  }, [user]);
   
   const [activeArbTypes, setActiveArbTypes] = useState<string[]>(['triangular', 'cross_exchange', 'triangular_arbitrage', 'triangular-arbitrage']);
   const [userSettings, setUserSettings] = useState<{
