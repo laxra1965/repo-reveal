@@ -83,6 +83,46 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
       return;
     }
 
+    // Admin approval gate for real-money trading
+    try {
+      const { data: adminRows } = await supabase
+        .from('admin_settings')
+        .select('key, value')
+        .in('key', ['real_money_approved', 'real_money_allowed_exchanges']);
+      const map = Object.fromEntries((adminRows || []).map((r: { key: string; value: string }) => [r.key, r.value]));
+      const approved = String(map['real_money_approved'] ?? 'false').toLowerCase() === 'true';
+      if (!approved) {
+        toast({ title: 'Real-Money Trading Disabled', description: 'Admin has not approved live execution yet. Use paper trade.', variant: 'destructive' });
+        return;
+      }
+      let allowed: string[] = [];
+      try { allowed = JSON.parse(map['real_money_allowed_exchanges'] || '[]'); } catch { allowed = []; }
+      const allowedSet = new Set(allowed.map(e => e.toLowerCase()));
+      const blocked = exchanges.filter(e => !allowedSet.has(e.toLowerCase()));
+      if (allowed.length === 0 || blocked.length > 0) {
+        toast({ title: 'Exchange Not Approved', description: `Live trading not approved for: ${blocked.join(', ') || 'these exchanges'}`, variant: 'destructive' });
+        return;
+      }
+    } catch {
+      toast({ title: 'Approval Check Failed', description: 'Could not verify admin approval status.', variant: 'destructive' });
+      return;
+    }
+
+    // User must have enabled the opportunity's exchanges in their config
+    try {
+      const { data: us } = await supabase
+        .from('user_settings')
+        .select('enabled_exchanges')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      const userEnabled = new Set(((us?.enabled_exchanges as string[]) || []).map(e => e.toLowerCase()));
+      const notEnabled = exchanges.filter(e => !userEnabled.has(e.toLowerCase()));
+      if (notEnabled.length > 0) {
+        toast({ title: 'Exchange Not Enabled', description: `Enable these in your Exchange Network: ${notEnabled.join(', ')}`, variant: 'destructive' });
+        return;
+      }
+    } catch { /* non-blocking */ }
+
     setIsExecuting(true);
     try {
       // Idempotency key: stable per (user × opportunity × card mount).
