@@ -158,7 +158,7 @@ export const PaperTradeHistory = () => {
         {stats && stats.totalTrades > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="p-3 bg-muted/50 rounded-lg text-center">
-              <div className="text-2xl font-bold">{stats.totalTrades}</div>
+              <div className="text-2xl font-bold">{totalCount || stats.totalTrades}</div>
               <div className="text-xs text-muted-foreground">Total Paper Trades</div>
             </div>
             <div className="p-3 bg-muted/50 rounded-lg text-center">
