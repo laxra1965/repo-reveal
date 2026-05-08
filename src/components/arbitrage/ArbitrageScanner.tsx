@@ -274,6 +274,7 @@ export const ArbitrageScanner = () => {
         execution_details: {
           is_paper_trade: true,
           auto_executed: true,
+          exchanges: [opportunity.exchange1, opportunity.exchange2, opportunity.exchange3].filter(Boolean).join(' / '),
           log: [
             { step: 1, success: true, isPaperTrade: true, orderId: `PAPER_AUTO_${Date.now()}_1`, timestamp: new Date().toISOString() },
             { step: 2, success: true, isPaperTrade: true, orderId: `PAPER_AUTO_${Date.now()}_2`, timestamp: new Date().toISOString() },
