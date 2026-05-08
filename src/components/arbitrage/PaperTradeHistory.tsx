@@ -36,31 +36,40 @@ interface PaperTradeStats {
   winRate: number;
 }
 
+const PAGE_SIZE = 50;
+
 export const PaperTradeHistory = () => {
   const { user } = useAuth();
   const [trades, setTrades] = useState<PaperTrade[]>([]);
   const [stats, setStats] = useState<PaperTradeStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [page, setPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
 
   useEffect(() => {
-    if (user) {
-      fetchPaperTrades();
-    }
-  }, [user]);
+    if (user) fetchPaperTrades(page);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, page]);
 
-  const fetchPaperTrades = async () => {
+  const fetchPaperTrades = async (pageIndex: number) => {
     if (!user) return;
-    
+
     setIsRefreshing(true);
     try {
       const { data, error } = await supabase
-        .rpc('get_paper_trades_with_exchanges', { p_user_id: user.id, p_limit: 50 });
+        .rpc('get_paper_trades_with_exchanges', {
+          p_user_id: user.id,
+          p_limit: PAGE_SIZE,
+          p_offset: pageIndex * PAGE_SIZE,
+        });
 
       if (error) throw error;
 
-      const trades = (data || []) as PaperTrade[];
+      const rows = (data || []) as (PaperTrade & { total_count?: number })[];
+      const trades = rows as PaperTrade[];
       setTrades(trades);
+      setTotalCount(rows[0]?.total_count ?? trades.length);
       calculateStats(trades);
     } catch (error) {
       console.error('Error fetching paper trades:', error);
