@@ -255,6 +255,31 @@ export const PaperTradeHistory = () => {
                 ))}
               </TableBody>
             </Table>
+            {totalCount > PAGE_SIZE && (
+              <div className="flex items-center justify-between mt-4 text-xs text-muted-foreground">
+                <span>
+                  Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalCount)} of {totalCount}
+                </span>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page === 0 || isRefreshing}
+                    onClick={() => setPage(p => Math.max(0, p - 1))}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={(page + 1) * PAGE_SIZE >= totalCount || isRefreshing}
+                    onClick={() => setPage(p => p + 1)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </CardContent>
