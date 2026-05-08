@@ -244,6 +244,21 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
       return;
     }
 
+    // Paper trade is also restricted to user's enabled exchanges
+    try {
+      const { data: us } = await supabase
+        .from('user_settings')
+        .select('enabled_exchanges')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      const userEnabled = new Set(((us?.enabled_exchanges as string[]) || []).map(e => e.toLowerCase()));
+      const notEnabled = exchanges.filter(e => !userEnabled.has(e.toLowerCase()));
+      if (notEnabled.length > 0) {
+        toast({ title: 'Exchange Not Enabled', description: `Enable these in your Exchange Network: ${notEnabled.join(', ')}`, variant: 'destructive' });
+        return;
+      }
+    } catch { /* non-blocking */ }
+
     setIsPaperExecuting(true);
     try {
       // Idempotency key for paper trade — prevents duplicate rows on rapid clicks.
