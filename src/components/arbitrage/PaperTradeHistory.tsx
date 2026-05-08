@@ -145,7 +145,7 @@ export const PaperTradeHistory = () => {
           <Button 
             variant="outline" 
             size="sm" 
-            onClick={fetchPaperTrades}
+            onClick={() => fetchPaperTrades(page)}
             disabled={isRefreshing}
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
