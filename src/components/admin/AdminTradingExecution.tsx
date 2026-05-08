@@ -8,11 +8,9 @@ import {
   CardDescription,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import {
-  Play,
   Settings as SettingsIcon,
   History,
   ShieldCheck,
@@ -23,14 +21,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { AdminApiKeyManager } from './AdminApiKeyManager';
-
-interface UserSettings {
-  auto_trade: boolean;
-  trade_amount: number;
-  max_position_size: number;
-  min_profit_percent: number;
-}
+import { MultiSelect } from '@/components/ui/multi-select';
 
 interface TradeHistoryRow {
   id: string;
@@ -42,27 +33,36 @@ interface TradeHistoryRow {
   quote_symbol: string;
 }
 
+const EXCHANGE_OPTIONS = [
+  { value: 'binance', label: 'Binance' },
+  { value: 'bybit', label: 'Bybit' },
+  { value: 'okx', label: 'OKX' },
+  { value: 'gate', label: 'Gate.io' },
+  { value: 'kucoin', label: 'KuCoin' },
+  { value: 'mexc', label: 'MEXC' },
+];
+
 export const AdminTradingExecution = () => {
-  const [settings, setSettings] = useState<UserSettings | null>(null);
+  const [approved, setApproved] = useState(false);
+  const [allowedExchanges, setAllowedExchanges] = useState<string[]>([]);
   const [trades, setTrades] = useState<TradeHistoryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchSettings = useCallback(async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
-
+  const fetchAdminFlags = useCallback(async () => {
     const { data, error } = await supabase
-      .from('user_settings')
-      .select('auto_trade, trade_amount, max_position_size, min_profit_percent')
-      .eq('user_id', user.id)
-      .maybeSingle();
-
+      .from('admin_settings')
+      .select('key, value')
+      .in('key', ['real_money_approved', 'real_money_allowed_exchanges']);
     if (!error && data) {
-      setSettings(data as UserSettings);
+      const map = Object.fromEntries(data.map((r) => [r.key, r.value]));
+      setApproved(String(map['real_money_approved'] ?? 'false').toLowerCase() === 'true');
+      try {
+        setAllowedExchanges(JSON.parse(map['real_money_allowed_exchanges'] || '[]'));
+      } catch {
+        setAllowedExchanges([]);
+      }
     }
   }, []);
 
@@ -73,17 +73,14 @@ export const AdminTradingExecution = () => {
       .select('id, created_at, status, actual_profit, base_symbol, intermediate_symbol, quote_symbol')
       .order('created_at', { ascending: false })
       .limit(20);
-
-    if (!error && data) {
-      setTrades(data as unknown as TradeHistoryRow[]);
-    }
+    if (!error && data) setTrades(data as unknown as TradeHistoryRow[]);
     setRefreshing(false);
   }, []);
 
   useEffect(() => {
     const init = async () => {
       setLoading(true);
-      await Promise.all([fetchSettings(), fetchTrades()]);
+      await Promise.all([fetchAdminFlags(), fetchTrades()]);
       setLoading(false);
     };
     init();
@@ -93,39 +90,45 @@ export const AdminTradingExecution = () => {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'trade_history' },
-        () => {
-          fetchTrades();
-        },
+        () => fetchTrades(),
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchSettings, fetchTrades]);
+  }, [fetchAdminFlags, fetchTrades]);
 
-  const handleUpdateSettings = async (updates: Partial<UserSettings>) => {
-    setSaving(true);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      setSaving(false);
-      return;
-    }
-
+  const upsertSetting = async (key: string, value: string) => {
     const { error } = await supabase
-      .from('user_settings')
-      .update(updates)
-      .eq('user_id', user.id);
+      .from('admin_settings')
+      .upsert({ key, value }, { onConflict: 'key' });
+    if (error) throw error;
+  };
 
-    if (!error) {
-      setSettings((prev) => (prev ? { ...prev, ...updates } : null));
-      toast.success('Settings updated');
-    } else {
-      toast.error('Failed to update settings');
+  const handleToggleApproved = async (checked: boolean) => {
+    setSaving(true);
+    try {
+      await upsertSetting('real_money_approved', checked ? 'true' : 'false');
+      setApproved(checked);
+      toast.success(checked ? 'Real-money trading APPROVED' : 'Real-money trading disabled');
+    } catch {
+      toast.error('Failed to update approval flag');
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
+  };
+
+  const handleSaveExchanges = async () => {
+    setSaving(true);
+    try {
+      await upsertSetting('real_money_allowed_exchanges', JSON.stringify(allowedExchanges));
+      toast.success('Allowed exchanges saved');
+    } catch {
+      toast.error('Failed to save allowed exchanges');
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) {
@@ -138,10 +141,11 @@ export const AdminTradingExecution = () => {
         <div>
           <h2 className="text-lg font-bold flex items-center gap-2">
             <SettingsIcon className="w-5 h-5 text-primary" />
-            Trading Execution
+            Real-Money Execution Approval
           </h2>
           <p className="text-xs text-muted-foreground">
-            Manage automated trading and monitor execution status.
+            Decide when the system is ready for real-money trading and which exchanges are allowed.
+            Trade amounts, min profit and API keys are configured by each user on their dashboard.
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={fetchTrades} disabled={refreshing}>
@@ -151,60 +155,63 @@ export const AdminTradingExecution = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Bot Controls */}
+        {/* Approval controls */}
         <Card className="md:col-span-1">
           <CardHeader>
             <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Play className="w-4 h-4 text-green-500" />
-              Bot Status
+              <ShieldCheck className="w-4 h-4 text-amber-500" />
+              Approval
             </CardTitle>
+            <CardDescription className="text-xs">
+              Controls live execution globally across all users.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border">
               <div>
-                <Label className="text-sm font-bold">Auto Trading</Label>
-                <p className="text-xs text-muted-foreground">Enable automated execution</p>
+                <Label className="text-sm font-bold">Real-Money Trading</Label>
+                <p className="text-xs text-muted-foreground">
+                  When OFF, only paper trades are allowed.
+                </p>
               </div>
               <Switch
-                checked={settings?.auto_trade || false}
-                onCheckedChange={(checked) => handleUpdateSettings({ auto_trade: checked })}
+                checked={approved}
+                onCheckedChange={handleToggleApproved}
                 disabled={saving}
               />
             </div>
 
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs uppercase text-muted-foreground">Trade Amount (USDT)</Label>
-                <Input
-                  type="number"
-                  value={settings?.trade_amount ?? 0}
-                  onChange={(e) =>
-                    handleUpdateSettings({ trade_amount: parseFloat(e.target.value) || 0 })
-                  }
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs uppercase text-muted-foreground">Min Profit %</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={settings?.min_profit_percent ?? 0}
-                  onChange={(e) =>
-                    handleUpdateSettings({
-                      min_profit_percent: parseFloat(e.target.value) || 0,
-                    })
-                  }
-                />
-              </div>
+            <div className="space-y-2">
+              <Label className="text-xs uppercase text-muted-foreground">
+                Allowed Exchanges (real money)
+              </Label>
+              <MultiSelect
+                options={EXCHANGE_OPTIONS}
+                selected={allowedExchanges}
+                onChange={setAllowedExchanges}
+                placeholder="Select exchanges..."
+              />
+              <Button
+                size="sm"
+                className="w-full"
+                onClick={handleSaveExchanges}
+                disabled={saving}
+              >
+                Save Allowed Exchanges
+              </Button>
             </div>
 
-            <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-              <div className="flex items-start gap-2">
-                <ShieldCheck className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
-                <p className="text-xs text-amber-600 dark:text-amber-400">
-                  Paper trading is forced globally for safety. Real-money execution requires admin approval.
-                </p>
-              </div>
+            <div
+              className={cn(
+                'p-3 rounded-lg border text-xs',
+                approved
+                  ? 'bg-green-500/10 border-green-500/30 text-green-700 dark:text-green-400'
+                  : 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400',
+              )}
+            >
+              {approved
+                ? `Live trading is APPROVED for: ${allowedExchanges.join(', ') || 'no exchanges yet'}`
+                : 'Live trading is currently DISABLED. Users can only run paper trades.'}
             </div>
           </CardContent>
         </Card>
@@ -299,11 +306,6 @@ export const AdminTradingExecution = () => {
             </div>
           </CardContent>
         </Card>
-      </div>
-
-      {/* API Key Management */}
-      <div className="pt-4 border-t">
-        <AdminApiKeyManager />
       </div>
     </div>
   );
