@@ -36,31 +36,40 @@ interface PaperTradeStats {
   winRate: number;
 }
 
+const PAGE_SIZE = 50;
+
 export const PaperTradeHistory = () => {
   const { user } = useAuth();
   const [trades, setTrades] = useState<PaperTrade[]>([]);
   const [stats, setStats] = useState<PaperTradeStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [page, setPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
 
   useEffect(() => {
-    if (user) {
-      fetchPaperTrades();
-    }
-  }, [user]);
+    if (user) fetchPaperTrades(page);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, page]);
 
-  const fetchPaperTrades = async () => {
+  const fetchPaperTrades = async (pageIndex: number) => {
     if (!user) return;
-    
+
     setIsRefreshing(true);
     try {
       const { data, error } = await supabase
-        .rpc('get_paper_trades_with_exchanges', { p_user_id: user.id, p_limit: 50 });
+        .rpc('get_paper_trades_with_exchanges', {
+          p_user_id: user.id,
+          p_limit: PAGE_SIZE,
+          p_offset: pageIndex * PAGE_SIZE,
+        });
 
       if (error) throw error;
 
-      const trades = (data || []) as PaperTrade[];
+      const rows = (data || []) as (PaperTrade & { total_count?: number })[];
+      const trades = rows as PaperTrade[];
       setTrades(trades);
+      setTotalCount(rows[0]?.total_count ?? trades.length);
       calculateStats(trades);
     } catch (error) {
       console.error('Error fetching paper trades:', error);
@@ -136,7 +145,7 @@ export const PaperTradeHistory = () => {
           <Button 
             variant="outline" 
             size="sm" 
-            onClick={fetchPaperTrades}
+            onClick={() => fetchPaperTrades(page)}
             disabled={isRefreshing}
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -149,7 +158,7 @@ export const PaperTradeHistory = () => {
         {stats && stats.totalTrades > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="p-3 bg-muted/50 rounded-lg text-center">
-              <div className="text-2xl font-bold">{stats.totalTrades}</div>
+              <div className="text-2xl font-bold">{totalCount || stats.totalTrades}</div>
               <div className="text-xs text-muted-foreground">Total Paper Trades</div>
             </div>
             <div className="p-3 bg-muted/50 rounded-lg text-center">
@@ -246,6 +255,31 @@ export const PaperTradeHistory = () => {
                 ))}
               </TableBody>
             </Table>
+            {totalCount > PAGE_SIZE && (
+              <div className="flex items-center justify-between mt-4 text-xs text-muted-foreground">
+                <span>
+                  Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalCount)} of {totalCount}
+                </span>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page === 0 || isRefreshing}
+                    onClick={() => setPage(p => Math.max(0, p - 1))}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={(page + 1) * PAGE_SIZE >= totalCount || isRefreshing}
+                    onClick={() => setPage(p => p + 1)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </CardContent>
