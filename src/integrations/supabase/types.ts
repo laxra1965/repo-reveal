@@ -837,6 +837,7 @@ export type Database = {
       user_settings: {
         Row: {
           arbitrage_types: string[] | null
+          auto_paper_trade: boolean
           auto_trade: boolean | null
           created_at: string | null
           custom_pairs: string[] | null
@@ -857,6 +858,7 @@ export type Database = {
         }
         Insert: {
           arbitrage_types?: string[] | null
+          auto_paper_trade?: boolean
           auto_trade?: boolean | null
           created_at?: string | null
           custom_pairs?: string[] | null
@@ -877,6 +879,7 @@ export type Database = {
         }
         Update: {
           arbitrage_types?: string[] | null
+          auto_paper_trade?: boolean
           auto_trade?: boolean | null
           created_at?: string | null
           custom_pairs?: string[] | null
