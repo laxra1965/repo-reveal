@@ -1064,6 +1064,13 @@ export type Database = {
               total_steps: number
             }[]
           }
+      get_public_admin_settings: {
+        Args: never
+        Returns: {
+          key: string
+          value: string
+        }[]
+      }
       is_credentials_encrypted: {
         Args: { credential_id: string }
         Returns: boolean
