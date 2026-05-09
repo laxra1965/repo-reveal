@@ -339,13 +339,15 @@ export const ArbitrageScanner = () => {
   }, [opportunities, autoPaperTrade, isScanning, executeAutoPaperTrade]);
 
   // Start scanning - reads from DB (VPS scanner writes opportunities independently)
-  const startScanning = useCallback(async () => {
+  const startScanning = useCallback(async (opts?: { silent?: boolean; skipPersist?: boolean }) => {
     if (!user || (!hasActiveSubscription && !isAdmin)) {
-      toast({
-        title: "Subscription Required",
-        description: "Please subscribe to use the scanner",
-        variant: "destructive",
-      });
+      if (!opts?.silent) {
+        toast({
+          title: "Subscription Required",
+          description: "Please subscribe to use the scanner",
+          variant: "destructive",
+        });
+      }
       return;
     }
 
@@ -359,18 +361,23 @@ export const ArbitrageScanner = () => {
       setIsScanning(true);
       setScanCount(prev => prev + 1);
 
-      toast({
-        title: "Scanner Active",
-        description: "Reading opportunities from VPS scanner. Updates every 20s + real-time.",
-      });
+      if (!opts?.skipPersist) persistScanState(true);
+
+      if (!opts?.silent) {
+        toast({
+          title: "Scanner Active",
+          description: "Reading opportunities from VPS scanner. Updates every 20s + real-time.",
+        });
+      }
 
       // Set up periodic polling (complements real-time subscription)
+      if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
       scanIntervalRef.current = setInterval(() => {
         loadOpportunitiesFromDB();
         setScanCount(prev => prev + 1);
       }, 20000);
     }
-  }, [user, hasActiveSubscription, isAdmin, toast, loadOpportunitiesFromDB]);
+  }, [user, hasActiveSubscription, isAdmin, toast, loadOpportunitiesFromDB, persistScanState]);
 
   // Stop scanning
   const stopScanning = useCallback(() => {
@@ -380,7 +387,16 @@ export const ArbitrageScanner = () => {
     }
     setIsScanning(false);
     isScanningRef.current = false;
-  }, []);
+    persistScanState(false);
+  }, [persistScanState]);
+
+  // Auto-resume scanning if it was active when user last logged out
+  useEffect(() => {
+    if (!scanStateLoaded || !isScanning || scanIntervalRef.current) return;
+    if (!user || (!hasActiveSubscription && !isAdmin)) return;
+    startScanning({ silent: true, skipPersist: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanStateLoaded, user, hasActiveSubscription, isAdmin]);
 
   // Filter and sort opportunities using user config
   // Normalize strategy names for matching (handles triangular vs triangular_arbitrage vs triangular-arbitrage)
