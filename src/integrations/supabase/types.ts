@@ -847,6 +847,7 @@ export type Database = {
             | null
           filter_profitable: boolean | null
           id: string
+          is_scanning: boolean
           max_position_size: number | null
           max_profit_percent: number | null
           min_profit_percent: number | null
@@ -868,6 +869,7 @@ export type Database = {
             | null
           filter_profitable?: boolean | null
           id?: string
+          is_scanning?: boolean
           max_position_size?: number | null
           max_profit_percent?: number | null
           min_profit_percent?: number | null
@@ -889,6 +891,7 @@ export type Database = {
             | null
           filter_profitable?: boolean | null
           id?: string
+          is_scanning?: boolean
           max_position_size?: number | null
           max_profit_percent?: number | null
           min_profit_percent?: number | null
