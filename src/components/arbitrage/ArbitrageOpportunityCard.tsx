@@ -85,11 +85,8 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
 
     // Admin approval gate for real-money trading
     try {
-      const { data: adminRows } = await supabase
-        .from('admin_settings')
-        .select('key, value')
-        .in('key', ['real_money_approved', 'real_money_allowed_exchanges']);
-      const map = Object.fromEntries((adminRows || []).map((r: { key: string; value: string }) => [r.key, r.value]));
+      const { data: adminRows } = await (supabase.rpc as any)('get_public_admin_settings');
+      const map = Object.fromEntries(((adminRows as Array<{ key: string; value: string }> | null) || []).map((r) => [r.key, r.value]));
       const approved = String(map['real_money_approved'] ?? 'false').toLowerCase() === 'true';
       if (!approved) {
         toast({ title: 'Blocked: Admin Gate', description: 'Real-money trading is not approved by the admin yet. Use paper trade.', variant: 'destructive' });
