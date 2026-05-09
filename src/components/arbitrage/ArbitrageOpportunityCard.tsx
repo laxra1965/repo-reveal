@@ -258,7 +258,7 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
       const userEnabled = new Set(((us?.enabled_exchanges as string[]) || []).map(e => e.toLowerCase()));
       const notEnabled = exchanges.filter(e => !userEnabled.has(e.toLowerCase()));
       if (notEnabled.length > 0) {
-        toast({ title: 'Exchange Not Enabled', description: `Enable these in your Exchange Network: ${notEnabled.join(', ')}`, variant: 'destructive' });
+        toast({ title: 'Blocked: User Gate (Paper)', description: `Enable these in your Exchange Network: ${notEnabled.join(', ')}`, variant: 'destructive' });
         return;
       }
     } catch { /* non-blocking */ }
