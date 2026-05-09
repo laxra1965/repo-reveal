@@ -848,7 +848,64 @@ async function handler(req: Request): Promise<Response> {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { action, tradeId, userId } = await req.json();
+    const { action, tradeId, userId, paperTrade } = await req.json();
+
+    // Re-validate exchange gates immediately before execution.
+    // This protects queued / scheduled jobs that bypassed the UI gates.
+    const enforceGates = async (
+      tUserId: string,
+      tTradeId: string | undefined,
+      isPaper: boolean,
+      exchanges: string[],
+    ): Promise<{ blocked: true; reason: string } | { blocked: false }> => {
+      const uniq = [...new Set(exchanges.filter(Boolean).map((e) => e.toLowerCase()))];
+      if (uniq.length === 0) return { blocked: false };
+
+      // User Gate — both paper and live trades require the user to have enabled the exchange
+      const { data: us } = await supabase
+        .from('user_settings')
+        .select('enabled_exchanges')
+        .eq('user_id', tUserId)
+        .maybeSingle();
+      const userSet = new Set(((us?.enabled_exchanges as string[]) || []).map((e) => e.toLowerCase()));
+      const userBlocked = uniq.filter((e) => !userSet.has(e));
+      if (userBlocked.length > 0) {
+        return { blocked: true, reason: `User Gate: ${userBlocked.join(', ')} not enabled in user settings` };
+      }
+
+      if (isPaper) return { blocked: false };
+
+      // Admin Gate — only for live (real-money) trades
+      const { data: adminRows } = await supabase
+        .from('admin_settings')
+        .select('key, value')
+        .in('key', ['real_money_approved', 'real_money_allowed_exchanges']);
+      const map = Object.fromEntries((adminRows || []).map((r: { key: string; value: string }) => [r.key, r.value]));
+      const approved = String(map['real_money_approved'] ?? 'false').toLowerCase() === 'true';
+      if (!approved) return { blocked: true, reason: 'Admin Gate: real-money trading not approved' };
+      let allowed: string[] = [];
+      try { allowed = JSON.parse(map['real_money_allowed_exchanges'] || '[]'); } catch { /* noop */ }
+      const allowSet = new Set(allowed.map((e) => e.toLowerCase()));
+      if (allowSet.size === 0) return { blocked: true, reason: 'Admin Gate: allowed exchanges list is empty' };
+      const adminBlocked = uniq.filter((e) => !allowSet.has(e));
+      if (adminBlocked.length > 0) {
+        return { blocked: true, reason: `Admin Gate: ${adminBlocked.join(', ')} not approved for live trading` };
+      }
+      return { blocked: false };
+    };
+
+    const abortBlockedTrade = async (tTradeId: string | undefined, reason: string) => {
+      if (!tTradeId) return;
+      await supabase
+        .from('trade_history')
+        .update({
+          status: 'failed',
+          error_message: `Blocked before execution — ${reason}`,
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', tTradeId)
+        .eq('status', 'pending');
+    };
 
     if (action === 'execute_single') {
       // Execute a single trade from the queue
@@ -863,6 +920,22 @@ async function handler(req: Request): Promise<Response> {
 
       if (tradeError || !trade) {
         throw new Error('Trade not found');
+      }
+
+      // Determine if this is a paper trade (request flag OR persisted in execution_details)
+      const isPaper = paperTrade === true ||
+        (trade.execution_details && (trade.execution_details as any).is_paper_trade === true);
+
+      // Pull exchanges from linked opportunity (or persisted execution_details)
+      const opp = (trade as any).arbitrage_opportunities || {};
+      const exList: string[] = [opp.exchange1, opp.exchange2, opp.exchange3].filter(Boolean);
+      const gate = await enforceGates(trade.user_id, trade.id, isPaper, exList);
+      if (gate.blocked) {
+        await abortBlockedTrade(trade.id, gate.reason);
+        return new Response(JSON.stringify({ success: false, blocked: true, reason: gate.reason }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
       }
 
       // Get user credentials
@@ -961,6 +1034,15 @@ async function handler(req: Request): Promise<Response> {
 
       const results = [];
       for (const trade of pendingTrades) {
+        const isPaper = (trade.execution_details && (trade.execution_details as any).is_paper_trade === true);
+        const opp = (trade as any).arbitrage_opportunities || {};
+        const exList: string[] = [opp.exchange1, opp.exchange2, opp.exchange3].filter(Boolean);
+        const gate = await enforceGates(trade.user_id, trade.id, isPaper, exList);
+        if (gate.blocked) {
+          await abortBlockedTrade(trade.id, gate.reason);
+          results.push({ tradeId: trade.id, success: false, blocked: true, reason: gate.reason });
+          continue;
+        }
         const result = await executeArbitrageTrade(
           supabase,
           trade.id,
