@@ -54,27 +54,42 @@ export const ArbitrageScanner = () => {
   const [autoPaperTrade, setAutoPaperTradeState] = useState<boolean>(false);
   const [autoPaperTradeLoaded, setAutoPaperTradeLoaded] = useState(false);
   const [autoPaperTradeCount, setAutoPaperTradeCount] = useState(0);
+  const [scanStateLoaded, setScanStateLoaded] = useState(false);
 
-  // Load auto-simulate preference from DB so it persists across devices and logouts
+  // Load persisted preferences (auto-simulate + scanner state) from DB
   useEffect(() => {
-    if (!user) { setAutoPaperTradeLoaded(false); return; }
+    if (!user) { setAutoPaperTradeLoaded(false); setScanStateLoaded(false); return; }
     let cancelled = false;
     (async () => {
       try {
         const { data } = await supabase
           .from('user_settings')
-          .select('auto_paper_trade')
+          .select('auto_paper_trade, is_scanning')
           .eq('user_id', user.id)
           .maybeSingle();
         if (!cancelled) {
           setAutoPaperTradeState(Boolean(data?.auto_paper_trade));
+          setIsScanning(Boolean((data as any)?.is_scanning));
           setAutoPaperTradeLoaded(true);
+          setScanStateLoaded(true);
         }
       } catch {
-        if (!cancelled) setAutoPaperTradeLoaded(true);
+        if (!cancelled) { setAutoPaperTradeLoaded(true); setScanStateLoaded(true); }
       }
     })();
     return () => { cancelled = true; };
+  }, [user]);
+
+  // Persist scanner state to DB so it follows the user across devices/logouts
+  const persistScanState = useCallback(async (next: boolean) => {
+    if (!user) return;
+    try {
+      await supabase
+        .from('user_settings')
+        .upsert({ user_id: user.id, is_scanning: next }, { onConflict: 'user_id' });
+    } catch (e) {
+      console.error('Failed to persist is_scanning:', e);
+    }
   }, [user]);
 
   // Wrapper that persists changes to DB immediately
