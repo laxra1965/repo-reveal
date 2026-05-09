@@ -529,7 +529,7 @@ export const ArbitrageScanner = () => {
                   Halt Scan
                 </Button>
               ) : (
-                <Button onClick={startScanning} size="sm" disabled={isInitializing} className="premium-gradient shadow-lg shadow-primary/20">
+                <Button onClick={() => startScanning()} size="sm" disabled={isInitializing} className="premium-gradient shadow-lg shadow-primary/20">
                   <Play className="h-4 w-4 mr-2" />
                   {isInitializing ? 'Booting...' : 'Initiate Scan'}
                 </Button>
