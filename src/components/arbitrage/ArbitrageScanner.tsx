@@ -54,27 +54,42 @@ export const ArbitrageScanner = () => {
   const [autoPaperTrade, setAutoPaperTradeState] = useState<boolean>(false);
   const [autoPaperTradeLoaded, setAutoPaperTradeLoaded] = useState(false);
   const [autoPaperTradeCount, setAutoPaperTradeCount] = useState(0);
+  const [scanStateLoaded, setScanStateLoaded] = useState(false);
 
-  // Load auto-simulate preference from DB so it persists across devices and logouts
+  // Load persisted preferences (auto-simulate + scanner state) from DB
   useEffect(() => {
-    if (!user) { setAutoPaperTradeLoaded(false); return; }
+    if (!user) { setAutoPaperTradeLoaded(false); setScanStateLoaded(false); return; }
     let cancelled = false;
     (async () => {
       try {
         const { data } = await supabase
           .from('user_settings')
-          .select('auto_paper_trade')
+          .select('auto_paper_trade, is_scanning')
           .eq('user_id', user.id)
           .maybeSingle();
         if (!cancelled) {
           setAutoPaperTradeState(Boolean(data?.auto_paper_trade));
+          setIsScanning(Boolean((data as any)?.is_scanning));
           setAutoPaperTradeLoaded(true);
+          setScanStateLoaded(true);
         }
       } catch {
-        if (!cancelled) setAutoPaperTradeLoaded(true);
+        if (!cancelled) { setAutoPaperTradeLoaded(true); setScanStateLoaded(true); }
       }
     })();
     return () => { cancelled = true; };
+  }, [user]);
+
+  // Persist scanner state to DB so it follows the user across devices/logouts
+  const persistScanState = useCallback(async (next: boolean) => {
+    if (!user) return;
+    try {
+      await supabase
+        .from('user_settings')
+        .upsert({ user_id: user.id, is_scanning: next }, { onConflict: 'user_id' });
+    } catch (e) {
+      console.error('Failed to persist is_scanning:', e);
+    }
   }, [user]);
 
   // Wrapper that persists changes to DB immediately
@@ -324,13 +339,15 @@ export const ArbitrageScanner = () => {
   }, [opportunities, autoPaperTrade, isScanning, executeAutoPaperTrade]);
 
   // Start scanning - reads from DB (VPS scanner writes opportunities independently)
-  const startScanning = useCallback(async () => {
+  const startScanning = useCallback(async (opts?: { silent?: boolean; skipPersist?: boolean }) => {
     if (!user || (!hasActiveSubscription && !isAdmin)) {
-      toast({
-        title: "Subscription Required",
-        description: "Please subscribe to use the scanner",
-        variant: "destructive",
-      });
+      if (!opts?.silent) {
+        toast({
+          title: "Subscription Required",
+          description: "Please subscribe to use the scanner",
+          variant: "destructive",
+        });
+      }
       return;
     }
 
@@ -344,18 +361,23 @@ export const ArbitrageScanner = () => {
       setIsScanning(true);
       setScanCount(prev => prev + 1);
 
-      toast({
-        title: "Scanner Active",
-        description: "Reading opportunities from VPS scanner. Updates every 20s + real-time.",
-      });
+      if (!opts?.skipPersist) persistScanState(true);
+
+      if (!opts?.silent) {
+        toast({
+          title: "Scanner Active",
+          description: "Reading opportunities from VPS scanner. Updates every 20s + real-time.",
+        });
+      }
 
       // Set up periodic polling (complements real-time subscription)
+      if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
       scanIntervalRef.current = setInterval(() => {
         loadOpportunitiesFromDB();
         setScanCount(prev => prev + 1);
       }, 20000);
     }
-  }, [user, hasActiveSubscription, isAdmin, toast, loadOpportunitiesFromDB]);
+  }, [user, hasActiveSubscription, isAdmin, toast, loadOpportunitiesFromDB, persistScanState]);
 
   // Stop scanning
   const stopScanning = useCallback(() => {
@@ -365,7 +387,16 @@ export const ArbitrageScanner = () => {
     }
     setIsScanning(false);
     isScanningRef.current = false;
-  }, []);
+    persistScanState(false);
+  }, [persistScanState]);
+
+  // Auto-resume scanning if it was active when user last logged out
+  useEffect(() => {
+    if (!scanStateLoaded || !isScanning || scanIntervalRef.current) return;
+    if (!user || (!hasActiveSubscription && !isAdmin)) return;
+    startScanning({ silent: true, skipPersist: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanStateLoaded, user, hasActiveSubscription, isAdmin]);
 
   // Filter and sort opportunities using user config
   // Normalize strategy names for matching (handles triangular vs triangular_arbitrage vs triangular-arbitrage)
@@ -498,7 +529,7 @@ export const ArbitrageScanner = () => {
                   Halt Scan
                 </Button>
               ) : (
-                <Button onClick={startScanning} size="sm" disabled={isInitializing} className="premium-gradient shadow-lg shadow-primary/20">
+                <Button onClick={() => startScanning()} size="sm" disabled={isInitializing} className="premium-gradient shadow-lg shadow-primary/20">
                   <Play className="h-4 w-4 mr-2" />
                   {isInitializing ? 'Booting...' : 'Initiate Scan'}
                 </Button>
