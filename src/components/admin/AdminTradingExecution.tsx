@@ -188,7 +188,7 @@ export const AdminTradingExecution = () => {
               <Switch
                 checked={approved}
                 onCheckedChange={handleToggleApproved}
-                disabled={saving}
+                disabled={saving || allowedExchanges.length === 0}
               />
             </div>
 
@@ -211,6 +211,16 @@ export const AdminTradingExecution = () => {
                 Save Allowed Exchanges
               </Button>
             </div>
+
+            {allowedExchanges.length === 0 && (
+              <div className="p-3 rounded-lg border border-destructive/40 bg-destructive/10 text-xs text-destructive flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                <div>
+                  <div className="font-bold uppercase">No exchanges approved</div>
+                  Real-money trading is hard-blocked (UI + database trigger) until at least one exchange is selected and saved.
+                </div>
+              </div>
+            )}
 
             <div
               className={cn(
