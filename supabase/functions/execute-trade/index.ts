@@ -1034,6 +1034,15 @@ async function handler(req: Request): Promise<Response> {
 
       const results = [];
       for (const trade of pendingTrades) {
+        const isPaper = (trade.execution_details && (trade.execution_details as any).is_paper_trade === true);
+        const opp = (trade as any).arbitrage_opportunities || {};
+        const exList: string[] = [opp.exchange1, opp.exchange2, opp.exchange3].filter(Boolean);
+        const gate = await enforceGates(trade.user_id, trade.id, isPaper, exList);
+        if (gate.blocked) {
+          await abortBlockedTrade(trade.id, gate.reason);
+          results.push({ tradeId: trade.id, success: false, blocked: true, reason: gate.reason });
+          continue;
+        }
         const result = await executeArbitrageTrade(
           supabase,
           trade.id,
