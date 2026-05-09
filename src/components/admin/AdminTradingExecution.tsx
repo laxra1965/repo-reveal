@@ -107,13 +107,17 @@ export const AdminTradingExecution = () => {
   };
 
   const handleToggleApproved = async (checked: boolean) => {
+    if (checked && allowedExchanges.length === 0) {
+      toast.error('Select at least one allowed exchange before enabling real-money trading.');
+      return;
+    }
     setSaving(true);
     try {
       await upsertSetting('real_money_approved', checked ? 'true' : 'false');
       setApproved(checked);
       toast.success(checked ? 'Real-money trading APPROVED' : 'Real-money trading disabled');
-    } catch {
-      toast.error('Failed to update approval flag');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to update approval flag');
     } finally {
       setSaving(false);
     }
@@ -123,9 +127,16 @@ export const AdminTradingExecution = () => {
     setSaving(true);
     try {
       await upsertSetting('real_money_allowed_exchanges', JSON.stringify(allowedExchanges));
-      toast.success('Allowed exchanges saved');
-    } catch {
-      toast.error('Failed to save allowed exchanges');
+      // DB trigger will auto-disable approval if list became empty — reflect locally.
+      if (allowedExchanges.length === 0 && approved) {
+        await upsertSetting('real_money_approved', 'false');
+        setApproved(false);
+        toast.warning('Allowed exchanges cleared — real-money trading was automatically disabled.');
+      } else {
+        toast.success('Allowed exchanges saved');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to save allowed exchanges');
     } finally {
       setSaving(false);
     }
