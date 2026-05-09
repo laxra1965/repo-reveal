@@ -92,15 +92,19 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
       const map = Object.fromEntries((adminRows || []).map((r: { key: string; value: string }) => [r.key, r.value]));
       const approved = String(map['real_money_approved'] ?? 'false').toLowerCase() === 'true';
       if (!approved) {
-        toast({ title: 'Real-Money Trading Disabled', description: 'Admin has not approved live execution yet. Use paper trade.', variant: 'destructive' });
+        toast({ title: 'Blocked: Admin Gate', description: 'Real-money trading is not approved by the admin yet. Use paper trade.', variant: 'destructive' });
         return;
       }
       let allowed: string[] = [];
       try { allowed = JSON.parse(map['real_money_allowed_exchanges'] || '[]'); } catch { allowed = []; }
+      if (allowed.length === 0) {
+        toast({ title: 'Blocked: Admin Gate', description: 'Admin allowed-exchanges list is empty. Live trading is hard-blocked.', variant: 'destructive' });
+        return;
+      }
       const allowedSet = new Set(allowed.map(e => e.toLowerCase()));
       const blocked = exchanges.filter(e => !allowedSet.has(e.toLowerCase()));
-      if (allowed.length === 0 || blocked.length > 0) {
-        toast({ title: 'Exchange Not Approved', description: `Live trading not approved for: ${blocked.join(', ') || 'these exchanges'}`, variant: 'destructive' });
+      if (blocked.length > 0) {
+        toast({ title: 'Blocked: Admin Gate', description: `Live trading not approved for: ${blocked.join(', ')}`, variant: 'destructive' });
         return;
       }
     } catch {
@@ -118,7 +122,7 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
       const userEnabled = new Set(((us?.enabled_exchanges as string[]) || []).map(e => e.toLowerCase()));
       const notEnabled = exchanges.filter(e => !userEnabled.has(e.toLowerCase()));
       if (notEnabled.length > 0) {
-        toast({ title: 'Exchange Not Enabled', description: `Enable these in your Exchange Network: ${notEnabled.join(', ')}`, variant: 'destructive' });
+        toast({ title: 'Blocked: User Gate', description: `Enable these in your Exchange Network: ${notEnabled.join(', ')}`, variant: 'destructive' });
         return;
       }
     } catch { /* non-blocking */ }
