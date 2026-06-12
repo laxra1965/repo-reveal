@@ -983,6 +983,16 @@ export type Database = {
       }
     }
     Functions: {
+      admin_run_auto_trade_cycle: {
+        Args: never
+        Returns: {
+          failed: number
+          processed: number
+          succeeded: number
+          trades_queued: number
+          users_processed: number
+        }[]
+      }
       cleanup_stale_opportunities: { Args: never; Returns: number }
       create_demo_paper_trades: {
         Args: { p_user_id: string }
@@ -1101,6 +1111,26 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: {
           trades_created: number
+        }[]
+      }
+      run_auto_trade_cycle: {
+        Args: never
+        Returns: {
+          failed: number
+          processed: number
+          succeeded: number
+          trades_queued: number
+          users_processed: number
+        }[]
+      }
+      run_my_auto_trade_cycle: {
+        Args: never
+        Returns: {
+          failed: number
+          processed: number
+          succeeded: number
+          trades_queued: number
+          users_processed: number
         }[]
       }
       set_cache: {
