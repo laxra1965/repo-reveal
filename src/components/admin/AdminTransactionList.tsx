@@ -79,10 +79,48 @@ export const AdminTransactionList = () => {
   };
 
   const approveTransaction = async (transaction: Transaction) => {
+    if (processing) return; // guard against concurrent clicks
     try {
       setProcessing(transaction.id);
 
       console.log('Starting transaction approval for:', transaction.id);
+
+      // Idempotency: bail if this transaction is already confirmed
+      // or already has a linked subscription.
+      const { data: existingTxn } = await supabase
+        .from('transactions')
+        .select('status')
+        .eq('id', transaction.id)
+        .maybeSingle();
+
+      if (existingTxn?.status === 'confirmed') {
+        toast({
+          title: 'Already approved',
+          description: 'This transaction was already confirmed.',
+        });
+        fetchTransactions();
+        return;
+      }
+
+      const { data: existingSub } = await supabase
+        .from('user_subscriptions')
+        .select('id')
+        .eq('transaction_id', transaction.id)
+        .maybeSingle();
+
+      if (existingSub) {
+        // Sub already exists — just make sure the txn is marked confirmed.
+        await supabase
+          .from('transactions')
+          .update({ status: 'confirmed', confirmed_at: new Date().toISOString() })
+          .eq('id', transaction.id);
+        toast({
+          title: 'Already activated',
+          description: 'A subscription already exists for this transaction.',
+        });
+        fetchTransactions();
+        return;
+      }
 
       // Update transaction status
       const { error: transactionError } = await supabase
