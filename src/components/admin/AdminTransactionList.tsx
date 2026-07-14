@@ -310,6 +310,32 @@ export const AdminTransactionList = () => {
                   </div>
                 )}
 
+                {transaction.status === 'pending' && (
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => {
+                        if (confirm(`Force approve transaction ${transaction.transaction_id}? This will activate the subscription without payment proof.`)) {
+                          approveTransaction(transaction);
+                        }
+                      }}
+                      disabled={processing === transaction.id}
+                      variant="outline"
+                      className="border-orange-500 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950"
+                    >
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      {processing === transaction.id ? 'Processing...' : 'Force Approve'}
+                    </Button>
+                    <Button
+                      onClick={() => rejectTransaction(transaction.id)}
+                      disabled={processing === transaction.id}
+                      variant="destructive"
+                    >
+                      <XCircle className="h-4 w-4 mr-2" />
+                      Reject
+                    </Button>
+                  </div>
+                )}
+
                 {transaction.confirmed_at && (
                   <div className="text-sm text-green-600">
                     <strong>Confirmed at:</strong> {new Date(transaction.confirmed_at).toLocaleString()}
