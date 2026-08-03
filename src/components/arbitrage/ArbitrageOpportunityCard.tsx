@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { describeTradeError } from '@/lib/tradeErrors';
 import { ArrowRight, TrendingUp, Clock, Eye, EyeOff, Zap, AlertTriangle, Target, Loader2, TestTube } from 'lucide-react';
 
 const STALE_THRESHOLD_SECONDS = 60;
@@ -233,7 +234,8 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
       });
     } catch (error: any) {
       console.error('Trade execution error:', error);
-      toast({ title: "Trade Failed", description: error.message || "Failed to execute trade", variant: "destructive" });
+      const info = describeTradeError(error, 'Failed to execute trade');
+      toast({ title: info.title, description: info.description, variant: "destructive" });
     } finally {
       setIsExecuting(false);
     }
@@ -411,7 +413,8 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
       });
     } catch (error: any) {
       console.error('Paper trade error:', error);
-      toast({ title: "Paper Trade Failed", description: error.message || "Failed to simulate trade", variant: "destructive" });
+      const info = describeTradeError(error, 'Failed to simulate trade');
+      toast({ title: info.title === 'Trade Failed' ? 'Paper Trade Failed' : info.title, description: info.description, variant: "destructive" });
     } finally {
       setIsPaperExecuting(false);
     }
