@@ -653,6 +653,51 @@ export type Database = {
         }
         Relationships: []
       }
+      scheduler_runs: {
+        Row: {
+          created_at: string
+          details: Json
+          duration_ms: number | null
+          failures: number
+          finished_at: string | null
+          id: string
+          inserts_attempted: number
+          source: string
+          started_at: string
+          successes: number
+          triggered_by: string | null
+          users_processed: number
+        }
+        Insert: {
+          created_at?: string
+          details?: Json
+          duration_ms?: number | null
+          failures?: number
+          finished_at?: string | null
+          id?: string
+          inserts_attempted?: number
+          source?: string
+          started_at?: string
+          successes?: number
+          triggered_by?: string | null
+          users_processed?: number
+        }
+        Update: {
+          created_at?: string
+          details?: Json
+          duration_ms?: number | null
+          failures?: number
+          finished_at?: string | null
+          id?: string
+          inserts_attempted?: number
+          source?: string
+          started_at?: string
+          successes?: number
+          triggered_by?: string | null
+          users_processed?: number
+        }
+        Relationships: []
+      }
       subscription_plans: {
         Row: {
           active: boolean | null
@@ -1085,6 +1130,19 @@ export type Database = {
         Args: { credential_id: string }
         Returns: boolean
       }
+      is_platform_admin: { Args: { _user_id: string }; Returns: boolean }
+      log_scheduler_run: {
+        Args: {
+          p_details?: Json
+          p_failures: number
+          p_inserts_attempted: number
+          p_source: string
+          p_started_at: string
+          p_successes: number
+          p_users_processed: number
+        }
+        Returns: string
+      }
       process_pending_auto_trades: {
         Args: never
         Returns: {
@@ -1111,6 +1169,14 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: {
           trades_created: number
+        }[]
+      }
+      reconcile_duplicate_trades: {
+        Args: never
+        Returns: {
+          queue_cancelled: number
+          queue_relinked: number
+          trades_cancelled: number
         }[]
       }
       run_auto_trade_cycle: {
