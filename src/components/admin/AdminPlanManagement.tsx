@@ -287,6 +287,7 @@ export const AdminPlanManagement = () => {
                                         <SelectItem value="weekly">Weekly</SelectItem>
                                         <SelectItem value="monthly">Monthly</SelectItem>
                                         <SelectItem value="quarterly">Quarterly</SelectItem>
+                                        <SelectItem value="lifetime">Lifetime</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>

@@ -21,7 +21,7 @@ export const PlanCard = ({ id, name, price, duration_type, features, onSelect, l
           <div>
             <CardTitle className="text-xl mb-2">{name}</CardTitle>
             <CardDescription className="mb-4">
-              Perfect for {duration_type} usage
+              {duration_type === 'lifetime' ? 'One-time, never expires' : `Perfect for ${duration_type} usage`}
             </CardDescription>
           </div>
           <Badge variant="secondary" className="capitalize">
@@ -30,9 +30,11 @@ export const PlanCard = ({ id, name, price, duration_type, features, onSelect, l
         </div>
         <div className="text-3xl font-bold">
           ${price}
-          <span className="text-base font-normal text-muted-foreground">
-            /{duration_type === 'weekly' ? 'week' : 'month'}
-          </span>
+          {duration_type !== 'lifetime' && (
+            <span className="text-base font-normal text-muted-foreground">
+              /{duration_type === 'weekly' ? 'week' : duration_type === 'quarterly' ? 'quarter' : 'month'}
+            </span>
+          )}
         </div>
       </CardHeader>
       

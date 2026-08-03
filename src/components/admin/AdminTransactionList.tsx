@@ -142,8 +142,13 @@ export const AdminTransactionList = () => {
       const startDate = new Date();
       const endDate = new Date(startDate);
       
-      if (transaction.subscription_plans?.duration_type === 'weekly') {
+      const durationType = transaction.subscription_plans?.duration_type;
+      if (durationType === 'lifetime') {
+        endDate.setFullYear(endDate.getFullYear() + 100);
+      } else if (durationType === 'weekly') {
         endDate.setDate(endDate.getDate() + 7);
+      } else if (durationType === 'quarterly') {
+        endDate.setDate(endDate.getDate() + 90);
       } else {
         endDate.setMonth(endDate.getMonth() + 1);
       }

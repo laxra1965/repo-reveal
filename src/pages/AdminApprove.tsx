@@ -108,6 +108,10 @@ const AdminApprove = () => {
       case "quarterly":
         endDate = new Date(startDate.getTime() + 90 * 24 * 60 * 60 * 1000);
         break;
+      case "lifetime":
+        endDate = new Date(startDate);
+        endDate.setFullYear(endDate.getFullYear() + 100);
+        break;
       default:
         endDate = new Date(startDate.getTime() + 30 * 24 * 60 * 60 * 1000);
     }
