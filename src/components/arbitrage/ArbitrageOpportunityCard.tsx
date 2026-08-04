@@ -418,8 +418,13 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
       });
     } catch (error: any) {
       console.error('Paper trade error:', error);
-      const info = describeTradeError(error, 'Failed to simulate trade');
-      toast({ title: info.title === 'Trade Failed' ? 'Paper Trade Failed' : info.title, description: info.description, variant: "destructive" });
+      const info = describeTradeError(error, 'Failed to simulate trade', {
+        userId: user?.id,
+        opportunityId: opportunity.id,
+        idempotencyKey: paperIdempotencyKey.current,
+      });
+      toast({ title: info.title === 'Trade Failed' ? 'Paper Trade Failed' : info.title, description: <span className="whitespace-pre-line">{info.description}</span>, variant: "destructive" });
+
     } finally {
       setIsPaperExecuting(false);
     }
