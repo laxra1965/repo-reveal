@@ -4,8 +4,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { RefreshCw, ListChecks, History, Wrench } from 'lucide-react';
+import { RefreshCw, ListChecks, History, Wrench, Download } from 'lucide-react';
+
 
 interface QueueRow {
   id: string;
@@ -69,6 +72,9 @@ export const AdminTradeOperations = () => {
   const [loading, setLoading] = useState(true);
   const [reconciling, setReconciling] = useState(false);
   const [search, setSearch] = useState('');
+  const [dryRun, setDryRun] = useState(true);
+  const [dryRunReport, setDryRunReport] = useState<any | null>(null);
+
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -102,14 +108,15 @@ export const AdminTradeOperations = () => {
   const runReconciliation = async () => {
     setReconciling(true);
     try {
-      const { data, error } = await supabase.rpc('reconcile_duplicate_trades');
+      const { data, error } = await supabase.rpc('reconcile_duplicate_trades', { p_dry_run: dryRun } as any);
       if (error) throw error;
       const row: any = Array.isArray(data) ? data[0] : data;
+      setDryRunReport(dryRun ? row ?? null : null);
       toast({
-        title: 'Reconciliation complete',
-        description: `Cancelled ${row?.trades_cancelled ?? 0} duplicate trades, ${row?.queue_cancelled ?? 0} queue entries, re-linked ${row?.queue_relinked ?? 0}.`,
+        title: dryRun ? 'Dry run complete — nothing changed' : 'Reconciliation complete',
+        description: `${dryRun ? 'Would cancel' : 'Cancelled'} ${row?.trades_cancelled ?? 0} duplicate trades, ${row?.queue_cancelled ?? 0} queue entries, ${dryRun ? 'would re-link' : 're-linked'} ${row?.queue_relinked ?? 0}.`,
       });
-      fetchAll();
+      if (!dryRun) fetchAll();
     } catch (err: any) {
       toast({ title: 'Reconciliation failed', description: err.message, variant: 'destructive' });
     } finally {
@@ -123,6 +130,38 @@ export const AdminTradeOperations = () => {
   const filteredQueue = queue.filter(q => matches(q.user_id));
   const filteredTrades = trades.filter(t => matches(t.user_id));
 
+  const exportCsv = () => {
+    if (!filteredQueue.length && !filteredTrades.length) {
+      toast({ title: 'Nothing to export', description: 'No queue entries or trades match the current filter.' });
+      return;
+    }
+    const esc = (v: unknown) => {
+      const s = v == null ? '' : String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const rows: string[] = [];
+    rows.push(['record_type', 'id', 'user_id', 'user_email', 'opportunity_id', 'status', 'mode', 'path', 'amount', 'profit', 'error', 'created_at', 'completed_at'].join(','));
+    filteredQueue.forEach(q => rows.push([
+      'queue', q.id, q.user_id, emails[q.user_id] || '', q.opportunity_id, q.status ?? '', '',
+      '', q.actual_trade_amount, '', q.error_message ?? '', q.queued_at ?? '', q.completed_at ?? '',
+    ].map(esc).join(',')));
+    filteredTrades.forEach(t => rows.push([
+      'trade', t.id, t.user_id, emails[t.user_id] || '', t.opportunity_id ?? '', t.status ?? '',
+      t.execution_details?.is_paper_trade ? 'paper' : 'live',
+      `${t.base_symbol}>${t.intermediate_symbol}>${t.quote_symbol}`,
+      t.start_amount, t.actual_profit ?? '', t.error_message ?? '', t.created_at ?? '', '',
+    ].map(esc).join(',')));
+
+    const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `trade-ops-${(search || 'all-users').replace(/[^a-z0-9]+/gi, '_')}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: 'CSV exported', description: `${filteredQueue.length} queue rows and ${filteredTrades.length} trades.` });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -130,23 +169,71 @@ export const AdminTradeOperations = () => {
           <h2 className="text-lg font-bold tracking-tight">Trade Operations</h2>
           <p className="text-xs text-muted-foreground">Per-user queue, trades, scheduler runs and duplicate reconciliation.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Input
             placeholder="Filter by user email"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="h-9 w-56"
           />
+          <Button variant="outline" size="sm" onClick={exportCsv} className="gap-2">
+            <Download className="h-3.5 w-3.5" />
+            Export CSV
+          </Button>
           <Button variant="outline" size="sm" onClick={fetchAll} disabled={loading} className="gap-2">
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
+          <div className="flex items-center gap-2 rounded-md border px-3 h-9">
+            <Switch id="dry-run" checked={dryRun} onCheckedChange={setDryRun} />
+            <Label htmlFor="dry-run" className="text-xs cursor-pointer">Dry run</Label>
+          </div>
           <Button size="sm" onClick={runReconciliation} disabled={reconciling} className="gap-2">
             <Wrench className="h-3.5 w-3.5" />
-            {reconciling ? 'Reconciling…' : 'Reconcile duplicates'}
+            {reconciling ? 'Working…' : dryRun ? 'Preview duplicates' : 'Reconcile duplicates'}
           </Button>
         </div>
       </div>
+
+      {dryRunReport && (
+        <Card className="border-dashed">
+          <CardHeader>
+            <CardTitle className="text-base">Dry run report — no rows were changed</CardTitle>
+            <CardDescription>
+              Would cancel {dryRunReport.trades_cancelled ?? 0} duplicate trades and {dryRunReport.queue_cancelled ?? 0} queue entries, and re-link {dryRunReport.queue_relinked ?? 0} queue entries.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="overflow-x-auto">
+            {(dryRunReport.conflicts?.length ?? 0) === 0 ? (
+              <p className="text-sm text-muted-foreground">No duplicates or stale links detected.</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="text-xs text-muted-foreground">
+                  <tr className="border-b">
+                    <th className="text-left py-2">Source</th>
+                    <th className="text-left">Action</th>
+                    <th className="text-left">User</th>
+                    <th className="text-left">Opportunity</th>
+                    <th className="text-left">Row</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(dryRunReport.conflicts as any[]).map((c, i) => (
+                    <tr key={`${c.id}-${i}`} className="border-b last:border-0">
+                      <td className="py-2 pr-3 text-xs">{c.source}</td>
+                      <td className="pr-3"><Badge variant="outline">{c.action}</Badge></td>
+                      <td className="pr-3">{label(c.user_id)}</td>
+                      <td className="pr-3 font-mono text-xs">{String(c.opportunity_id ?? '—').slice(0, 8)}…</td>
+                      <td className="font-mono text-xs">{String(c.id).slice(0, 8)}…</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
 
       <Card>
         <CardHeader>
