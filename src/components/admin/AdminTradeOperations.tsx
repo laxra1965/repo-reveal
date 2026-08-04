@@ -4,8 +4,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { RefreshCw, ListChecks, History, Wrench } from 'lucide-react';
+import { RefreshCw, ListChecks, History, Wrench, Download } from 'lucide-react';
+
 
 interface QueueRow {
   id: string;
