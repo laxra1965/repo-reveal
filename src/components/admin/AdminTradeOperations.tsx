@@ -72,6 +72,9 @@ export const AdminTradeOperations = () => {
   const [loading, setLoading] = useState(true);
   const [reconciling, setReconciling] = useState(false);
   const [search, setSearch] = useState('');
+  const [dryRun, setDryRun] = useState(true);
+  const [dryRunReport, setDryRunReport] = useState<any | null>(null);
+
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
