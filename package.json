@@ -76,6 +76,8 @@
   "devDependencies": {
     "@eslint/js": "^9.32.0",
     "@tailwindcss/typography": "^0.5.16",
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^22.16.5",
     "@types/react": "^18.3.23",
     "@types/react-dom": "^18.3.7",
@@ -86,6 +88,7 @@
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.15.0",
     "ioredis-mock": "^8.13.1",
+    "jsdom": "^30.0.1",
     "lovable-tagger": "^1.1.8",
     "postcss": "^8.5.6",
     "supabase": "^2.63.1",
@@ -93,6 +96,7 @@
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.38.0",
     "update-browserslist-db": "^1.0.13",
-    "vite": "^5.4.19"
+    "vite": "^5.4.19",
+    "vitest": "^3.2.4"
   }
 }
