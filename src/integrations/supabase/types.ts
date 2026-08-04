@@ -1172,8 +1172,10 @@ export type Database = {
         }[]
       }
       reconcile_duplicate_trades: {
-        Args: never
+        Args: { p_dry_run?: boolean }
         Returns: {
+          conflicts: Json
+          dry_run: boolean
           queue_cancelled: number
           queue_relinked: number
           trades_cancelled: number
