@@ -234,8 +234,13 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
       });
     } catch (error: any) {
       console.error('Trade execution error:', error);
-      const info = describeTradeError(error, 'Failed to execute trade');
-      toast({ title: info.title, description: info.description, variant: "destructive" });
+      const info = describeTradeError(error, 'Failed to execute trade', {
+        userId: user?.id,
+        opportunityId: opportunity.id,
+        idempotencyKey: liveIdempotencyKey.current,
+      });
+      toast({ title: info.title, description: <span className="whitespace-pre-line">{info.description}</span>, variant: "destructive" });
+
     } finally {
       setIsExecuting(false);
     }
