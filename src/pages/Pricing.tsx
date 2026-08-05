@@ -238,9 +238,10 @@ const Pricing = () => {
                     {currentPrice}
                   </span>
                   <span className="text-sm font-medium text-muted-foreground ml-1">
-                    /{durationLabel[selectedPlan] || selectedPlan}
+                    {isLifetime ? 'one-time' : `/${durationLabel[selectedPlan] || selectedPlan}`}
                   </span>
                 </div>
+
 
                 <ul className="space-y-2 flex-1 mb-6">
                   {tier.features.map((f, i) => (
