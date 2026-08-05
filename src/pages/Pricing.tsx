@@ -55,6 +55,16 @@ function groupPlansIntoTiers(plans: DBPlan[]) {
   });
 }
 
+type Tier = ReturnType<typeof groupPlansIntoTiers>[number];
+
+// Lifetime tiers have a single "lifetime" duration and ignore the billing toggle
+function resolvePlan(tier: Tier, selectedPlan: string) {
+  return (
+    tier.plans.find(p => p.duration_type === selectedPlan) ||
+    tier.plans.find(p => p.duration_type === 'lifetime')
+  );
+}
+
 const Pricing = () => {
   const [selectedPlan, setSelectedPlan] = useState("weekly");
   const [loadingTier, setLoadingTier] = useState<number | null>(null);
@@ -123,7 +133,7 @@ const Pricing = () => {
     }
 
     const tier = tiers[tierIdx];
-    const selectedDuration = tier.plans.find(p => p.duration_type === selectedPlan);
+    const selectedDuration = resolvePlan(tier, selectedPlan);
 
     if (!selectedDuration) {
       toast({
@@ -197,8 +207,9 @@ const Pricing = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
           {tiers.map((tier, idx) => {
-            const currentDuration = tier.plans.find(p => p.duration_type === selectedPlan);
+            const currentDuration = resolvePlan(tier, selectedPlan);
             const currentPrice = currentDuration ? formatPrice(currentDuration.price) : 'N/A';
+            const isLifetime = currentDuration?.duration_type === 'lifetime';
             const isMiddle = idx === 1;
 
             return (
@@ -227,9 +238,10 @@ const Pricing = () => {
                     {currentPrice}
                   </span>
                   <span className="text-sm font-medium text-muted-foreground ml-1">
-                    /{durationLabel[selectedPlan] || selectedPlan}
+                    {isLifetime ? 'one-time' : `/${durationLabel[selectedPlan] || selectedPlan}`}
                   </span>
                 </div>
+
 
                 <ul className="space-y-2 flex-1 mb-6">
                   {tier.features.map((f, i) => (
