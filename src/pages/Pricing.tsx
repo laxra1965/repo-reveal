@@ -55,6 +55,16 @@ function groupPlansIntoTiers(plans: DBPlan[]) {
   });
 }
 
+type Tier = ReturnType<typeof groupPlansIntoTiers>[number];
+
+// Lifetime tiers have a single "lifetime" duration and ignore the billing toggle
+function resolvePlan(tier: Tier, selectedPlan: string) {
+  return (
+    tier.plans.find(p => p.duration_type === selectedPlan) ||
+    tier.plans.find(p => p.duration_type === 'lifetime')
+  );
+}
+
 const Pricing = () => {
   const [selectedPlan, setSelectedPlan] = useState("weekly");
   const [loadingTier, setLoadingTier] = useState<number | null>(null);
@@ -123,7 +133,7 @@ const Pricing = () => {
     }
 
     const tier = tiers[tierIdx];
-    const selectedDuration = tier.plans.find(p => p.duration_type === selectedPlan);
+    const selectedDuration = resolvePlan(tier, selectedPlan);
 
     if (!selectedDuration) {
       toast({
