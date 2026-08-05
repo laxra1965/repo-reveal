@@ -207,8 +207,9 @@ const Pricing = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
           {tiers.map((tier, idx) => {
-            const currentDuration = tier.plans.find(p => p.duration_type === selectedPlan);
+            const currentDuration = resolvePlan(tier, selectedPlan);
             const currentPrice = currentDuration ? formatPrice(currentDuration.price) : 'N/A';
+            const isLifetime = currentDuration?.duration_type === 'lifetime';
             const isMiddle = idx === 1;
 
             return (
