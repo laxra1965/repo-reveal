@@ -8,6 +8,8 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { getErrorMessage } from '@/utils/networkUtils';
+import { signInWithGoogle } from '@/lib/nativeAuth';
+
 
 export const AuthForm = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -116,12 +118,8 @@ export const AuthForm = () => {
   const handleGoogleSignIn = async () => {
     try {
       setLoading(true);
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/dashboard`,
-        },
-      });
+      const { error } = await signInWithGoogle();
+
       if (error) {
         toast({
           title: "Google Sign-In Error",
