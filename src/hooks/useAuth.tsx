@@ -53,11 +53,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       }
     );
 
+    // Native (Android/iOS) OAuth deep-link handler — no-op on web
+    const unregisterNative = registerNativeAuthListener();
+
     return () => {
       mounted = false;
       subscription.unsubscribe();
+      unregisterNative();
     };
   }, []);
+
 
   const cleanupAuthState = () => {
     // Remove standard auth tokens
