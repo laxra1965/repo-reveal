@@ -2,6 +2,8 @@ import { useState, useEffect, createContext, useContext, ReactNode } from 'react
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { registerNativeAuthListener } from '@/lib/nativeAuth';
+import { registerPushNotifications } from '@/lib/pushNotifications';
+
 
 
 interface AuthContextType {
@@ -62,6 +64,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       unregisterNative();
     };
   }, []);
+
+  // Register the device for background push once a user is signed in (native only)
+  useEffect(() => {
+    if (!user) return;
+    const cleanup = registerPushNotifications();
+    return cleanup;
+  }, [user?.id]);
+
+
 
 
   const cleanupAuthState = () => {
