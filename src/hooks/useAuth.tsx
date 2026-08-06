@@ -65,6 +65,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     };
   }, []);
 
+  // Register the device for background push once a user is signed in (native only)
+  useEffect(() => {
+    if (!user) return;
+    const cleanup = registerPushNotifications();
+    return cleanup;
+  }, [user?.id]);
+
+
+
 
   const cleanupAuthState = () => {
     // Remove standard auth tokens
