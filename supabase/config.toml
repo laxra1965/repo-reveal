@@ -27,3 +27,6 @@ verify_jwt = false
 
 [functions.ml-analysis]
 verify_jwt = false
+
+[functions.send-push]
+verify_jwt = false
