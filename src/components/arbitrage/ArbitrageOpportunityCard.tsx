@@ -180,6 +180,8 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
 
       let tradeEntry = existingRows?.[0] as { id: string; status?: string; actual_profit?: number | null } | undefined;
 
+      const startAmount = await resolveTradeAmount();
+
       if (!tradeEntry) {
         const { data: inserted, error: insertError } = await supabase
           .from('trade_history')
@@ -189,12 +191,12 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
             base_symbol: baseSymbol,
             quote_symbol: quoteSymbol,
             intermediate_symbol: intermediateSymbol,
-            start_amount: opportunity.volume_estimate,
-            expected_profit: opportunity.volume_estimate * (opportunity.profit_percent / 100),
+            start_amount: startAmount,
+            expected_profit: startAmount * (opportunity.profit_percent / 100),
             status: 'pending',
             total_steps: 3,
             completed_steps: 0,
-            execution_details: { idempotency_key: idempotencyKey, mode: 'live' },
+            execution_details: { idempotency_key: idempotencyKey, mode: 'live', configured_trade_amount: startAmount },
           })
           .select()
           .single();
