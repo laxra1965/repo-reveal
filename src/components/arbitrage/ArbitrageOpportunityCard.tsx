@@ -311,8 +311,9 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
       const intermediateSymbol = symbols[1] || 'UNKNOWN';
       const quoteSymbol = symbols[2] || symbols[0] || 'UNKNOWN';
 
-      const startAmount = opportunity.volume_estimate;
+      const startAmount = await resolveTradeAmount();
       const expectedProfit = startAmount * (opportunity.profit_percent / 100);
+
 
       // 1. Reuse existing paper trade row for this idempotency key, otherwise create one.
       const { data: existingRows } = await supabase
