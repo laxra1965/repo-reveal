@@ -47,11 +47,38 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
   const exchanges = [opportunity.exchange1, opportunity.exchange2, opportunity.exchange3].filter(Boolean) as string[];
   const pairs = [opportunity.pair1, opportunity.pair2, opportunity.pair3].filter(Boolean) as string[];
 
+  // Resolve the trade size from the user's saved Trading Configuration.
+  // trade_amount is the configured notional; max_position_size caps it; the
+  // opportunity's own liquidity (volume_estimate) caps it further.
+  const resolveTradeAmount = async (): Promise<number> => {
+    const fallback = opportunity.volume_estimate;
+    if (!user) return fallback;
+    try {
+      const { data } = await supabase
+        .from('user_settings')
+        .select('trade_amount, max_position_size')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      const configured = Number(data?.trade_amount ?? 0);
+      if (!configured || configured <= 0) return fallback;
+
+      const maxPosition = Number(data?.max_position_size ?? 0);
+      let amount = configured;
+      if (maxPosition > 0) amount = Math.min(amount, maxPosition);
+      if (opportunity.volume_estimate > 0) amount = Math.min(amount, opportunity.volume_estimate);
+      return amount > 0 ? amount : configured;
+    } catch {
+      return fallback;
+    }
+  };
+
   // 1Hz tick to drive the live countdown / staleness color
   useEffect(() => {
     const id = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
+
 
   // Check if user has credentials for required exchanges
   useEffect(() => {
@@ -153,6 +180,8 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
 
       let tradeEntry = existingRows?.[0] as { id: string; status?: string; actual_profit?: number | null } | undefined;
 
+      const startAmount = await resolveTradeAmount();
+
       if (!tradeEntry) {
         const { data: inserted, error: insertError } = await supabase
           .from('trade_history')
@@ -162,12 +191,12 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
             base_symbol: baseSymbol,
             quote_symbol: quoteSymbol,
             intermediate_symbol: intermediateSymbol,
-            start_amount: opportunity.volume_estimate,
-            expected_profit: opportunity.volume_estimate * (opportunity.profit_percent / 100),
+            start_amount: startAmount,
+            expected_profit: startAmount * (opportunity.profit_percent / 100),
             status: 'pending',
             total_steps: 3,
             completed_steps: 0,
-            execution_details: { idempotency_key: idempotencyKey, mode: 'live' },
+            execution_details: { idempotency_key: idempotencyKey, mode: 'live', configured_trade_amount: startAmount },
           })
           .select()
           .single();
@@ -282,8 +311,9 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
       const intermediateSymbol = symbols[1] || 'UNKNOWN';
       const quoteSymbol = symbols[2] || symbols[0] || 'UNKNOWN';
 
-      const startAmount = opportunity.volume_estimate;
+      const startAmount = await resolveTradeAmount();
       const expectedProfit = startAmount * (opportunity.profit_percent / 100);
+
 
       // 1. Reuse existing paper trade row for this idempotency key, otherwise create one.
       const { data: existingRows } = await supabase
