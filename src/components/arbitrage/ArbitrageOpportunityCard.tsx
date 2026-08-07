@@ -47,11 +47,38 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
   const exchanges = [opportunity.exchange1, opportunity.exchange2, opportunity.exchange3].filter(Boolean) as string[];
   const pairs = [opportunity.pair1, opportunity.pair2, opportunity.pair3].filter(Boolean) as string[];
 
+  // Resolve the trade size from the user's saved Trading Configuration.
+  // trade_amount is the configured notional; max_position_size caps it; the
+  // opportunity's own liquidity (volume_estimate) caps it further.
+  const resolveTradeAmount = async (): Promise<number> => {
+    const fallback = opportunity.volume_estimate;
+    if (!user) return fallback;
+    try {
+      const { data } = await supabase
+        .from('user_settings')
+        .select('trade_amount, max_position_size')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      const configured = Number(data?.trade_amount ?? 0);
+      if (!configured || configured <= 0) return fallback;
+
+      const maxPosition = Number(data?.max_position_size ?? 0);
+      let amount = configured;
+      if (maxPosition > 0) amount = Math.min(amount, maxPosition);
+      if (opportunity.volume_estimate > 0) amount = Math.min(amount, opportunity.volume_estimate);
+      return amount > 0 ? amount : configured;
+    } catch {
+      return fallback;
+    }
+  };
+
   // 1Hz tick to drive the live countdown / staleness color
   useEffect(() => {
     const id = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
+
 
   // Check if user has credentials for required exchanges
   useEffect(() => {
