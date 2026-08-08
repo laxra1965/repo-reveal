@@ -189,12 +189,13 @@ export const TradingConfigCard = () => {
                   type="number"
                   min={1}
                   step={1}
-                  value={config.tradeAmount}
-                  onChange={(e) => updateField('tradeAmount', e.target.value, 10)}
-                  className="h-9"
+                  value={Number.isFinite(config.tradeAmount) ? config.tradeAmount : ''}
+                  onChange={(e) => updateField('tradeAmount', e.target.value)}
+                  aria-invalid={!!errors.tradeAmount}
+                  className={`h-9 ${errors.tradeAmount ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                 />
-                <p className="text-[10px] text-muted-foreground">
-                  Minimum size per trade leg
+                <p className={`text-[10px] ${errors.tradeAmount ? 'text-destructive' : 'text-muted-foreground'}`}>
+                  {errors.tradeAmount ?? 'Minimum size per trade leg'}
                 </p>
               </div>
               <div className="space-y-1.5">
@@ -206,12 +207,13 @@ export const TradingConfigCard = () => {
                   type="number"
                   min={0.01}
                   step={0.01}
-                  value={config.minProfitPercent}
-                  onChange={(e) => updateField('minProfitPercent', e.target.value, 0.05)}
-                  className="h-9"
+                  value={Number.isFinite(config.minProfitPercent) ? config.minProfitPercent : ''}
+                  onChange={(e) => updateField('minProfitPercent', e.target.value)}
+                  aria-invalid={!!errors.minProfitPercent}
+                  className={`h-9 ${errors.minProfitPercent ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                 />
-                <p className="text-[10px] text-muted-foreground">
-                  Only execute if net profit exceeds this
+                <p className={`text-[10px] ${errors.minProfitPercent ? 'text-destructive' : 'text-muted-foreground'}`}>
+                  {errors.minProfitPercent ?? 'Only execute if net profit exceeds this'}
                 </p>
               </div>
               <div className="space-y-1.5">
@@ -223,12 +225,13 @@ export const TradingConfigCard = () => {
                   type="number"
                   min={0.01}
                   step={0.1}
-                  value={config.slippageBuffer}
-                  onChange={(e) => updateField('slippageBuffer', e.target.value, 0.5)}
-                  className="h-9"
+                  value={Number.isFinite(config.slippageBuffer) ? config.slippageBuffer : ''}
+                  onChange={(e) => updateField('slippageBuffer', e.target.value)}
+                  aria-invalid={!!errors.slippageBuffer}
+                  className={`h-9 ${errors.slippageBuffer ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                 />
-                <p className="text-[10px] text-muted-foreground">
-                  Price slippage tolerance per leg
+                <p className={`text-[10px] ${errors.slippageBuffer ? 'text-destructive' : 'text-muted-foreground'}`}>
+                  {errors.slippageBuffer ?? 'Price slippage tolerance per leg'}
                 </p>
               </div>
               <div className="space-y-1.5">
@@ -240,14 +243,16 @@ export const TradingConfigCard = () => {
                   type="number"
                   min={10}
                   step={10}
-                  value={config.maxPositionSize}
-                  onChange={(e) => updateField('maxPositionSize', e.target.value, 1000)}
-                  className="h-9"
+                  value={Number.isFinite(config.maxPositionSize) ? config.maxPositionSize : ''}
+                  onChange={(e) => updateField('maxPositionSize', e.target.value)}
+                  aria-invalid={!!errors.maxPositionSize}
+                  className={`h-9 ${errors.maxPositionSize ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                 />
-                <p className="text-[10px] text-muted-foreground">
-                  Maximum USD per trade leg
+                <p className={`text-[10px] ${errors.maxPositionSize ? 'text-destructive' : 'text-muted-foreground'}`}>
+                  {errors.maxPositionSize ?? 'Maximum USD per trade leg'}
                 </p>
               </div>
+
             </div>
 
             <Button
