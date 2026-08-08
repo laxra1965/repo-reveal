@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Settings2, DollarSign, Percent, Save, TrendingDown, Shield } from 'lucide-react';
+import { z } from 'zod';
 
 interface TradingConfig {
   tradeAmount: number;
@@ -15,6 +16,37 @@ interface TradingConfig {
   slippageBuffer: number;
   maxPositionSize: number;
 }
+
+const num = (label: string, min: number, max: number) =>
+  z.number({ invalid_type_error: `${label} must be a number` })
+    .refine((v) => Number.isFinite(v), { message: `${label} must be a valid number` })
+    .refine((v) => v >= min, { message: `${label} must be at least ${min}` })
+    .refine((v) => v <= max, { message: `${label} cannot exceed ${max}` });
+
+const configSchema = z
+  .object({
+    tradeAmount: num('Trade amount', 1, 1_000_000),
+    minProfitPercent: num('Min profit', 0.01, 100),
+    slippageBuffer: num('Slippage buffer', 0.01, 50),
+    maxPositionSize: num('Max position size', 10, 1_000_000),
+  })
+  .refine((c) => c.tradeAmount <= c.maxPositionSize, {
+    path: ['tradeAmount'],
+    message: 'Trade amount cannot exceed max position size',
+  });
+
+type FieldErrors = Partial<Record<keyof TradingConfig, string>>;
+
+const validateConfig = (c: TradingConfig): FieldErrors => {
+  const result = configSchema.safeParse(c);
+  if (result.success) return {};
+  const errors: FieldErrors = {};
+  for (const issue of result.error.issues) {
+    const key = issue.path[0] as keyof TradingConfig;
+    if (key && !errors[key]) errors[key] = issue.message;
+  }
+  return errors;
+};
 
 const DEFAULTS: TradingConfig = {
   tradeAmount: 10,
