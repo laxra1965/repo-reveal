@@ -314,7 +314,7 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
       const intermediateSymbol = symbols[1] || 'UNKNOWN';
       const quoteSymbol = symbols[2] || symbols[0] || 'UNKNOWN';
 
-      const startAmount = await resolveTradeAmount();
+      const startAmount = await resolveTradeAmount('paper');
       const expectedProfit = startAmount * (opportunity.profit_percent / 100);
 
 
