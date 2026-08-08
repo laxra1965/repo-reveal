@@ -106,8 +106,19 @@ export const TradingConfigCard = () => {
     );
   }, [config, original]);
 
+  const errors = validateConfig(config);
+  const isValid = Object.keys(errors).length === 0;
+
   const handleSave = async () => {
     if (!user?.id) return;
+    if (!isValid) {
+      toast({
+        title: 'Invalid configuration',
+        description: Object.values(errors)[0],
+        variant: 'destructive',
+      });
+      return;
+    }
     setSaving(true);
     try {
       const { error } = await (supabase
@@ -142,9 +153,11 @@ export const TradingConfigCard = () => {
     }
   };
 
-  const updateField = (field: keyof TradingConfig, value: string, fallback: number) => {
-    setConfig(prev => ({ ...prev, [field]: parseFloat(value) || fallback }));
+  const updateField = (field: keyof TradingConfig, value: string) => {
+    const parsed = value.trim() === '' ? NaN : Number(value);
+    setConfig(prev => ({ ...prev, [field]: parsed }));
   };
+
 
   return (
     <Card>
