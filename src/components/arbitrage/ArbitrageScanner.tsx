@@ -288,12 +288,12 @@ export const ArbitrageScanner = () => {
       const intermediateSymbol = symbols[1] || 'UNKNOWN';
       const quoteSymbol = symbols[2] || symbols[0] || 'UNKNOWN';
       // Respect the user's saved Trading Configuration: trade_amount is the
-      // notional, capped by max_position_size (and by the opportunity liquidity).
+      // notional, capped only by max_position_size (paper trades are simulated,
+      // so opportunity liquidity does not constrain the size).
       const configured = Number(userSettings.trade_amount ?? 0);
       const maxPosition = Number(userSettings.max_position_size ?? 0);
       let startAmount = configured > 0 ? configured : opportunity.volume_estimate;
       if (maxPosition > 0) startAmount = Math.min(startAmount, maxPosition);
-      if (opportunity.volume_estimate > 0) startAmount = Math.min(startAmount, opportunity.volume_estimate);
       if (!(startAmount > 0)) startAmount = configured > 0 ? configured : opportunity.volume_estimate;
       const expectedProfit = startAmount * (opportunity.profit_percent / 100);
 
