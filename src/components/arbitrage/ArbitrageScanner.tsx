@@ -111,6 +111,8 @@ export const ArbitrageScanner = () => {
     max_profit_percent?: number;
     enabled_exchanges?: string[];
     slippage_buffer?: number;
+    trade_amount?: number;
+    max_position_size?: number;
   }>({});
 
   // Pagination state
@@ -216,7 +218,7 @@ export const ArbitrageScanner = () => {
   const loadUserSettings = useCallback(async () => {
     if (!user) return;
     try {
-      const { data } = await supabase.from('user_settings').select('arbitrage_types, min_profit_percent, max_profit_percent, enabled_exchanges, slippage_buffer').eq('user_id', user.id).maybeSingle();
+      const { data } = await supabase.from('user_settings').select('arbitrage_types, min_profit_percent, max_profit_percent, enabled_exchanges, slippage_buffer, trade_amount, max_position_size').eq('user_id', user.id).maybeSingle();
       if (data) {
         if (data.arbitrage_types) setActiveArbTypes(data.arbitrage_types);
         setUserSettings({
@@ -224,6 +226,8 @@ export const ArbitrageScanner = () => {
           max_profit_percent: data.max_profit_percent != null ? Number(data.max_profit_percent) : undefined,
           enabled_exchanges: data.enabled_exchanges || undefined,
           slippage_buffer: data.slippage_buffer != null ? Number(data.slippage_buffer) : undefined,
+          trade_amount: data.trade_amount != null ? Number(data.trade_amount) : undefined,
+          max_position_size: data.max_position_size != null ? Number(data.max_position_size) : undefined,
         });
       }
     } catch (e) { }
@@ -283,7 +287,14 @@ export const ArbitrageScanner = () => {
       const baseSymbol = symbols[0] || 'UNKNOWN';
       const intermediateSymbol = symbols[1] || 'UNKNOWN';
       const quoteSymbol = symbols[2] || symbols[0] || 'UNKNOWN';
-      const startAmount = opportunity.volume_estimate;
+      // Respect the user's saved Trading Configuration: trade_amount is the
+      // notional, capped by max_position_size (and by the opportunity liquidity).
+      const configured = Number(userSettings.trade_amount ?? 0);
+      const maxPosition = Number(userSettings.max_position_size ?? 0);
+      let startAmount = configured > 0 ? configured : opportunity.volume_estimate;
+      if (maxPosition > 0) startAmount = Math.min(startAmount, maxPosition);
+      if (opportunity.volume_estimate > 0) startAmount = Math.min(startAmount, opportunity.volume_estimate);
+      if (!(startAmount > 0)) startAmount = configured > 0 ? configured : opportunity.volume_estimate;
       const expectedProfit = startAmount * (opportunity.profit_percent / 100);
 
       const slippage = (Math.random() - 0.5) * 0.002;
@@ -306,6 +317,8 @@ export const ArbitrageScanner = () => {
         execution_details: {
           is_paper_trade: true,
           auto_executed: true,
+          configured_trade_amount: configured || null,
+          max_position_size: maxPosition || null,
           exchanges: [opportunity.exchange1, opportunity.exchange2, opportunity.exchange3].filter(Boolean).join(' / '),
           log: [
             { step: 1, success: true, isPaperTrade: true, orderId: `PAPER_AUTO_${Date.now()}_1`, timestamp: new Date().toISOString() },
@@ -320,7 +333,7 @@ export const ArbitrageScanner = () => {
       console.error('Auto paper trade error:', error);
       autoTradedIdsRef.current.delete(opportunity.id); // Allow retry on error
     }
-  }, [user]);
+  }, [user, userSettings]);
 
   // Auto paper trade effect - execute on new profitable opportunities
   useEffect(() => {
