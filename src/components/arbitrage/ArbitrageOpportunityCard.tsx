@@ -48,9 +48,10 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
   const pairs = [opportunity.pair1, opportunity.pair2, opportunity.pair3].filter(Boolean) as string[];
 
   // Resolve the trade size from the user's saved Trading Configuration.
-  // trade_amount is the configured notional; max_position_size caps it; the
-  // opportunity's own liquidity (volume_estimate) caps it further.
-  const resolveTradeAmount = async (): Promise<number> => {
+  // trade_amount is the configured notional; max_position_size caps it. For live
+  // trades the opportunity's own liquidity (volume_estimate) caps it further;
+  // paper trades are simulated so liquidity does not constrain them.
+  const resolveTradeAmount = async (mode: 'live' | 'paper' = 'live'): Promise<number> => {
     const fallback = opportunity.volume_estimate;
     if (!user) return fallback;
     try {
@@ -66,7 +67,9 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
       const maxPosition = Number(data?.max_position_size ?? 0);
       let amount = configured;
       if (maxPosition > 0) amount = Math.min(amount, maxPosition);
-      if (opportunity.volume_estimate > 0) amount = Math.min(amount, opportunity.volume_estimate);
+      if (mode === 'live' && opportunity.volume_estimate > 0) {
+        amount = Math.min(amount, opportunity.volume_estimate);
+      }
       return amount > 0 ? amount : configured;
     } catch {
       return fallback;
