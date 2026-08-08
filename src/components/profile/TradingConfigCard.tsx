@@ -257,7 +257,7 @@ export const TradingConfigCard = () => {
 
             <Button
               onClick={handleSave}
-              disabled={saving || !hasChanges}
+              disabled={saving || !hasChanges || !isValid}
               size="sm"
               className="w-full"
             >
