@@ -351,23 +351,8 @@ export const ArbitrageScanner = () => {
       console.error('Auto paper trade error:', error);
       autoTradedIdsRef.current.delete(opportunity.id); // Allow retry on error
     }
-  }, [user, userSettings]);
+  }, [user, userSettings, toast]);
 
-  // Auto paper trade effect - execute on new profitable opportunities
-  useEffect(() => {
-    if (!autoPaperTrade || !isScanning || opportunities.length === 0) return;
-
-    // Find new opportunities that haven't been auto-traded yet
-    const newOpportunities = opportunities.filter(opp =>
-      !autoTradedIdsRef.current.has(opp.id) &&
-      opp.profit_percent > 0
-    );
-
-    // Execute paper trades for top 3 new opportunities
-    newOpportunities.slice(0, 3).forEach(opp => {
-      executeAutoPaperTrade(opp);
-    });
-  }, [opportunities, autoPaperTrade, isScanning, executeAutoPaperTrade]);
 
   // Start scanning - reads from DB (VPS scanner writes opportunities independently)
   const startScanning = useCallback(async (opts?: { silent?: boolean; skipPersist?: boolean }) => {
