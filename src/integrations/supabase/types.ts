@@ -1268,6 +1268,10 @@ export type Database = {
         Args: { data: Json; key: string; ttl_seconds: number }
         Returns: undefined
       }
+      validate_trade_config: {
+        Args: { p_max_position: number; p_trade_amount: number }
+        Returns: boolean
+      }
     }
     Enums: {
       exchange_name:
