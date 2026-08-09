@@ -15,6 +15,7 @@ import { ArbitrageOpportunityCard } from './ArbitrageOpportunityCard';
 import { PaperTradeHistory } from './PaperTradeHistory';
 import { PlansSection } from '@/components/plans/PlansSection';
 import { Play, Pause, Settings, TrendingUp, Lock, ChevronLeft, ChevronRight, TestTube, Shield, Clock } from 'lucide-react';
+import { resolveValidatedAmount } from '@/lib/tradeConfigValidation';
 
 interface Opportunity {
   id: string;
