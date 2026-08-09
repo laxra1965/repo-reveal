@@ -122,6 +122,7 @@ export const ArbitrageScanner = () => {
 
   // Track which opportunities have been auto-traded
   const autoTradedIdsRef = useRef<Set<string>>(new Set());
+  const invalidConfigNotifiedRef = useRef(false);
   const isScanningRef = useRef(false);
   const mountedRef = useRef(true);
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
