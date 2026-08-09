@@ -51,30 +51,32 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
   // trade_amount is the configured notional; max_position_size caps it. For live
   // trades the opportunity's own liquidity (volume_estimate) caps it further;
   // paper trades are simulated so liquidity does not constrain them.
+  // Invalid/missing/out-of-range settings throw so the trade is blocked.
   const resolveTradeAmount = async (mode: 'live' | 'paper' = 'live'): Promise<number> => {
-    const fallback = opportunity.volume_estimate;
-    if (!user) return fallback;
-    try {
-      const { data } = await supabase
-        .from('user_settings')
-        .select('trade_amount, max_position_size')
-        .eq('user_id', user.id)
-        .maybeSingle();
+    if (!user) throw new Error('You must be logged in to trade.');
 
-      const configured = Number(data?.trade_amount ?? 0);
-      if (!configured || configured <= 0) return fallback;
+    const { data, error } = await supabase
+      .from('user_settings')
+      .select('trade_amount, max_position_size')
+      .eq('user_id', user.id)
+      .maybeSingle();
 
-      const maxPosition = Number(data?.max_position_size ?? 0);
-      let amount = configured;
-      if (maxPosition > 0) amount = Math.min(amount, maxPosition);
-      if (mode === 'live' && opportunity.volume_estimate > 0) {
-        amount = Math.min(amount, opportunity.volume_estimate);
-      }
-      return amount > 0 ? amount : configured;
-    } catch {
-      return fallback;
+    if (error) throw new Error('Could not load your trading configuration. Please try again.');
+
+    const resolved = resolveValidatedAmount(
+      {
+        tradeAmount: data?.trade_amount ?? null,
+        maxPositionSize: data?.max_position_size ?? null,
+      },
+      mode === 'live' ? opportunity.volume_estimate : undefined
+    );
+
+    if ('error' in resolved) {
+      throw new Error(`${resolved.error} Update it in Profile → Trading Configuration.`);
     }
+    return resolved.amount;
   };
+
 
   // 1Hz tick to drive the live countdown / staleness color
   useEffect(() => {
