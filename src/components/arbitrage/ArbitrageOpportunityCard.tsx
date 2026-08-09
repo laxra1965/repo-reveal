@@ -6,6 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { describeTradeError } from '@/lib/tradeErrors';
+import { resolveValidatedAmount } from '@/lib/tradeConfigValidation';
 import { ArrowRight, TrendingUp, Clock, Eye, EyeOff, Zap, AlertTriangle, Target, Loader2, TestTube } from 'lucide-react';
 
 const STALE_THRESHOLD_SECONDS = 60;
