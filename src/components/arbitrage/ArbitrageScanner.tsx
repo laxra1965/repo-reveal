@@ -15,6 +15,7 @@ import { ArbitrageOpportunityCard } from './ArbitrageOpportunityCard';
 import { PaperTradeHistory } from './PaperTradeHistory';
 import { PlansSection } from '@/components/plans/PlansSection';
 import { Play, Pause, Settings, TrendingUp, Lock, ChevronLeft, ChevronRight, TestTube, Shield, Clock } from 'lucide-react';
+import { resolveValidatedAmount } from '@/lib/tradeConfigValidation';
 
 interface Opportunity {
   id: string;
@@ -121,6 +122,7 @@ export const ArbitrageScanner = () => {
 
   // Track which opportunities have been auto-traded
   const autoTradedIdsRef = useRef<Set<string>>(new Set());
+  const invalidConfigNotifiedRef = useRef(false);
   const isScanningRef = useRef(false);
   const mountedRef = useRef(true);
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -289,12 +291,28 @@ export const ArbitrageScanner = () => {
       const quoteSymbol = symbols[2] || symbols[0] || 'UNKNOWN';
       // Respect the user's saved Trading Configuration: trade_amount is the
       // notional, capped only by max_position_size (paper trades are simulated,
-      // so opportunity liquidity does not constrain the size).
-      const configured = Number(userSettings.trade_amount ?? 0);
-      const maxPosition = Number(userSettings.max_position_size ?? 0);
-      let startAmount = configured > 0 ? configured : opportunity.volume_estimate;
-      if (maxPosition > 0) startAmount = Math.min(startAmount, maxPosition);
-      if (!(startAmount > 0)) startAmount = configured > 0 ? configured : opportunity.volume_estimate;
+      // so opportunity liquidity does not constrain the size). Invalid or
+      // out-of-range settings block the trade entirely.
+      const configured = Number(userSettings.trade_amount ?? NaN);
+      const maxPosition = Number(userSettings.max_position_size ?? NaN);
+      const resolved = resolveValidatedAmount({
+        tradeAmount: userSettings.trade_amount ?? null,
+        maxPositionSize: userSettings.max_position_size ?? null,
+      });
+      if ('error' in resolved) {
+        autoTradedIdsRef.current.delete(opportunity.id);
+        if (!invalidConfigNotifiedRef.current) {
+          invalidConfigNotifiedRef.current = true;
+          toast({
+            title: 'Auto-simulate blocked: invalid trading configuration',
+            description: resolved.error,
+            variant: 'destructive',
+          });
+        }
+        return;
+      }
+      invalidConfigNotifiedRef.current = false;
+      const startAmount = resolved.amount;
       const expectedProfit = startAmount * (opportunity.profit_percent / 100);
 
       const slippage = (Math.random() - 0.5) * 0.002;
@@ -333,23 +351,8 @@ export const ArbitrageScanner = () => {
       console.error('Auto paper trade error:', error);
       autoTradedIdsRef.current.delete(opportunity.id); // Allow retry on error
     }
-  }, [user, userSettings]);
+  }, [user, userSettings, toast]);
 
-  // Auto paper trade effect - execute on new profitable opportunities
-  useEffect(() => {
-    if (!autoPaperTrade || !isScanning || opportunities.length === 0) return;
-
-    // Find new opportunities that haven't been auto-traded yet
-    const newOpportunities = opportunities.filter(opp =>
-      !autoTradedIdsRef.current.has(opp.id) &&
-      opp.profit_percent > 0
-    );
-
-    // Execute paper trades for top 3 new opportunities
-    newOpportunities.slice(0, 3).forEach(opp => {
-      executeAutoPaperTrade(opp);
-    });
-  }, [opportunities, autoPaperTrade, isScanning, executeAutoPaperTrade]);
 
   // Start scanning - reads from DB (VPS scanner writes opportunities independently)
   const startScanning = useCallback(async (opts?: { silent?: boolean; skipPersist?: boolean }) => {
@@ -461,6 +464,21 @@ export const ArbitrageScanner = () => {
         return b.profit_percent - a.profit_percent;
       });
   }, [opportunities, activeArbTypes, userSettings]);
+
+  // Auto paper trade effect — only trades opportunities that pass the user's
+  // saved configuration (strategy types, exchanges, profit range, slippage).
+  useEffect(() => {
+    if (!autoPaperTrade || !isScanning || filteredOpportunities.length === 0) return;
+
+    const newOpportunities = filteredOpportunities.filter(opp =>
+      !autoTradedIdsRef.current.has(opp.id) &&
+      opp.profit_percent > 0
+    );
+
+    newOpportunities.slice(0, 3).forEach(opp => {
+      executeAutoPaperTrade(opp);
+    });
+  }, [filteredOpportunities, autoPaperTrade, isScanning, executeAutoPaperTrade]);
 
   // Update total pages whenever filtered opportunities change
   useEffect(() => {
