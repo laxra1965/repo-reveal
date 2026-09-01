@@ -414,56 +414,28 @@ export const ArbitrageScanner = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scanStateLoaded, user, hasActiveSubscription, isAdmin]);
 
-  // Filter and sort opportunities using user config
-  // Normalize strategy names for matching (handles triangular vs triangular_arbitrage vs triangular-arbitrage)
-  const normalizeStrategy = (s: string) => s.replace(/[-_]arbitrage$/i, '').replace(/[-_]/g, '_').toLowerCase();
+  // Filter and sort opportunities using the shared eligibility rules, keeping
+  // the exact reason (field + rule) each opportunity was skipped for.
+  const { filteredOpportunities, skipEntries } = useMemo(() => {
+    const { eligible, skipped } = partitionOpportunities(opportunities, {
+      arbitrage_types: activeArbTypes,
+      min_profit_percent: userSettings.min_profit_percent,
+      max_profit_percent: userSettings.max_profit_percent,
+      enabled_exchanges: userSettings.enabled_exchanges,
+      slippage_buffer: userSettings.slippage_buffer,
+    });
 
-  const filteredOpportunities = useMemo(() => {
-    const normalizedActiveTypes = new Set(activeArbTypes.map(normalizeStrategy));
-    const now = Date.now();
-    const STALE_THRESHOLD_MS = 5 * 60_000; // 5 minutes (VPS scanner cadence ~1-2 min)
-    const TRADING_FEES_PCT = 0.3; // 3 legs × 0.1%
+    const sorted = eligible.sort((a, b) => {
+      if (a.liquidity_score !== b.liquidity_score) return b.liquidity_score - a.liquidity_score;
+      return b.profit_percent - a.profit_percent;
+    });
 
-    return opportunities
-      .filter(opp => {
-        if (opp.status !== 'active') return false;
-
-        // Exclude stale opportunities (older than 60s)
-        const ageMs = now - new Date(opp.detected_at).getTime();
-        if (ageMs > STALE_THRESHOLD_MS) return false;
-
-        // Exclude negative net-profit opportunities
-        const slippagePct = opp.estimated_slippage * 100;
-        const netProfitPct = opp.profit_percent - TRADING_FEES_PCT - slippagePct;
-        if (netProfitPct <= 0) return false;
-
-        if (opp.strategy && !normalizedActiveTypes.has(normalizeStrategy(opp.strategy))) return false;
-        
-        // Apply user's min/max profit filters (client-side for VPS-fetched data)
-        if (userSettings.min_profit_percent != null && opp.profit_percent < userSettings.min_profit_percent) return false;
-        if (userSettings.max_profit_percent != null && opp.profit_percent > userSettings.max_profit_percent) return false;
-        
-        // Filter by user's enabled exchanges
-        if (userSettings.enabled_exchanges?.length) {
-          const oppExchanges = [opp.exchange1, opp.exchange2, opp.exchange3].filter(Boolean);
-          const hasEnabledExchange = oppExchanges.some(ex => 
-            userSettings.enabled_exchanges!.includes(ex!.toLowerCase())
-          );
-          if (!hasEnabledExchange) return false;
-        }
-        
-        // Filter by slippage buffer
-        if (userSettings.slippage_buffer != null && opp.estimated_slippage > userSettings.slippage_buffer) return false;
-        
-        return true;
-      })
-      .sort((a, b) => {
-        if (a.liquidity_score !== b.liquidity_score) {
-          return b.liquidity_score - a.liquidity_score;
-        }
-        return b.profit_percent - a.profit_percent;
-      });
+    return {
+      filteredOpportunities: sorted,
+      skipEntries: skipped.map(s => ({ opportunityId: s.opportunity.id, reason: s.reason })),
+    };
   }, [opportunities, activeArbTypes, userSettings]);
+
 
   // Auto paper trade effect — only trades opportunities that pass the user's
   // saved configuration (strategy types, exchanges, profit range, slippage).
