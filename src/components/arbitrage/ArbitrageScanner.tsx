@@ -58,6 +58,7 @@ export const ArbitrageScanner = () => {
   const [autoPaperTradeLoaded, setAutoPaperTradeLoaded] = useState(false);
   const [autoPaperTradeCount, setAutoPaperTradeCount] = useState(0);
   const [scanStateLoaded, setScanStateLoaded] = useState(false);
+  const [blockingReason, setBlockingReason] = useState<SkipReason | null>(null);
 
   // Load persisted preferences (auto-simulate + scanner state) from DB
   useEffect(() => {
