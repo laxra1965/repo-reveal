@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { getErrorMessage } from '@/utils/networkUtils';
-import { signInWithGoogle } from '@/lib/nativeAuth';
+import { signInWithGoogle } from '@/mobile/nativeAuth';
 
 
 export const AuthForm = () => {

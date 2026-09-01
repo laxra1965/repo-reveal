@@ -1,6 +1,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
+import { brokeredPreviewStorage } from './previewAuthStorage';
 
 // Use Environment Variables for Security and Flexibility
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://zupbliefzhnohsoguwuk.supabase.co';
@@ -10,7 +11,7 @@ const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY |
 // Note: Removed custom fetch wrapper which was stripping API Key headers in some environments (Error: 'no api key found').
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
-    storage: localStorage,
+    storage: brokeredPreviewStorage(),
     persistSession: true,
     autoRefreshToken: true,
   },

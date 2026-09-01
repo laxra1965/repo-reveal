@@ -15,7 +15,9 @@ import { ArbitrageOpportunityCard } from './ArbitrageOpportunityCard';
 import { PaperTradeHistory } from './PaperTradeHistory';
 import { PlansSection } from '@/components/plans/PlansSection';
 import { Play, Pause, Settings, TrendingUp, Lock, ChevronLeft, ChevronRight, TestTube, Shield, Clock } from 'lucide-react';
-import { resolveValidatedAmount } from '@/lib/tradeConfigValidation';
+
+import { partitionOpportunities, evaluateTradeConfig, type SkipReason } from '@/lib/opportunityEligibility';
+import { AutoTradeSkipSummary } from './AutoTradeSkipSummary';
 
 interface Opportunity {
   id: string;
@@ -56,6 +58,7 @@ export const ArbitrageScanner = () => {
   const [autoPaperTradeLoaded, setAutoPaperTradeLoaded] = useState(false);
   const [autoPaperTradeCount, setAutoPaperTradeCount] = useState(0);
   const [scanStateLoaded, setScanStateLoaded] = useState(false);
+  const [blockingReason, setBlockingReason] = useState<SkipReason | null>(null);
 
   // Load persisted preferences (auto-simulate + scanner state) from DB
   useEffect(() => {
@@ -295,23 +298,25 @@ export const ArbitrageScanner = () => {
       // out-of-range settings block the trade entirely.
       const configured = Number(userSettings.trade_amount ?? NaN);
       const maxPosition = Number(userSettings.max_position_size ?? NaN);
-      const resolved = resolveValidatedAmount({
-        tradeAmount: userSettings.trade_amount ?? null,
-        maxPositionSize: userSettings.max_position_size ?? null,
-      });
-      if ('error' in resolved) {
+      const resolved = evaluateTradeConfig(
+        { trade_amount: userSettings.trade_amount ?? null, max_position_size: userSettings.max_position_size ?? null },
+        'paper'
+      );
+      if ('reason' in resolved) {
         autoTradedIdsRef.current.delete(opportunity.id);
+        setBlockingReason(resolved.reason);
         if (!invalidConfigNotifiedRef.current) {
           invalidConfigNotifiedRef.current = true;
           toast({
-            title: 'Auto-simulate blocked: invalid trading configuration',
-            description: resolved.error,
+            title: `Auto-simulate blocked: ${resolved.reason.field}`,
+            description: resolved.reason.message,
             variant: 'destructive',
           });
         }
         return;
       }
       invalidConfigNotifiedRef.current = false;
+      setBlockingReason(null);
       const startAmount = resolved.amount;
       const expectedProfit = startAmount * (opportunity.profit_percent / 100);
 
@@ -414,56 +419,28 @@ export const ArbitrageScanner = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scanStateLoaded, user, hasActiveSubscription, isAdmin]);
 
-  // Filter and sort opportunities using user config
-  // Normalize strategy names for matching (handles triangular vs triangular_arbitrage vs triangular-arbitrage)
-  const normalizeStrategy = (s: string) => s.replace(/[-_]arbitrage$/i, '').replace(/[-_]/g, '_').toLowerCase();
+  // Filter and sort opportunities using the shared eligibility rules, keeping
+  // the exact reason (field + rule) each opportunity was skipped for.
+  const { filteredOpportunities, skipEntries } = useMemo(() => {
+    const { eligible, skipped } = partitionOpportunities(opportunities, {
+      arbitrage_types: activeArbTypes,
+      min_profit_percent: userSettings.min_profit_percent,
+      max_profit_percent: userSettings.max_profit_percent,
+      enabled_exchanges: userSettings.enabled_exchanges,
+      slippage_buffer: userSettings.slippage_buffer,
+    });
 
-  const filteredOpportunities = useMemo(() => {
-    const normalizedActiveTypes = new Set(activeArbTypes.map(normalizeStrategy));
-    const now = Date.now();
-    const STALE_THRESHOLD_MS = 5 * 60_000; // 5 minutes (VPS scanner cadence ~1-2 min)
-    const TRADING_FEES_PCT = 0.3; // 3 legs × 0.1%
+    const sorted = eligible.sort((a, b) => {
+      if (a.liquidity_score !== b.liquidity_score) return b.liquidity_score - a.liquidity_score;
+      return b.profit_percent - a.profit_percent;
+    });
 
-    return opportunities
-      .filter(opp => {
-        if (opp.status !== 'active') return false;
-
-        // Exclude stale opportunities (older than 60s)
-        const ageMs = now - new Date(opp.detected_at).getTime();
-        if (ageMs > STALE_THRESHOLD_MS) return false;
-
-        // Exclude negative net-profit opportunities
-        const slippagePct = opp.estimated_slippage * 100;
-        const netProfitPct = opp.profit_percent - TRADING_FEES_PCT - slippagePct;
-        if (netProfitPct <= 0) return false;
-
-        if (opp.strategy && !normalizedActiveTypes.has(normalizeStrategy(opp.strategy))) return false;
-        
-        // Apply user's min/max profit filters (client-side for VPS-fetched data)
-        if (userSettings.min_profit_percent != null && opp.profit_percent < userSettings.min_profit_percent) return false;
-        if (userSettings.max_profit_percent != null && opp.profit_percent > userSettings.max_profit_percent) return false;
-        
-        // Filter by user's enabled exchanges
-        if (userSettings.enabled_exchanges?.length) {
-          const oppExchanges = [opp.exchange1, opp.exchange2, opp.exchange3].filter(Boolean);
-          const hasEnabledExchange = oppExchanges.some(ex => 
-            userSettings.enabled_exchanges!.includes(ex!.toLowerCase())
-          );
-          if (!hasEnabledExchange) return false;
-        }
-        
-        // Filter by slippage buffer
-        if (userSettings.slippage_buffer != null && opp.estimated_slippage > userSettings.slippage_buffer) return false;
-        
-        return true;
-      })
-      .sort((a, b) => {
-        if (a.liquidity_score !== b.liquidity_score) {
-          return b.liquidity_score - a.liquidity_score;
-        }
-        return b.profit_percent - a.profit_percent;
-      });
+    return {
+      filteredOpportunities: sorted,
+      skipEntries: skipped.map(s => ({ opportunityId: s.opportunity.id, reason: s.reason })),
+    };
   }, [opportunities, activeArbTypes, userSettings]);
+
 
   // Auto paper trade effect — only trades opportunities that pass the user's
   // saved configuration (strategy types, exchanges, profit range, slippage).
@@ -623,6 +600,13 @@ export const ArbitrageScanner = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Why auto trades were skipped or blocked (field + rule) */}
+      <AutoTradeSkipSummary
+        skipped={skipEntries}
+        blocking={blockingReason}
+        mode={autoPaperTrade ? 'paper' : 'live'}
+      />
 
       {/* Opportunities with Pagination */}
       <div className="space-y-4">
