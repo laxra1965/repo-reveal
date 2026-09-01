@@ -16,6 +16,8 @@ import { PaperTradeHistory } from './PaperTradeHistory';
 import { PlansSection } from '@/components/plans/PlansSection';
 import { Play, Pause, Settings, TrendingUp, Lock, ChevronLeft, ChevronRight, TestTube, Shield, Clock } from 'lucide-react';
 import { resolveValidatedAmount } from '@/lib/tradeConfigValidation';
+import { partitionOpportunities, evaluateTradeConfig, type SkipReason } from '@/lib/opportunityEligibility';
+import { AutoTradeSkipSummary } from './AutoTradeSkipSummary';
 
 interface Opportunity {
   id: string;
