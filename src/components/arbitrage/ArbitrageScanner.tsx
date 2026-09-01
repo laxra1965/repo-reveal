@@ -297,23 +297,25 @@ export const ArbitrageScanner = () => {
       // out-of-range settings block the trade entirely.
       const configured = Number(userSettings.trade_amount ?? NaN);
       const maxPosition = Number(userSettings.max_position_size ?? NaN);
-      const resolved = resolveValidatedAmount({
-        tradeAmount: userSettings.trade_amount ?? null,
-        maxPositionSize: userSettings.max_position_size ?? null,
-      });
-      if ('error' in resolved) {
+      const resolved = evaluateTradeConfig(
+        { trade_amount: userSettings.trade_amount ?? null, max_position_size: userSettings.max_position_size ?? null },
+        'paper'
+      );
+      if ('reason' in resolved) {
         autoTradedIdsRef.current.delete(opportunity.id);
+        setBlockingReason(resolved.reason);
         if (!invalidConfigNotifiedRef.current) {
           invalidConfigNotifiedRef.current = true;
           toast({
-            title: 'Auto-simulate blocked: invalid trading configuration',
-            description: resolved.error,
+            title: `Auto-simulate blocked: ${resolved.reason.field}`,
+            description: resolved.reason.message,
             variant: 'destructive',
           });
         }
         return;
       }
       invalidConfigNotifiedRef.current = false;
+      setBlockingReason(null);
       const startAmount = resolved.amount;
       const expectedProfit = startAmount * (opportunity.profit_percent / 100);
 
