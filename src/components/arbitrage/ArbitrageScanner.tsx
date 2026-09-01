@@ -601,6 +601,13 @@ export const ArbitrageScanner = () => {
         </CardContent>
       </Card>
 
+      {/* Why auto trades were skipped or blocked (field + rule) */}
+      <AutoTradeSkipSummary
+        skipped={skipEntries}
+        blocking={blockingReason}
+        mode={autoPaperTrade ? 'paper' : 'live'}
+      />
+
       {/* Opportunities with Pagination */}
       <div className="space-y-4">
         {paginatedOpportunities.length === 0 && (
