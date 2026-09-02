@@ -7,6 +7,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { MobileNav } from "@/components/mobile/MobileNav";
 import { Suspense, lazy } from "react";
 
 // Lazy Load Pages for Performance
@@ -56,6 +57,7 @@ const App = () => (
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<NotFound />} />
                 </Routes>
+                <MobileNav />
               </Suspense>
             </BrowserRouter>
           </TooltipProvider>
