@@ -70,6 +70,8 @@ export class BybitExecutor implements IExchangeExecutor {
         if (parseFloat(order.cumExecQty) <= 0) {
             throw new Error("Bybit filled quantity is zero");
         }
+
+        return order;
     }
 
     async executeMarketOrder(
@@ -84,7 +86,7 @@ export class BybitExecutor implements IExchangeExecutor {
 
         if (isDryRun()) {
             console.log(`[DRY RUN] Bybit executeMarketOrder: ${side} ${amount} ${symbol}`);
-            return { fillPrice: 10000, fillAmount: amount, fee: 0 };
+            return { fillPrice: 0, fillAmount: amount, fee: 0 };
         }
 
         const keys = await this.keyManager.getKeys(userId, 'bybit');
@@ -131,19 +133,17 @@ export class BybitExecutor implements IExchangeExecutor {
         const orderId = data.result?.orderId;
         if (!orderId) throw new Error("Bybit did not return orderId");
 
-        // Verify
-        await this.verifyOrder(orderId, symbol.toUpperCase(), keys);
-
-        // Calculate result (Approximate or fetch execution details?)
-        // VerifyOrder fetched the order from History, so we COULD return exacts.
-        // But for simplicity of this Refactor, and since 'verifyOrder' logic above didn't return values...
-        // We will assume full fill verified.
-        // Ideally verifyOrder returns the order object.
+        // Verify (returns the filled order)
+        const order = await this.verifyOrder(orderId, symbol.toUpperCase(), keys);
+        const execQty = parseFloat(order.cumExecQty || qtyStr);
+        const execValue = parseFloat(order.cumExecValue || '0');
+        const avgPrice = parseFloat(order.avgPrice || (execQty > 0 ? (execValue / execQty).toString() : '0'));
+        const fee = parseFloat(order.cumExecFee || '0');
 
         return {
-            fillAmount: parseFloat(qtyStr), // Verified Filled
-            fillPrice: 0, // Need to fetch avgPrice from executed order
-            fee: 0.001 * parseFloat(qtyStr)
+            fillAmount: side === 'BUY' ? execQty : execValue,
+            fillPrice: avgPrice,
+            fee
         };
     }
 

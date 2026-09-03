@@ -1,5 +1,6 @@
 
 import { IExchangeExecutor } from './ExecutionEngine';
+import { assertTradingEnabled } from './config';
 import { BinanceExecutor } from './BinanceExecutor';
 import { BybitExecutor } from './BybitExecutor';
 import { OKXExecutor } from './OKXExecutor';
@@ -31,10 +32,7 @@ export class MultiExchangeExecutor implements IExchangeExecutor {
         amount: number
     ): Promise<{ fillPrice: number, fillAmount: number, fee: number }> {
         // PHASE E: HARD EXECUTION BLOCK (MANDATORY)
-        if (process.env.TRADING_ENABLED !== "true") {
-            console.log(`[SAFETY] Execution disabled — live trading blocked for ${exchange} ${symbol} ${side} ${amount}`);
-            throw new Error("Trading is disabled. Set TRADING_ENABLED=true to enable live trading.");
-        }
+        assertTradingEnabled(`${exchange} ${symbol} ${side}`);
         
         const exName = exchange.toLowerCase();
 

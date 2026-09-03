@@ -61,7 +61,7 @@ export class BinanceExecutor implements IExchangeExecutor {
 
         if (isDryRun()) {
             console.log(`[DRY RUN] Binance executeMarketOrder: ${side} ${amount} ${symbol}`);
-            return { fillPrice: 10000, fillAmount: amount, fee: 0 };
+            return { fillPrice: 0, fillAmount: amount, fee: 0 };
         }
 
         const keys = await this.keyManager.getKeys(userId, 'binance');

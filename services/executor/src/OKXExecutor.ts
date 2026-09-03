@@ -26,7 +26,7 @@ export class OKXExecutor implements IExchangeExecutor {
         if (isDryRun()) {
             console.log(`[DRY RUN] OKX executeMarketOrder: ${side} ${amount} ${symbol} for user ${userId}`);
             return {
-                fillPrice: 10000,
+                fillPrice: 0,
                 fillAmount: amount,
                 fee: 0
             };
