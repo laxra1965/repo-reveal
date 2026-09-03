@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import fetch from 'node-fetch';
 import { IExchangeExecutor } from './ExecutionEngine';
 import { KeyManager } from './KeyManager';
+import { assertTradingEnabled, isDryRun } from './config';
 
 export class BybitExecutor implements IExchangeExecutor {
     private keyManager: KeyManager;
@@ -79,13 +80,9 @@ export class BybitExecutor implements IExchangeExecutor {
         amount: number
     ): Promise<{ fillPrice: number, fillAmount: number, fee: number }> {
         // PHASE E: HARD EXECUTION BLOCK (MANDATORY)
-        if (process.env.TRADING_ENABLED !== "true") {
-            console.log(`[SAFETY] Execution disabled — live trading blocked for ${exchange} ${symbol} ${side} ${amount}`);
-            throw new Error("Trading is disabled. Set TRADING_ENABLED=true to enable live trading.");
-        }
+        assertTradingEnabled(`bybit ${symbol} ${side}`);
 
-        const dryRun = true;
-        if (dryRun) {
+        if (isDryRun()) {
             console.log(`[DRY RUN] Bybit executeMarketOrder: ${side} ${amount} ${symbol}`);
             return { fillPrice: 10000, fillAmount: amount, fee: 0 };
         }
