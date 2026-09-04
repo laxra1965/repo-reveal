@@ -58,7 +58,7 @@ export class KeyManager {
         try {
             const { data, error } = await this.supabase
                 .from('exchange_credentials')
-                .select('api_key, api_secret, passphrase, encrypted_api_key, encrypted_api_secret, encrypted_api_passphrase')
+                .select('api_key, api_secret, encrypted_api_key, encrypted_api_secret, encrypted_api_passphrase')
                 .eq('user_id', userId)
                 .eq('exchange', exchange.toLowerCase())
                 .maybeSingle();
@@ -73,7 +73,6 @@ export class KeyManager {
             // Legacy fallback: plaintext columns.
             if (!apiKey) apiKey = data.api_key || null;
             if (!apiSecret) apiSecret = data.api_secret || null;
-            if (!passphrase) passphrase = data.passphrase || undefined;
 
             if (!apiKey || !apiSecret) return null;
 
