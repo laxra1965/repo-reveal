@@ -58,23 +58,21 @@ export class KeyManager {
         try {
             const { data, error } = await this.supabase
                 .from('exchange_credentials')
-                .select('api_key, api_secret, passphrase, encrypted_api_key, encrypted_api_secret, encrypted_passphrase, is_active')
+                .select('api_key, api_secret, encrypted_api_key, encrypted_api_secret, encrypted_api_passphrase')
                 .eq('user_id', userId)
                 .eq('exchange', exchange.toLowerCase())
                 .maybeSingle();
 
             if (error || !data) return null;
-            if (data.is_active === false) return null;
 
             // Prefer encrypted columns (decrypted here, in memory only).
             let apiKey = await this.decrypt(data.encrypted_api_key);
             let apiSecret = await this.decrypt(data.encrypted_api_secret);
-            let passphrase = await this.decrypt(data.encrypted_passphrase ?? null);
+            let passphrase = await this.decrypt(data.encrypted_api_passphrase ?? null);
 
             // Legacy fallback: plaintext columns.
             if (!apiKey) apiKey = data.api_key || null;
             if (!apiSecret) apiSecret = data.api_secret || null;
-            if (!passphrase) passphrase = data.passphrase || undefined;
 
             if (!apiKey || !apiSecret) return null;
 
