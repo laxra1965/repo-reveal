@@ -13,6 +13,11 @@ StandardOutput=append:/var/log/repo-reveal/executor.log
 StandardError=append:/var/log/repo-reveal/executor.error.log
 Environment=NODE_ENV=production
 Environment=RUNTIME=vps
+# Safety: both must be set for real market orders.
+# TRADING_ENABLED=true and EXECUTION_MODE=live -> real orders
+# anything else -> simulated fills (dry run)
+Environment=TRADING_ENABLED=false
+Environment=EXECUTION_MODE=dry_run
 
 [Install]
 WantedBy=multi-user.target
