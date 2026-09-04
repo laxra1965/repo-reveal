@@ -9,6 +9,7 @@ import { UserService } from './UserService';
 import Redis from 'ioredis';
 
 import { MultiExchangeExecutor } from './MultiExchangeExecutor';
+import { TradeJobConsumer } from './TradeJobConsumer';
 
 export class ExecutorService {
     private logger: AsyncLogger;
@@ -22,6 +23,7 @@ export class ExecutorService {
     private userService: UserService;
     private orderBooks: Map<string, OrderBook> = new Map();
     private exchangeExecutor: IExchangeExecutor;
+    private tradeJobConsumer: TradeJobConsumer;
 
     constructor(redisInstance?: Redis) {
         this.logger = new AsyncLogger();
@@ -37,6 +39,8 @@ export class ExecutorService {
         this.userService = new UserService();
         this.sub = redisInstance || new Redis();
         this.redis = this.sub.duplicate(); // For publishing
+        // Bridges DB-queued trades (trade:execute) to real exchange orders
+        this.tradeJobConsumer = new TradeJobConsumer(this.exchangeExecutor, this.sub.duplicate(), this.redis);
     }
 
     private trackOpportunity(opp: any, stage: string, reason?: string, meta?: any) {
@@ -58,6 +62,7 @@ export class ExecutorService {
 
     async start() {
         this.logger.log(LogLevel.INFO, `[ExecutorService] Starting (Multi-Exchange)...`);
+        this.tradeJobConsumer.start();
         this.sub.psubscribe(`opportunity:*`);
         this.sub.psubscribe(`depth:*`);
         this.sub.psubscribe(`admin:*`); // Phase 18 Admin Commands
