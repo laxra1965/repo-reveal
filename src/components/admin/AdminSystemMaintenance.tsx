@@ -50,65 +50,25 @@ export const AdminSystemMaintenance = () => {
     try {
       setCleaning(true);
 
-      let recordsToDelete = 0;
+      const { data, error } = await supabase.rpc('cleanup_old_opportunities', { p_hours: 24 });
+      if (error) throw error;
 
-      try {
-        const response = await invokeFunction('clear-user-data', {
-          body: {
-            action: 'clear_opportunities_old',
-            daysOld: 1
-          }
-        });
-
-        if (response.error) {
-          throw new Error(response.error.message || response.error || 'Function returned error');
-        }
-
-        const result = response.data || response;
-        recordsToDelete = result?.deletedCount || result?.details?.opportunities || 0;
-      } catch (functionError: any) {
-        console.warn('Function invocation failed, using direct Supabase query:', functionError);
-        
-        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-
-        const { count: existingCount, error: countError } = await supabase
-          .from('opportunities')
-          .select('*', { count: 'exact', head: true })
-          .lt('detected_at', twentyFourHoursAgo);
-
-        if (countError) throw countError;
-
-        recordsToDelete = existingCount || 0;
-
-        const { error } = await supabase
-          .from('opportunities')
-          .delete()
-          .lt('detected_at', twentyFourHoursAgo);
-
-        if (error) throw error;
-      }
-
-      setLastCleanup({ count: recordsToDelete, timestamp: new Date() });
+      const deletedCount = typeof data === 'number' ? data : 0;
+      setLastCleanup({ count: deletedCount, timestamp: new Date() });
+      await fetchStats();
 
       toast({
         title: "Cleanup Complete",
-        description: `Successfully deleted ${recordsToDelete} old arbitrage opportunities`,
+        description: `Deleted ${deletedCount} opportunities older than 24 hours.`,
       });
     } catch (error: any) {
       console.error('Error cleaning up opportunities:', error);
-      let errorMessage = error.message || "Failed to cleanup old opportunities";
-      
-      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
-        errorMessage = "Network error: Unable to reach the server.";
-      } else if (errorMessage.includes('404') || errorMessage.includes('not found')) {
-        errorMessage = "Function not found. Please ensure clear-user-data is deployed.";
-      } else if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
-        errorMessage = "Authentication failed. Please sign in again.";
-      }
-      
+      const raw = error?.message || "Failed to cleanup old opportunities";
       toast({
         title: "Cleanup Failed",
-        description: errorMessage,
+        description: raw.includes('Admin required')
+          ? 'Admin access required to run cleanup.'
+          : raw,
         variant: "destructive",
       });
     } finally {
@@ -122,13 +82,12 @@ export const AdminSystemMaintenance = () => {
     try {
       setPurging(true);
 
-      // Use the DB function to purge stale opportunities (>2 min old)
       const { data, error } = await supabase.rpc('cleanup_stale_opportunities');
-
       if (error) throw error;
 
       const deletedCount = typeof data === 'number' ? data : 0;
       setLastPurge({ count: deletedCount, timestamp: new Date() });
+      await fetchStats();
 
       toast({
         title: "Purge Complete",
@@ -136,9 +95,12 @@ export const AdminSystemMaintenance = () => {
       });
     } catch (error: any) {
       console.error('Error purging expired opportunities:', error);
+      const raw = error?.message || "Failed to purge expired opportunities";
       toast({
         title: "Purge Failed",
-        description: error.message || "Failed to purge expired opportunities",
+        description: raw.includes('Admin required')
+          ? 'Admin access required to purge opportunities.'
+          : raw,
         variant: "destructive",
       });
     } finally {
