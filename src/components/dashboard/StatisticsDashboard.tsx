@@ -274,7 +274,6 @@ export const StatisticsDashboard = () => {
       let details: Record<string, number> = {};
 
       // Try using the Edge Function first
-      let clearedViaFunction = false;
       try {
         const { invokeFunction } = await import('@/lib/functionsInvoke');
         const response = await invokeFunction('clear-user-data', {
@@ -296,7 +295,6 @@ export const StatisticsDashboard = () => {
         }
         deletedCount = result?.deletedCount || 0;
         details = result?.details || {};
-        clearedViaFunction = true;
       } catch (functionError: any) {
 
         // If function fails (not deployed or network error), fall back to direct Supabase queries
