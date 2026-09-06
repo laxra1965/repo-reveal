@@ -1101,6 +1101,7 @@ export type Database = {
           users_processed: number
         }[]
       }
+      cleanup_old_opportunities: { Args: { p_hours?: number }; Returns: number }
       cleanup_stale_opportunities: { Args: never; Returns: number }
       create_demo_paper_trades: {
         Args: { p_user_id: string }
