@@ -274,12 +274,14 @@ export const StatisticsDashboard = () => {
       let details: Record<string, number> = {};
 
       // Try using the Edge Function first
+      let clearedViaFunction = false;
       try {
         const { invokeFunction } = await import('@/lib/functionsInvoke');
         const response = await invokeFunction('clear-user-data', {
           body: {
             action: functionAction,
-            daysOld: days || clearDays
+            daysOld: days || clearDays,
+            opportunityIds: filteredIds,
           }
         });
 
@@ -289,9 +291,14 @@ export const StatisticsDashboard = () => {
 
         // Handle both response formats (data wrapper or direct response)
         const result = response.data || response;
+        if (result?.success === false) {
+          throw new Error(result?.error || 'Function returned error');
+        }
         deletedCount = result?.deletedCount || 0;
         details = result?.details || {};
+        clearedViaFunction = true;
       } catch (functionError: any) {
+
         // If function fails (not deployed or network error), fall back to direct Supabase queries
         console.warn('Function invocation failed, using direct Supabase queries:', functionError);
         
