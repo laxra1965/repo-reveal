@@ -1,4 +1,3 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 declare const Deno: any;
@@ -6,13 +5,20 @@ declare const Deno: any;
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-signature, x-timestamp, x-nonce',
 };
 
 interface ClearDataRequest {
   action: 'clear_opportunities' | 'clear_opportunities_old' | 'clear_scan_logs' | 'clear_scan_logs_old' | 'clear_all';
-  daysOld?: number; // For clearing old data
+  daysOld?: number;
+  opportunityIds?: string[];
 }
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
 
 async function handler(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') {
@@ -20,159 +26,105 @@ async function handler(req: Request): Promise<Response> {
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    );
 
-    // Get user from auth token
-    const authHeader = req.headers.get('Authorization') || '';
-    const token = authHeader.replace('Bearer ', '');
-    
-    if (!token) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized: No token provided' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    const token = (req.headers.get('Authorization') || '').replace('Bearer ', '');
+    if (!token) return json({ error: 'Unauthorized: No token provided' }, 401);
 
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-    
-    if (userError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized: Invalid token' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    if (userError || !user) return json({ error: 'Unauthorized: Invalid token' }, 401);
 
-    const { action, daysOld = 30 }: ClearDataRequest = await req.json();
+    const { action, daysOld = 30, opportunityIds = [] }: ClearDataRequest = await req.json();
 
-    let deletedCount = 0;
-    let details: Record<string, number> = {};
+    const details: Record<string, number> = {};
+
+    const clearOpportunities = async (olderThanDays?: number) => {
+      // `opportunities` is a shared table (no user_id column).
+      // When the client sends the ids it currently sees, only those are removed.
+      if (opportunityIds.length > 0) {
+        let removed = 0;
+        for (let i = 0; i < opportunityIds.length; i += 200) {
+          const batch = opportunityIds.slice(i, i + 200);
+          const { data, error } = await supabase
+            .from('opportunities')
+            .delete()
+            .in('id', batch)
+            .select('id');
+          if (error) throw error;
+          removed += data?.length || 0;
+        }
+        return removed;
+      }
+
+      let query = supabase.from('opportunities').delete();
+      if (olderThanDays !== undefined) {
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - olderThanDays);
+        query = query.lt('detected_at', cutoff.toISOString());
+      } else {
+        // delete everything (guard clause required by PostgREST)
+        query = query.not('id', 'is', null);
+      }
+      const { data, error } = await query.select('id');
+      if (error) throw error;
+      return data?.length || 0;
+    };
+
+    const clearLogs = async (olderThanDays?: number) => {
+      let query = supabase.from('scanner_logs').delete().eq('user_id', user.id);
+      if (olderThanDays !== undefined) {
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - olderThanDays);
+        query = query.lt('created_at', cutoff.toISOString());
+      }
+      const { data, error } = await query.select('id');
+      if (error) throw error;
+      return data?.length || 0;
+    };
 
     switch (action) {
-      case 'clear_opportunities': {
-        // Clear all opportunities for user
-        const { error: delError, data: deleted } = await supabase
-          .from('arbitrage_opportunities')
-          .delete()
-          .eq('user_id', user.id)
-          .select('id');
-        
-        deletedCount = deleted?.length || 0;
-        details.opportunities = deletedCount;
+      case 'clear_opportunities':
+        details.opportunities = await clearOpportunities();
         break;
-      }
-
-      case 'clear_opportunities_old': {
-        // Clear opportunities older than X days
-        const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - (daysOld || 30));
-        
-        const { error: delError, data: deleted } = await supabase
-          .from('arbitrage_opportunities')
-          .delete()
-          .eq('user_id', user.id)
-          .lt('detected_at', cutoffDate.toISOString())
-          .select('id');
-        
-        deletedCount = deleted?.length || 0;
-        details.opportunities = deletedCount;
+      case 'clear_opportunities_old':
+        details.opportunities = await clearOpportunities(daysOld);
         details.daysOld = daysOld;
         break;
-      }
-
-      case 'clear_scan_logs': {
-        // Clear all scan logs for user
-        const { error: delError, data: deleted } = await supabase
-          .from('scanner_logs')
-          .delete()
-          .eq('user_id', user.id)
-          .select('id');
-        
-        deletedCount = deleted?.length || 0;
-        details.scan_logs = deletedCount;
+      case 'clear_scan_logs':
+        details.scan_logs = await clearLogs();
         break;
-      }
-
-      case 'clear_scan_logs_old': {
-        // Clear scan logs older than X days
-        const logCutoffDate = new Date();
-        logCutoffDate.setDate(logCutoffDate.getDate() - (daysOld || 30));
-        
-        const { error: delError, data: deleted } = await supabase
-          .from('scanner_logs')
-          .delete()
-          .eq('user_id', user.id)
-          .lt('created_at', logCutoffDate.toISOString())
-          .select('id');
-        
-        deletedCount = deleted?.length || 0;
-        details.scan_logs = deletedCount;
+      case 'clear_scan_logs_old':
+        details.scan_logs = await clearLogs(daysOld);
         details.daysOld = daysOld;
         break;
-      }
-
-      case 'clear_all': {
-        // Clear all opportunities and scan logs
-        const { data: deletedOpps } = await supabase
-          .from('arbitrage_opportunities')
-          .delete()
-          .eq('user_id', user.id)
-          .select('id');
-        
-        const { data: deletedLogs } = await supabase
-          .from('scanner_logs')
-          .delete()
-          .eq('user_id', user.id)
-          .select('id');
-        
-        const allOppCount = deletedOpps?.length || 0;
-        const allLogCount = deletedLogs?.length || 0;
-        deletedCount = allOppCount + allLogCount;
-        details.opportunities = allOppCount;
-        details.scan_logs = allLogCount;
+      case 'clear_all':
+        details.opportunities = await clearOpportunities();
+        details.scan_logs = await clearLogs();
         break;
-      }
-
       default:
-        return new Response(
-          JSON.stringify({ error: 'Invalid action' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return json({ error: 'Invalid action' }, 400);
     }
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        action,
-        deletedCount,
-        details,
-        timestamp: new Date().toISOString()
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
-    );
+    const deletedCount = (details.opportunities || 0) + (details.scan_logs || 0);
+
+    return json({
+      success: true,
+      action,
+      deletedCount,
+      details,
+      timestamp: new Date().toISOString(),
+    });
   } catch (error: any) {
     console.error('Clear data error:', error);
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: error.message || 'Unknown error'
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
-    );
+    return json({ success: false, error: error?.message || 'Unknown error' }, 500);
   }
 }
 
-// Export default handler for unified server
 export default handler;
 
-// For Supabase Edge Functions compatibility (commented out for unified server)
-// if (typeof Deno !== 'undefined' && Deno.serve) {
-//   serve(handler);
-// }
-
+if (typeof Deno !== 'undefined' && Deno.serve) {
+  Deno.serve(handler);
+}
