@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'app.lovable.64b44d9e8bca4a859edc15e293ba8d8a',
+  appId: 'app.lovable.p64b44d9e8bca4a859edc15e293ba8d8a',
   appName: 'repo-reveal',
   webDir: 'dist',
   server: {
