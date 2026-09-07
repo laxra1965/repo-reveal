@@ -265,6 +265,11 @@ const Pricing = () => {
             );
           })}
         </div>
+
+        <div className="mt-12 flex justify-center gap-6 text-sm text-muted-foreground">
+          <a href="/faq" className="hover:underline">FAQs</a>
+          <a href="/terms" className="hover:underline">Terms and conditions</a>
+        </div>
       </div>
     </div>
   );
