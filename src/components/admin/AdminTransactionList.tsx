@@ -109,7 +109,7 @@ export const AdminTransactionList = () => {
         .maybeSingle();
 
       if (existingSub) {
-        // Sub already exists — just make sure the txn is marked confirmed.
+        // Sub already exists - just make sure the txn is marked confirmed.
         await supabase
           .from('transactions')
           .update({ status: 'confirmed', confirmed_at: new Date().toISOString() })

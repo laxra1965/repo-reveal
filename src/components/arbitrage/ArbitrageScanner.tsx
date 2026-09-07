@@ -442,7 +442,7 @@ export const ArbitrageScanner = () => {
   }, [opportunities, activeArbTypes, userSettings]);
 
 
-  // Auto paper trade effect — only trades opportunities that pass the user's
+  // Auto paper trade effect - only trades opportunities that pass the user's
   // saved configuration (strategy types, exchanges, profit range, slippage).
   useEffect(() => {
     if (!autoPaperTrade || !isScanning || filteredOpportunities.length === 0) return;

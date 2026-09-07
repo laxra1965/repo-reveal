@@ -75,6 +75,6 @@ export function resolveValidatedAmount(
   if (liquidityCap && liquidityCap > 0) {
     amount = Math.min(amount, liquidityCap);
   }
-  if (!(amount > 0)) return { error: 'Resolved trade size is zero — check your trading configuration.' };
+  if (!(amount > 0)) return { error: 'Resolved trade size is zero - check your trading configuration.' };
   return { amount };
 }

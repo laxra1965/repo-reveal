@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils';
 const STRATEGY_OPTIONS = [
   { value: 'triangular-arbitrage', label: 'Triangular Arbitrage', description: 'Same-exchange 3-leg cycles (e.g. USDT→BTC→ETH→USDT)' },
   { value: 'cross_exchange', label: 'Cross-Exchange Arbitrage', description: 'Price differences across multiple exchanges' },
-  { value: 'triangular_arbitrage', label: 'Triangular Arbitrage (legacy)', description: 'Legacy strategy key — underscore variant' },
+  { value: 'triangular_arbitrage', label: 'Triangular Arbitrage (legacy)', description: 'Legacy strategy key - underscore variant' },
 ];
 
 const EXCHANGE_OPTIONS = [
@@ -140,7 +140,7 @@ export const AdminFilterManager = () => {
       icon: Settings,
       preset: {
         name: 'Default Filter',
-        description: 'Balanced filter — standard profit and liquidity thresholds',
+        description: 'Balanced filter - standard profit and liquidity thresholds',
         min_profit_percent: 0.3,
         min_liquidity_score: 0.5,
         min_volume_estimate: 1000,
@@ -152,7 +152,7 @@ export const AdminFilterManager = () => {
       icon: ShieldCheck,
       preset: {
         name: 'Conservative',
-        description: 'Conservative filter — fewer, safer trades',
+        description: 'Conservative filter - fewer, safer trades',
         min_profit_percent: 0.5,
         min_liquidity_score: 0.7,
         min_volume_estimate: 5000,
@@ -164,7 +164,7 @@ export const AdminFilterManager = () => {
       icon: Zap,
       preset: {
         name: 'Aggressive',
-        description: 'Aggressive filter — more trades, higher risk',
+        description: 'Aggressive filter - more trades, higher risk',
         min_profit_percent: 0.15,
         min_liquidity_score: 0.3,
         min_volume_estimate: 500,

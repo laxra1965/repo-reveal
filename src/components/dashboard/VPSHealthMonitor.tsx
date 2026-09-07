@@ -126,7 +126,7 @@ export const VPSHealthMonitor = () => {
       if (!overallConnected) {
         setError('No recent VPS activity detected in the last 10 minutes');
       } else if (!hasRecentOpps) {
-        setError('Scanner may be idle — no opportunities in the last 2 minutes');
+        setError('Scanner may be idle - no opportunities in the last 2 minutes');
       }
     } catch (err: any) {
       setMetrics(prev => ({ ...prev, connected: false, services: getDefaultServices('unknown'), lastUpdate: new Date() }));
@@ -211,7 +211,7 @@ export const VPSHealthMonitor = () => {
 
         {directFetchFailed && (
           <div className="p-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-xs text-yellow-400">
-            ⚠️ Direct VPS health check unavailable (raw IP / no SSL). Status inferred from recent Supabase data.
+            Direct VPS health check unavailable (raw IP / no SSL). Status inferred from recent Supabase data.
             {vpsUrl.match(/\d+\.\d+\.\d+\.\d+/) && (
               <span className="block mt-1 text-muted-foreground">
                 Tip: Set up a domain with SSL for {vpsUrl.replace(/https?:\/\//, '').replace(/\/.*/, '')} for direct monitoring.

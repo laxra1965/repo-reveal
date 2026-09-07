@@ -197,7 +197,7 @@ const Pricing = () => {
         )}
         {!plansLoading && tiers.length === 0 && (
           <div className="text-center text-destructive mb-6 p-4 bg-destructive/10 rounded-lg">
-            ⚠️ No subscription plans are currently available. Please contact support.
+            No subscription plans are currently available. Please contact support.
           </div>
         )}
 

@@ -55,7 +55,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       }
     );
 
-    // Native (Android/iOS) OAuth deep-link handler — no-op on web
+    // Native (Android/iOS) OAuth deep-link handler - no-op on web
     const unregisterNative = registerNativeAuthListener();
 
     return () => {

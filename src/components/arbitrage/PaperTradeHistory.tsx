@@ -215,7 +215,7 @@ export const PaperTradeHistory = () => {
                       {format(new Date(trade.started_at), 'MMM dd, HH:mm')}
                     </TableCell>
                     <TableCell className="text-xs capitalize">
-                      <Badge variant="outline">{trade.exchanges || '—'}</Badge>
+                      <Badge variant="outline">{trade.exchanges || '-'}</Badge>
                     </TableCell>
                     <TableCell className="font-mono text-xs">
                       {trade.quote_symbol} → {trade.base_symbol} → {trade.intermediate_symbol}
