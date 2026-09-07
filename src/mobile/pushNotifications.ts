@@ -54,7 +54,7 @@ export const registerPushNotifications = (
 
     handles.push(
       PushNotifications.addListener('registrationError', () => {
-        /* silently ignore — app still works without push */
+        /* silently ignore - app still works without push */
       }),
     );
 

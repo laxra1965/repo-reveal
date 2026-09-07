@@ -147,7 +147,7 @@ export const AdminSystemMaintenance = () => {
                         </span>
                       </span>
                     ) : (
-                      <span className="text-destructive font-medium">No data — scanner may be offline</span>
+                      <span className="text-destructive font-medium">No data - scanner may be offline</span>
                     )}
                   </div>
                 </>
@@ -192,7 +192,7 @@ export const AdminSystemMaintenance = () => {
           {lastPurge && (
             <div className="pt-3 border-t">
               <p className="text-sm text-muted-foreground">
-                Last purge: {lastPurge.timestamp.toLocaleString()} — Deleted: {lastPurge.count} records
+                Last purge: {lastPurge.timestamp.toLocaleString()} - Deleted: {lastPurge.count} records
               </p>
             </div>
           )}
@@ -221,7 +221,7 @@ export const AdminSystemMaintenance = () => {
           {lastCleanup && (
             <div className="pt-3 border-t">
               <p className="text-sm text-muted-foreground">
-                Last cleanup: {lastCleanup.timestamp.toLocaleString()} — Deleted: {lastCleanup.count} records
+                Last cleanup: {lastCleanup.timestamp.toLocaleString()} - Deleted: {lastCleanup.count} records
               </p>
             </div>
           )}

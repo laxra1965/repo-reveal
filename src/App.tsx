@@ -23,6 +23,8 @@ const AdminApprove = lazy(() => import("./pages/AdminApprove"));
 const Profile = lazy(() => import("./pages/Profile"));
 const TradeHistory = lazy(() => import("./pages/TradeHistory"));
 const AutoTrade = lazy(() => import("./pages/AutoTrade"));
+const FAQ = lazy(() => import("./pages/FAQ"));
+const Terms = lazy(() => import("./pages/Terms"));
 
 const queryClient = new QueryClient();
 
@@ -54,6 +56,8 @@ const App = () => (
                   <Route path="/admin" element={<Admin />} />
                   <Route path="/admin-approve" element={<AdminApprove />} />
                   <Route path="/pricing" element={<Pricing />} />
+                  <Route path="/faq" element={<FAQ />} />
+                  <Route path="/terms" element={<Terms />} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<NotFound />} />
                 </Routes>

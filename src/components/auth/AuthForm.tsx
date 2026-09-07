@@ -269,6 +269,10 @@ export const AuthForm = () => {
                 Admin Login
               </Button>
             </div>
+            <div className="flex justify-center gap-4 pt-2 text-xs text-muted-foreground">
+              <a href="/faq" className="hover:underline">FAQs</a>
+              <a href="/terms" className="hover:underline">Terms and conditions</a>
+            </div>
           </div>
         </CardContent>
       </Card>

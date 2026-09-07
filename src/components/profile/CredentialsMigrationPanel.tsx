@@ -128,7 +128,7 @@ export function CredentialsMigrationPanel() {
                     </Button>
 
                     <p className="text-xs text-amber-600 dark:text-amber-400">
-                        ℹ️ After encryption, credentials can only be decrypted by the system. This prevents unauthorized access.
+                        ℹAfter encryption, credentials can only be decrypted by the system. This prevents unauthorized access.
                     </p>
                 </div>
             </CardContent>

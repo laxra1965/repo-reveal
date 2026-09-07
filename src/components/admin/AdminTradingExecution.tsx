@@ -127,11 +127,11 @@ export const AdminTradingExecution = () => {
     setSaving(true);
     try {
       await upsertSetting('real_money_allowed_exchanges', JSON.stringify(allowedExchanges));
-      // DB trigger will auto-disable approval if list became empty — reflect locally.
+      // DB trigger will auto-disable approval if list became empty - reflect locally.
       if (allowedExchanges.length === 0 && approved) {
         await upsertSetting('real_money_approved', 'false');
         setApproved(false);
-        toast.warning('Allowed exchanges cleared — real-money trading was automatically disabled.');
+        toast.warning('Allowed exchanges cleared - real-money trading was automatically disabled.');
       } else {
         toast.success('Allowed exchanges saved');
       }
@@ -316,7 +316,7 @@ export const AdminTradingExecution = () => {
                               {Number(trade.actual_profit).toFixed(4)} USDT
                             </span>
                           ) : (
-                            <span className="text-muted-foreground">—</span>
+                            <span className="text-muted-foreground">-</span>
                           )}
                         </td>
                       </tr>

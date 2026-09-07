@@ -304,7 +304,7 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
 
     setIsPaperExecuting(true);
     try {
-      // Idempotency key for paper trade — prevents duplicate rows on rapid clicks.
+      // Idempotency key for paper trade - prevents duplicate rows on rapid clicks.
       if (!paperIdempotencyKey.current) {
         paperIdempotencyKey.current =
           (globalThis.crypto?.randomUUID?.() ??

@@ -130,7 +130,7 @@ export const AdminOnboardingTour = ({ onNavigate }: AdminOnboardingTourProps) =>
       <CardContent className="pt-0">
         {allDone ? (
           <p className="text-sm text-muted-foreground">
-            🎉 All checks passed! Your admin dashboard is ready. You can dismiss this banner.
+            All checks passed! Your admin dashboard is ready. You can dismiss this banner.
           </p>
         ) : (
           <ul className="space-y-3">

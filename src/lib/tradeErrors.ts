@@ -30,7 +30,7 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   uniq_trade_history_open_per_user_opp:
     'You already have an open trade for this opportunity. Wait for it to finish (or cancel it) before submitting again.',
   uniq_auto_trade_queue_open_per_user:
-    'You already have a trade queued or executing. Only one auto-trade can run at a time — it will pick up the next opportunity automatically.',
+    'You already have a trade queued or executing. Only one auto-trade can run at a time - it will pick up the next opportunity automatically.',
 };
 
 /**

@@ -113,7 +113,7 @@ export const AdminTradeOperations = () => {
       const row: any = Array.isArray(data) ? data[0] : data;
       setDryRunReport(dryRun ? row ?? null : null);
       toast({
-        title: dryRun ? 'Dry run complete — nothing changed' : 'Reconciliation complete',
+        title: dryRun ? 'Dry run complete - nothing changed' : 'Reconciliation complete',
         description: `${dryRun ? 'Would cancel' : 'Cancelled'} ${row?.trades_cancelled ?? 0} duplicate trades, ${row?.queue_cancelled ?? 0} queue entries, ${dryRun ? 'would re-link' : 're-linked'} ${row?.queue_relinked ?? 0}.`,
       });
       if (!dryRun) fetchAll();
@@ -198,7 +198,7 @@ export const AdminTradeOperations = () => {
       {dryRunReport && (
         <Card className="border-dashed">
           <CardHeader>
-            <CardTitle className="text-base">Dry run report — no rows were changed</CardTitle>
+            <CardTitle className="text-base">Dry run report - no rows were changed</CardTitle>
             <CardDescription>
               Would cancel {dryRunReport.trades_cancelled ?? 0} duplicate trades and {dryRunReport.queue_cancelled ?? 0} queue entries, and re-link {dryRunReport.queue_relinked ?? 0} queue entries.
             </CardDescription>
@@ -223,7 +223,7 @@ export const AdminTradeOperations = () => {
                       <td className="py-2 pr-3 text-xs">{c.source}</td>
                       <td className="pr-3"><Badge variant="outline">{c.action}</Badge></td>
                       <td className="pr-3">{label(c.user_id)}</td>
-                      <td className="pr-3 font-mono text-xs">{String(c.opportunity_id ?? '—').slice(0, 8)}…</td>
+                      <td className="pr-3 font-mono text-xs">{String(c.opportunity_id ?? '-').slice(0, 8)}…</td>
                       <td className="font-mono text-xs">{String(c.id).slice(0, 8)}…</td>
                     </tr>
                   ))}
@@ -264,8 +264,8 @@ export const AdminTradeOperations = () => {
                     <td className="pr-3"><Badge variant={statusVariant(q.status)}>{q.status}</Badge></td>
                     <td className="pr-3">${Number(q.actual_trade_amount).toFixed(2)}</td>
                     <td className="pr-3 font-mono text-xs">{q.opportunity_id?.slice(0, 8)}…</td>
-                    <td className="pr-3 text-xs">{q.queued_at ? new Date(q.queued_at).toLocaleString() : '—'}</td>
-                    <td className="text-xs text-destructive max-w-[240px] truncate">{q.error_message || '—'}</td>
+                    <td className="pr-3 text-xs">{q.queued_at ? new Date(q.queued_at).toLocaleString() : '-'}</td>
+                    <td className="text-xs text-destructive max-w-[240px] truncate">{q.error_message || '-'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -310,9 +310,9 @@ export const AdminTradeOperations = () => {
                       <td className="pr-3 text-xs">{t.base_symbol}→{t.intermediate_symbol}→{t.quote_symbol}</td>
                       <td className="pr-3"><Badge variant={statusVariant(t.status)}>{t.status}</Badge></td>
                       <td className="pr-3">${Number(t.start_amount).toFixed(2)}</td>
-                      <td className="pr-3">{t.actual_profit != null ? `$${Number(t.actual_profit).toFixed(2)}` : '—'}</td>
-                      <td className="pr-3 text-xs">{t.created_at ? new Date(t.created_at).toLocaleString() : '—'}</td>
-                      <td className="text-xs text-destructive max-w-[240px] truncate">{t.error_message || '—'}</td>
+                      <td className="pr-3">{t.actual_profit != null ? `$${Number(t.actual_profit).toFixed(2)}` : '-'}</td>
+                      <td className="pr-3 text-xs">{t.created_at ? new Date(t.created_at).toLocaleString() : '-'}</td>
+                      <td className="text-xs text-destructive max-w-[240px] truncate">{t.error_message || '-'}</td>
                     </tr>
                   );
                 })}
@@ -351,8 +351,8 @@ export const AdminTradeOperations = () => {
                   <tr key={r.id} className="border-b last:border-0">
                     <td className="py-2 pr-3">{r.source}</td>
                     <td className="pr-3 text-xs">{new Date(r.started_at).toLocaleString()}</td>
-                    <td className="pr-3 text-xs">{r.finished_at ? new Date(r.finished_at).toLocaleTimeString() : '—'}</td>
-                    <td className="pr-3 text-xs">{r.duration_ms != null ? `${r.duration_ms} ms` : '—'}</td>
+                    <td className="pr-3 text-xs">{r.finished_at ? new Date(r.finished_at).toLocaleTimeString() : '-'}</td>
+                    <td className="pr-3 text-xs">{r.duration_ms != null ? `${r.duration_ms} ms` : '-'}</td>
                     <td className="pr-3">{r.users_processed}</td>
                     <td className="pr-3">{r.inserts_attempted}</td>
                     <td className="pr-3 text-green-500">{r.successes}</td>

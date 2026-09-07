@@ -39,7 +39,7 @@ export const AutoTradeSkipSummary = memo(({ skipped, blocking, mode }: Props) =>
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>
-            Auto trade blocked ({mode} mode) — {blocking.field}
+            Auto trade blocked ({mode} mode) - {blocking.field}
           </AlertTitle>
           <AlertDescription className="space-y-1">
             <p>{blocking.message}</p>
