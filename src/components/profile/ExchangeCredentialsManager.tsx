@@ -42,12 +42,12 @@ interface ExchangeCredential {
   api_passphrase?: string | null;
 }
 
-const SUPPORTED_EXCHANGES: { value: ExchangeName; label: string; logo: string }[] = [
-  { value: 'binance', label: 'Binance', logo: '🟡' },
-  { value: 'bybit', label: 'Bybit', logo: '🟠' },
-  { value: 'okx', label: 'OKX', logo: '⚫' },
-  { value: 'gate', label: 'Gate.io', logo: '🔵' },
-  { value: 'mexc', label: 'MEXC', logo: '🟢' },
+const SUPPORTED_EXCHANGES: { value: ExchangeName; label: string; initials: string }[] = [
+  { value: 'binance', label: 'Binance', initials: 'BN' },
+  { value: 'bybit', label: 'Bybit', initials: 'BY' },
+  { value: 'okx', label: 'OKX', initials: 'OK' },
+  { value: 'gate', label: 'Gate.io', initials: 'GA' },
+  { value: 'mexc', label: 'MEXC', initials: 'MX' },
 ];
 
 export function ExchangeCredentialsManager() {
@@ -350,7 +350,7 @@ export function ExchangeCredentialsManager() {
                     <SelectContent>
                       {availableExchanges.map(exchange => (
                         <SelectItem key={exchange.value} value={exchange.value}>
-                          {exchange.logo} {exchange.label}
+                          {exchange.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -430,7 +430,9 @@ export function ExchangeCredentialsManager() {
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <span className="text-2xl">{exchangeInfo?.logo}</span>
+                      <span className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-muted text-xs font-semibold text-muted-foreground">
+                        {exchangeInfo?.initials || credential.exchange.slice(0, 2).toUpperCase()}
+                      </span>
                       <div>
                         <h4 className="font-semibold">{exchangeInfo?.label || credential.exchange}</h4>
                         <div className="flex items-center gap-2 mt-1">
