@@ -4,6 +4,8 @@ interface RestQuote {
   pair: string;
   bid: number;
   ask: number;
+  bidSize?: number;
+  askSize?: number;
 }
 
 const TIMEOUT_MS = 8_000;
@@ -35,7 +37,7 @@ export async function fetchSnapshot(
       if (!pair) return [];
       const bid = Number(row.bidPrice);
       const ask = Number(row.askPrice);
-      return bid > 0 && ask > 0 ? [{ pair, bid, ask }] : [];
+      return bid > 0 && ask > 0 ? [{ pair, bid, ask, bidSize: Number(row.bidQty), askSize: Number(row.askQty) }] : [];
     });
   }
 
@@ -49,7 +51,7 @@ export async function fetchSnapshot(
       if (!pair) return [];
       const bid = Number(row.bid1Price);
       const ask = Number(row.ask1Price);
-      return bid > 0 && ask > 0 ? [{ pair, bid, ask }] : [];
+      return bid > 0 && ask > 0 ? [{ pair, bid, ask, bidSize: Number(row.bid1Size), askSize: Number(row.ask1Size) }] : [];
     });
   }
 
@@ -62,6 +64,6 @@ export async function fetchSnapshot(
     if (!pair) return [];
     const bid = Number(row.bidPx);
     const ask = Number(row.askPx);
-    return bid > 0 && ask > 0 ? [{ pair, bid, ask }] : [];
+    return bid > 0 && ask > 0 ? [{ pair, bid, ask, bidSize: Number(row.bidSz), askSize: Number(row.askSz) }] : [];
   });
 }

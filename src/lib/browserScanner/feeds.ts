@@ -10,7 +10,7 @@ export interface FeedHandle {
 }
 
 interface FeedCallbacks {
-  onQuote: (pair: string, bid: number, ask: number) => void;
+  onQuote: (pair: string, bid: number, ask: number, bidSize?: number, askSize?: number) => void;
   onStatus: (status: FeedStatus) => void;
 }
 
@@ -54,10 +54,13 @@ function createSocket(
 
     ws.onopen = () => {
       cb.onStatus('live');
-      onOpen(ws!);
+      const socket = ws;
+      if (!socket) return;
+      onOpen(socket);
       heartbeat = setInterval(() => {
         try {
-          ws?.send('ping');
+          if (url.includes('bybit')) socket.send(JSON.stringify({ op: 'ping' }));
+          else if (url.includes('okx')) socket.send('ping');
         } catch {
           /* venues that reject text pings are fine */
         }
@@ -102,21 +105,22 @@ function createSocket(
 function binance(pairs: string[], cb: FeedCallbacks): FeedHandle {
   const wanted = new Map(pairs.map((p) => [p.replace('/', ''), p]));
   return createSocket(
-    'wss://stream.binance.com:9443/ws/!bookTicker',
+    'wss://stream.binance.com:9443/ws',
     cb,
-    () => {},
+    (ws) => ws.send(JSON.stringify({ method: 'SUBSCRIBE', params: [...wanted.keys()].map((s) => `${s.toLowerCase()}@bookTicker`), id: 1 })),
     (msg, emit) => {
       const pair = wanted.get(msg?.s);
       if (!pair) return;
       const bid = Number(msg.b);
       const ask = Number(msg.a);
-      if (bid > 0 && ask > 0) emit(pair, bid, ask);
+      if (bid > 0 && ask > 0) emit(pair, bid, ask, Number(msg.B), Number(msg.A));
     },
   );
 }
 
 function bybit(pairs: string[], cb: FeedCallbacks): FeedHandle {
   const wanted = new Map(pairs.map((p) => [p.replace('/', ''), p]));
+  const tickers = new Map<string, Record<string, unknown>>();
   return createSocket(
     'wss://stream.bybit.com/v5/public/spot',
     cb,
@@ -128,13 +132,16 @@ function bybit(pairs: string[], cb: FeedCallbacks): FeedHandle {
       }
     },
     (msg, emit) => {
-      const d = msg?.data;
-      if (!d?.symbol) return;
+      const update = msg?.data;
+      const symbol = update?.symbol || msg?.topic?.replace('tickers.', '');
+      if (!symbol) return;
+      const d = { ...(msg.type === 'snapshot' ? {} : tickers.get(symbol)), ...update, symbol };
+      tickers.set(symbol, d);
       const pair = wanted.get(d.symbol);
       if (!pair) return;
       const bid = Number(d.bid1Price);
       const ask = Number(d.ask1Price);
-      if (bid > 0 && ask > 0) emit(pair, bid, ask);
+      if (bid > 0 && ask > 0) emit(pair, bid, ask, Number(d.bid1Size), Number(d.ask1Size));
     },
   );
 }
@@ -157,7 +164,7 @@ function okx(pairs: string[], cb: FeedCallbacks): FeedHandle {
         if (!pair) continue;
         const bid = Number(d.bidPx);
         const ask = Number(d.askPx);
-        if (bid > 0 && ask > 0) emit(pair, bid, ask);
+        if (bid > 0 && ask > 0) emit(pair, bid, ask, Number(d.bidSz), Number(d.askSz));
       }
     },
   );
