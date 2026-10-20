@@ -15,14 +15,15 @@ import { findTriangular, type Book, type LocalOpportunity } from '@/lib/browserS
 const STORAGE_KEY = 'browser-scanner-enabled';
 const COMPUTE_INTERVAL_MS = 2_000;
 const SNAPSHOT_INTERVAL_MS = 30_000;
-const PUBLISH_INTERVAL_MS = 15_000;
-const MIN_PUBLISH_PROFIT = 0.15;
+const PUBLISH_INTERVAL_MS = 5_000;
 
 export interface ExchangeFeedState {
   exchange: SupportedExchange;
   status: FeedStatus;
   pairs: number;
   lastUpdate: number | null;
+  bid: number | null;
+  ask: number | null;
 }
 
 export const useBrowserScanner = () => {
@@ -36,7 +37,7 @@ export const useBrowserScanner = () => {
   });
   const [feeds, setFeeds] = useState<Record<SupportedExchange, ExchangeFeedState>>(() =>
     Object.fromEntries(
-      BROWSER_SCANNER_EXCHANGES.map((e) => [e, { exchange: e, status: 'idle', pairs: 0, lastUpdate: null }]),
+      BROWSER_SCANNER_EXCHANGES.map((e) => [e, { exchange: e, status: 'idle', pairs: 0, lastUpdate: null, bid: null, ask: null }]),
     ) as Record<SupportedExchange, ExchangeFeedState>,
   );
   const [opportunities, setOpportunities] = useState<LocalOpportunity[]>([]);
@@ -46,6 +47,9 @@ export const useBrowserScanner = () => {
   const booksRef = useRef<Record<string, Book>>({});
   const handlesRef = useRef<FeedHandle[]>([]);
   const publishingRef = useRef(false);
+  const opportunitiesRef = useRef<LocalOpportunity[]>([]);
+  const [lastPublishedAt, setLastPublishedAt] = useState<number | null>(null);
+  opportunitiesRef.current = opportunities;
 
   const toggle = useCallback((next: boolean) => {
     setEnabled(next);
@@ -64,7 +68,7 @@ export const useBrowserScanner = () => {
       setOpportunities([]);
       setFeeds((prev) => {
         const next = { ...prev };
-        for (const e of BROWSER_SCANNER_EXCHANGES) next[e] = { ...next[e], status: 'idle', pairs: 0 };
+        for (const e of BROWSER_SCANNER_EXCHANGES) next[e] = { ...next[e], status: 'idle', pairs: 0, lastUpdate: null, bid: null, ask: null };
         return next;
       });
       return;
@@ -73,26 +77,18 @@ export const useBrowserScanner = () => {
     const pairs = buildPairUniverse();
     let cancelled = false;
 
-    const applyQuote = (exchange: SupportedExchange, pair: string, bid: number, ask: number) => {
+    const applyQuote = (exchange: SupportedExchange, pair: string, bid: number, ask: number, bidSize?: number, askSize?: number) => {
+      if (cancelled || !Number.isFinite(bid) || !Number.isFinite(ask) || bid <= 0 || ask < bid) return;
       const book = (booksRef.current[exchange] ||= {});
-      book[pair] = { bid, ask, ts: Date.now() };
+      book[pair] = { bid, ask, ts: Date.now(), bidSize, askSize };
     };
 
     const seed = async () => {
-      for (const exchange of BROWSER_SCANNER_EXCHANGES) {
+      await Promise.all(BROWSER_SCANNER_EXCHANGES.map(async (exchange) => {
         const snapshot = await fetchSnapshot(exchange, pairs);
         if (cancelled) return;
-        snapshot.forEach((q) => applyQuote(exchange, q.pair, q.bid, q.ask));
-        setFeeds((prev) => ({
-          ...prev,
-          [exchange]: {
-            ...prev[exchange],
-            status: prev[exchange].status === 'live' ? 'live' : snapshot.length > 0 ? 'live' : prev[exchange].status,
-            pairs: Object.keys(booksRef.current[exchange] || {}).length,
-            lastUpdate: snapshot.length ? Date.now() : prev[exchange].lastUpdate,
-          },
-        }));
-      }
+        snapshot.forEach((q) => applyQuote(exchange, q.pair, q.bid, q.ask, q.bidSize, q.askSize));
+      }));
     };
 
     seed();
@@ -100,9 +96,9 @@ export const useBrowserScanner = () => {
 
     handlesRef.current = BROWSER_SCANNER_EXCHANGES.map((exchange) =>
       connectExchange(exchange, pairs, {
-        onQuote: (pair, bid, ask) => applyQuote(exchange, pair, bid, ask),
+        onQuote: (pair, bid, ask, bidSize, askSize) => applyQuote(exchange, pair, bid, ask, bidSize, askSize),
         onStatus: (status) =>
-          setFeeds((prev) => ({ ...prev, [exchange]: { ...prev[exchange], status } })),
+          { if (!cancelled) setFeeds((prev) => ({ ...prev, [exchange]: { ...prev[exchange], status } })); },
       }),
     );
 
@@ -114,12 +110,15 @@ export const useBrowserScanner = () => {
         all.push(...findTriangular(exchange, book));
       }
       all.sort((a, b) => b.profitPercent - a.profitPercent);
-      setOpportunities(all.slice(0, 30));
+      setOpportunities(all);
       setFeeds((prev) => {
         const next = { ...prev };
         for (const e of BROWSER_SCANNER_EXCHANGES) {
-          const count = Object.keys(booksRef.current[e] || {}).length;
-          next[e] = { ...next[e], pairs: count, lastUpdate: count ? Date.now() : next[e].lastUpdate };
+          const book = booksRef.current[e] || {};
+          const fresh = Object.values(book).filter((q) => Date.now() - q.ts < 15_000);
+          const btc = book['BTC/USDT'];
+          const lastUpdate = fresh.length ? Math.max(...fresh.map((q) => q.ts)) : next[e].lastUpdate;
+          next[e] = { ...next[e], status: fresh.length ? 'live' : next[e].status === 'live' ? 'error' : next[e].status, pairs: fresh.length, lastUpdate, bid: btc && Date.now() - btc.ts < 15_000 ? btc.bid : null, ask: btc && Date.now() - btc.ts < 15_000 ? btc.ask : null };
         }
         return next;
       });
@@ -140,29 +139,28 @@ export const useBrowserScanner = () => {
 
     const publish = async () => {
       if (publishingRef.current) return;
-      const payload = opportunities
-        .filter((o) => o.profitPercent >= MIN_PUBLISH_PROFIT)
-        .slice(0, 10)
+      const payload = opportunitiesRef.current
+        .filter((o) => o.profitPercent > 0 && Date.now() - o.detectedAt < 15_000)
+        .slice(0, 100)
         .map((o) => ({
-          strategy: 'triangular',
+          exchange: o.exchange,
           path: o.path,
-          exchange1: o.exchange,
-          exchange2: o.exchange,
-          exchange3: o.exchange,
-          pair1: o.pairs[0],
-          pair2: o.pairs[1],
-          pair3: o.pairs[2],
-          profit_percent: o.profitPercent,
+          pairs: o.pairs,
+          gross_percent: o.grossPercent,
+          volume_estimate: o.volumeEstimate,
+          detected_at: new Date(o.detectedAt).toISOString(),
         }));
 
       if (payload.length === 0) return;
       publishingRef.current = true;
       try {
-        const { data, error } = await supabase.functions.invoke('ingest-opportunities', {
-          body: { source: 'browser', opportunities: payload },
+        const { data, error } = await supabase.rpc('publish_browser_opportunities', {
+          p_opportunities: payload,
         });
         if (error) throw error;
-        setPublishedCount((c) => c + (data?.inserted ?? 0));
+        setPublishedCount((c) => c + (data ?? 0));
+        setLastPublishedAt(Date.now());
+        window.dispatchEvent(new Event('browser-opportunities-published'));
         setLastPublishError(null);
       } catch (e: any) {
         setLastPublishError(e?.message || 'Could not publish local finds');
@@ -173,7 +171,7 @@ export const useBrowserScanner = () => {
 
     const id = setInterval(publish, PUBLISH_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [enabled, user, opportunities]);
+  }, [enabled, user?.id]);
 
   const liveFeeds = Object.values(feeds).filter((f) => f.status === 'live').length;
 
@@ -185,5 +183,6 @@ export const useBrowserScanner = () => {
     opportunities,
     publishedCount,
     lastPublishError,
+    lastPublishedAt,
   };
 };

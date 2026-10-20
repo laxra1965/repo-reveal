@@ -144,51 +144,14 @@ export const ArbitrageScanner = () => {
   const loadOpportunitiesFromDB = useCallback(async () => {
     if (!user || !mountedRef.current) return;
 
-    let vpsFetched = false;
-
     try {
-      // Primary: fetch from VPS API
-      const vpsUrl = import.meta.env.VITE_FUNCTIONS_URL || '';
-      if (vpsUrl) {
-        const apiBase = vpsUrl.replace(/\/functions\/?$/, '');
-        const response = await fetch(
-          `${apiBase}/fetch-opportunities?` + new URLSearchParams({
-            limit: '100',
-            sort_by: 'profit',
-            order: 'desc',
-          }),
-          { signal: AbortSignal.timeout(8000) }
-        );
-
-        if (response.ok) {
-          const result = await response.json();
-          const data = result.data || result;
-          if (Array.isArray(data) && data.length > 0 && mountedRef.current) {
-            setOpportunities(prev => {
-              const prevIds = new Set(prev.map(o => o.id));
-              const newIds = new Set(data.map((o: Opportunity) => o.id));
-              const hasChanged = prev.length !== data.length ||
-                data.some((o: Opportunity) => !prevIds.has(o.id)) ||
-                prev.some(o => !newIds.has(o.id));
-              return hasChanged ? data : prev;
-            });
-            setLastScanTime(new Date());
-            vpsFetched = true;
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('VPS fetch failed, falling back to Supabase:', (e as Error).message);
-    }
-
-    if (vpsFetched) return;
-
-    try {
-      // Fallback: read directly from Supabase with user-config filters
+      // Both VPS and browser discoveries share this source of truth.
       let query = supabase
         .from('opportunities')
         .select('*')
         .eq('status', 'active')
+        .gte('detected_at', new Date(Date.now() - 60_000).toISOString())
+        .gt('profit_percent', 0.3)
         .order('profit_percent', { ascending: false })
         .limit(100);
 
@@ -219,6 +182,14 @@ export const ArbitrageScanner = () => {
       console.error('Error loading opportunities from Supabase:', error);
     }
   }, [user, userSettings]);
+
+  useEffect(() => {
+    const refresh = () => { void loadOpportunitiesFromDB(); };
+    window.addEventListener('browser-opportunities-published', refresh);
+    // Poll even while VPS monitoring is paused; also expire stale cards.
+    const timer = setInterval(refresh, 10_000);
+    return () => { window.removeEventListener('browser-opportunities-published', refresh); clearInterval(timer); };
+  }, [loadOpportunitiesFromDB]);
 
   const loadUserSettings = useCallback(async () => {
     if (!user) return;
@@ -387,7 +358,7 @@ export const ArbitrageScanner = () => {
       if (!opts?.silent) {
         toast({
           title: "Scanner Active",
-          description: "Reading opportunities from VPS scanner. Updates every 20s + real-time.",
+            description: "Reading shared opportunities from browser and VPS scanners.",
         });
       }
 
