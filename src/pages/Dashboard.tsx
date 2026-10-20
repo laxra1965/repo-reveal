@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Crown, History, Bot, Zap } from 'lucide-react';
 import { ExecutionRouteIndicator } from '@/components/dashboard/ExecutionRouteIndicator';
+import { BrowserScannerPanel } from '@/components/dashboard/BrowserScannerPanel';
 
 const Dashboard = () => {
   const { user, loading: authLoading, signOut } = useAuth();
@@ -137,6 +138,7 @@ const Dashboard = () => {
       </header>
 
       <main className="container mx-auto px-4 py-8 space-y-8 animate-in">
+        <BrowserScannerPanel />
         <StatisticsDashboard />
         <ArbitrageScanner />
       </main>
