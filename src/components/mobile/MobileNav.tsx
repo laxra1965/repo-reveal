@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Bot, History, User, Shield } from 'lucide-react';
+import { LayoutDashboard, Bot, History, User, Shield, Activity } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { cn } from '@/lib/utils';
@@ -21,6 +21,7 @@ export const MobileNav = () => {
   const items = [
     { to: '/dashboard', label: 'Scanner', icon: LayoutDashboard },
     { to: '/auto-trade', label: 'Auto-Pilot', icon: Bot },
+    { to: '/live-trades', label: 'Live trades', icon: Activity },
     { to: '/trade-history', label: 'History', icon: History },
     { to: '/profile', label: 'Settings', icon: User },
     ...(isAdmin ? [{ to: '/admin', label: 'Trade Ops', icon: Shield }] : []),

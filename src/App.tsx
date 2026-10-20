@@ -25,6 +25,7 @@ const TradeHistory = lazy(() => import("./pages/TradeHistory"));
 const AutoTrade = lazy(() => import("./pages/AutoTrade"));
 const FAQ = lazy(() => import("./pages/FAQ"));
 const Terms = lazy(() => import("./pages/Terms"));
+const LiveTrades = lazy(() => import("./pages/LiveTrades"));
 
 const queryClient = new QueryClient();
 
@@ -49,6 +50,7 @@ const App = () => (
                   <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
                   <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
                   <Route path="/trade-history" element={<ProtectedRoute><TradeHistory /></ProtectedRoute>} />
+                  <Route path="/live-trades" element={<ProtectedRoute><LiveTrades /></ProtectedRoute>} />
                   <Route path="/auto-trade" element={<ProtectedRoute><AutoTrade /></ProtectedRoute>} />
                   <Route path="/auth" element={<Auth />} />
                   <Route path="/admin-login" element={<AdminAuth />} />
