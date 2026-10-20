@@ -1215,6 +1215,10 @@ export type Database = {
           succeeded: number
         }[]
       }
+      publish_browser_opportunities: {
+        Args: { p_opportunities: Json }
+        Returns: number
+      }
       queue_auto_trades_for_users: {
         Args: never
         Returns: {
