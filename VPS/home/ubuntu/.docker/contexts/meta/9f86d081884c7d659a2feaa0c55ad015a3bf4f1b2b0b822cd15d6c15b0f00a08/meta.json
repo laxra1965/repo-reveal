@@ -1,0 +1,1 @@
+{"Name":"test","Metadata":{},"Endpoints":{"docker":{"Host":"ssh://vps","SkipTLSVerify":false}}}

@@ -1,0 +1,1 @@
+{"Name":"arbitrage-vps","Metadata":{},"Endpoints":{"docker":{"Host":"ssh://arbitrage-vps","SkipTLSVerify":false}}}
