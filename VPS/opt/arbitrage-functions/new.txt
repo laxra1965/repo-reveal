@@ -1,0 +1,106 @@
+Tier 1
+
+Always:
+
+subscribed
+scanned
+highest priority
+
+Latency target:
+
+<10ms recalculation
+Tier 2
+
+Adaptive:
+
+lower priority
+event-triggered
+volatility-triggered
+
+Latency target:
+
+50–200ms acceptable
+Triangle Construction Logic
+Good triangle
+LINK/BTC
+BTC/USDT
+LINK/USDT
+Bad triangle
+RANDOMALT/SHIB
+SHIB/DOGE
+DOGE/RANDOMALT
+
+The second usually fails because:
+
+no liquidity
+stale books
+impossible fills
+Recommended Total Market Counts
+Gate.io
+Tier	Pair Count
+Tier 1	30–60
+Tier 2	100–250
+Total	150–300
+Binance
+Tier	Pair Count
+Tier 1	50–100
+Tier 2	200–400
+Total	300–500
+Advanced Production Optimization
+Volatility-weighted scanning
+
+Increase scan frequency for:
+
+high volatility assets
+fast-moving books
+abnormal spreads
+Depth-aware profitability
+
+Never calculate using only best bid/ask.
+
+Simulate:
+
+slippage
+taker fees
+partial fills
+Opportunity decay scoring
+
+Real opportunities decay rapidly.
+
+Store:
+
+{
+  durationMs,
+  spreadStability,
+  fillProbability,
+  depthScore
+}
+
+Then rank opportunities.
+
+Recommended Starting Configuration
+Tier 1
+BTC
+ETH
+SOL
+XRP
+BNB
+DOGE
+
+Against:
+
+USDT
+BTC
+ETH
+USDC
+Tier 2
+
+Top:
+
+50–80
+
+alts by:
+
+real volume
+liquidity
+websocket activity

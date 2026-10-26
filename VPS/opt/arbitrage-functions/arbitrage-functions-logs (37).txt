@@ -1,0 +1,86 @@
+2026-05-17T09:28:13.913072604Z [0m[32mDownload[0m https://esm.sh/@supabase/supabase-js@2
+2026-05-17T09:28:14.090449724Z [0m[32mDownload[0m https://esm.sh/@supabase/supabase-js@2.105.4
+2026-05-17T09:28:14.090623695Z [0m[32mDownload[0m https://deno.land/std@0.168.0/http/server.ts
+2026-05-17T09:28:14.212145376Z [0m[32mDownload[0m https://esm.sh/@supabase/auth-js@2.105.4/denonext/auth-js.mjs
+2026-05-17T09:28:14.212167003Z [0m[32mDownload[0m https://esm.sh/@supabase/functions-js@2.105.4/denonext/functions-js.mjs
+2026-05-17T09:28:14.212170146Z [0m[32mDownload[0m https://esm.sh/@supabase/postgrest-js@2.105.4/denonext/postgrest-js.mjs
+2026-05-17T09:28:14.212172807Z [0m[32mDownload[0m https://esm.sh/@supabase/realtime-js@2.105.4/denonext/realtime-js.mjs
+2026-05-17T09:28:14.212175191Z [0m[32mDownload[0m https://esm.sh/@supabase/storage-js@2.105.4/denonext/storage-js.mjs
+2026-05-17T09:28:14.212177382Z [0m[32mDownload[0m https://esm.sh/@supabase/supabase-js@2.105.4/denonext/supabase-js.mjs
+2026-05-17T09:28:14.261921632Z [0m[32mDownload[0m https://deno.land/std@0.168.0/async/mod.ts
+2026-05-17T09:28:14.268394518Z [0m[32mDownload[0m https://esm.sh/tslib@2.8.1/denonext/tslib.mjs
+2026-05-17T09:28:14.268500870Z [0m[32mDownload[0m https://esm.sh/@supabase/phoenix@^0.4.2?target=denonext
+2026-05-17T09:28:14.268612692Z [0m[32mDownload[0m https://esm.sh/iceberg-js@^0.8.1?target=denonext
+2026-05-17T09:28:14.323288347Z [0m[32mDownload[0m https://deno.land/std@0.168.0/async/abortable.ts
+2026-05-17T09:28:14.323503735Z [0m[32mDownload[0m https://deno.land/std@0.168.0/async/deadline.ts
+2026-05-17T09:28:14.323517406Z [0m[32mDownload[0m https://deno.land/std@0.168.0/async/debounce.ts
+2026-05-17T09:28:14.323575570Z [0m[32mDownload[0m https://deno.land/std@0.168.0/async/deferred.ts
+2026-05-17T09:28:14.323580664Z [0m[32mDownload[0m https://deno.land/std@0.168.0/async/delay.ts
+2026-05-17T09:28:14.323584326Z [0m[32mDownload[0m https://deno.land/std@0.168.0/async/mux_async_iterator.ts
+2026-05-17T09:28:14.323587950Z [0m[32mDownload[0m https://deno.land/std@0.168.0/async/pool.ts
+2026-05-17T09:28:14.323594172Z [0m[32mDownload[0m https://deno.land/std@0.168.0/async/tee.ts
+2026-05-17T09:28:14.323597784Z [0m[32mDownload[0m https://deno.land/std@0.168.0/async/retry.ts
+2026-05-17T09:28:14.324188297Z [0m[32mDownload[0m https://esm.sh/@supabase/phoenix@0.4.2?target=denonext
+2026-05-17T09:28:14.324198102Z [0m[32mDownload[0m https://esm.sh/iceberg-js@0.8.1?target=denonext
+2026-05-17T09:28:14.351285728Z [0m[32mDownload[0m https://esm.sh/@supabase/phoenix@0.4.2/denonext/phoenix.mjs
+2026-05-17T09:28:14.351460563Z [0m[32mDownload[0m https://esm.sh/iceberg-js@0.8.1/denonext/iceberg-js.mjs
+2026-05-17T09:28:14.383214215Z [0m[1m[31merror[0m: The module's source code could not be parsed: Expected '=>', got '=' at file:///app/functions/utils/arbitrage.ts:2:72
+2026-05-17T09:28:14.383234224Z 
+2026-05-17T09:28:14.383237704Z   const logDebugIfExchange = (exchange: string, msg: string, data?: any) =&gt; {
+2026-05-17T09:28:14.383241661Z                                                                          ~
+2026-05-17T09:28:14.800593348Z [0m[1m[31merror[0m: The module's source code could not be parsed: Expected '=>', got '=' at file:///app/functions/utils/arbitrage.ts:2:72
+2026-05-17T09:28:14.800621598Z 
+2026-05-17T09:28:14.800625906Z   const logDebugIfExchange = (exchange: string, msg: string, data?: any) =&gt; {
+2026-05-17T09:28:14.800629268Z                                                                          ~
+2026-05-17T09:28:15.514577362Z [0m[1m[31merror[0m: The module's source code could not be parsed: Expected '=>', got '=' at file:///app/functions/utils/arbitrage.ts:2:72
+2026-05-17T09:28:15.514626833Z 
+2026-05-17T09:28:15.514634653Z   const logDebugIfExchange = (exchange: string, msg: string, data?: any) =&gt; {
+2026-05-17T09:28:15.514642065Z                                                                          ~
+2026-05-17T09:28:16.252388128Z [0m[1m[31merror[0m: The module's source code could not be parsed: Expected '=>', got '=' at file:///app/functions/utils/arbitrage.ts:2:72
+2026-05-17T09:28:16.252417617Z 
+2026-05-17T09:28:16.252423152Z   const logDebugIfExchange = (exchange: string, msg: string, data?: any) =&gt; {
+2026-05-17T09:28:16.252427775Z                                                                          ~
+2026-05-17T09:28:17.340758980Z [0m[1m[31merror[0m: The module's source code could not be parsed: Expected '=>', got '=' at file:///app/functions/utils/arbitrage.ts:2:72
+2026-05-17T09:28:17.340794975Z 
+2026-05-17T09:28:17.340800355Z   const logDebugIfExchange = (exchange: string, msg: string, data?: any) =&gt; {
+2026-05-17T09:28:17.340804850Z                                                                          ~
+2026-05-17T09:28:19.262466766Z [0m[1m[31merror[0m: The module's source code could not be parsed: Expected '=>', got '=' at file:///app/functions/utils/arbitrage.ts:2:72
+2026-05-17T09:28:19.262500731Z 
+2026-05-17T09:28:19.262505912Z   const logDebugIfExchange = (exchange: string, msg: string, data?: any) =&gt; {
+2026-05-17T09:28:19.262510200Z                                                                          ~
+2026-05-17T09:28:30.310854579Z [0m[1m[31merror[0m: The module's source code could not be parsed: Expected '=>', got '=' at file:///app/functions/utils/arbitrage.ts:2:72
+2026-05-17T09:28:30.310898579Z 
+2026-05-17T09:28:30.310902350Z   const logDebugIfExchange = (exchange: string, msg: string, data?: any) =&gt; {
+2026-05-17T09:28:30.310913338Z                                                                          ~
+2026-05-17T09:28:30.742322337Z [0m[1m[31merror[0m: The module's source code could not be parsed: Expected '=>', got '=' at file:///app/functions/utils/arbitrage.ts:2:72
+2026-05-17T09:28:30.742368260Z 
+2026-05-17T09:28:30.742374128Z   const logDebugIfExchange = (exchange: string, msg: string, data?: any) =&gt; {
+2026-05-17T09:28:30.742377902Z                                                                          ~
+2026-05-17T09:28:31.241952032Z [0m[1m[31merror[0m: The module's source code could not be parsed: Expected '=>', got '=' at file:///app/functions/utils/arbitrage.ts:2:72
+2026-05-17T09:28:31.241999148Z 
+2026-05-17T09:28:31.242003516Z   const logDebugIfExchange = (exchange: string, msg: string, data?: any) =&gt; {
+2026-05-17T09:28:31.242006815Z                                                                          ~
+2026-05-17T09:28:31.993533966Z [0m[1m[31merror[0m: The module's source code could not be parsed: Expected '=>', got '=' at file:///app/functions/utils/arbitrage.ts:2:72
+2026-05-17T09:28:31.993561888Z 
+2026-05-17T09:28:31.993566467Z   const logDebugIfExchange = (exchange: string, msg: string, data?: any) =&gt; {
+2026-05-17T09:28:31.993570626Z                                                                          ~
+2026-05-17T09:28:33.114889058Z [0m[1m[31merror[0m: The module's source code could not be parsed: Expected '=>', got '=' at file:///app/functions/utils/arbitrage.ts:2:72
+2026-05-17T09:28:33.114961871Z 
+2026-05-17T09:28:33.114966753Z   const logDebugIfExchange = (exchange: string, msg: string, data?: any) =&gt; {
+2026-05-17T09:28:33.114971034Z                                                                          ~
+2026-05-17T09:28:35.064496291Z [0m[1m[31merror[0m: The module's source code could not be parsed: Expected '=>', got '=' at file:///app/functions/utils/arbitrage.ts:2:72
+2026-05-17T09:28:35.064528168Z 
+2026-05-17T09:28:35.064533268Z   const logDebugIfExchange = (exchange: string, msg: string, data?: any) =&gt; {
+2026-05-17T09:28:35.064537829Z                                                                          ~
+2026-05-17T09:28:38.588640120Z [0m[1m[31merror[0m: The module's source code could not be parsed: Expected '=>', got '=' at file:///app/functions/utils/arbitrage.ts:2:72
+2026-05-17T09:28:38.588681103Z 
+2026-05-17T09:28:38.588686477Z   const logDebugIfExchange = (exchange: string, msg: string, data?: any) =&gt; {
+2026-05-17T09:28:38.588690955Z                                                                          ~
+2026-05-17T09:28:45.324229456Z [0m[1m[31merror[0m: The module's source code could not be parsed: Expected '=>', got '=' at file:///app/functions/utils/arbitrage.ts:2:72
+2026-05-17T09:28:45.324417967Z 
+2026-05-17T09:28:45.324430915Z   const logDebugIfExchange = (exchange: string, msg: string, data?: any) =&gt; {
+2026-05-17T09:28:45.324434799Z                                                                          ~
+2026-05-17T09:28:59.070444506Z [0m[1m[31merror[0m: The module's source code could not be parsed: Expected '=>', got '=' at file:///app/functions/utils/arbitrage.ts:2:72
+2026-05-17T09:28:59.070475663Z 
+2026-05-17T09:28:59.071512082Z   const logDebugIfExchange = (exchange: string, msg: string, data?: any) =&gt; {
+2026-05-17T09:28:59.071527195Z                                                                          ~

@@ -1,0 +1,51 @@
+[Unit]
+Description=Arbitrage Bot Trading Service
+Documentation=https://github.com/your-repo/arbitrage-bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=arbitrage
+WorkingDirectory=/opt/arbitrage-functions
+
+# Environment variables
+EnvironmentFile=/etc/arbitrage/bot.env
+
+# Run command
+ExecStart=/usr/bin/deno run \
+  --allow-net \
+  --allow-env \
+  --allow-write \
+  --allow-read \
+  /opt/arbitrage-functions/bot-with-execution.ts
+
+# Restart policy
+Restart=always
+RestartSec=10
+StartLimitInterval=60
+StartLimitBurst=3
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=32768
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/arbitrage-functions/logs /tmp
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=arbitrage-bot
+
+# Graceful shutdown
+KillMode=mixed
+KillSignal=SIGINT
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
