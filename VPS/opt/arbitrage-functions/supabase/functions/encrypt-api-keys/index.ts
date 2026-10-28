@@ -70,7 +70,7 @@ async function handler(req: Request): Promise<Response> {
         const { action } = body;
 
         // --- Authorization: sensitive actions require service role ---
-        const sensitiveActions = ['rotate_keys', 'migrate', 'test_encryption'];
+        const sensitiveActions = ['decrypt', 'rotate_keys', 'migrate', 'test_encryption'];
         if (sensitiveActions.includes(action) && !isServiceRole) {
             return new Response(
                 JSON.stringify({ success: false, error: 'Forbidden: service role required' }),

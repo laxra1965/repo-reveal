@@ -18,7 +18,7 @@ ExecStart=/usr/bin/deno run \
   --allow-env \
   --allow-write \
   --allow-read \
-  /opt/arbitrage-functions/bot-with-execution.ts
+  /opt/arbitrage-functions/supabase/functions/server.ts
 
 # Restart policy
 Restart=always

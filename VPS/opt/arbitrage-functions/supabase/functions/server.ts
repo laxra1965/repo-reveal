@@ -1,8 +1,10 @@
 import './arbitrage-scanner/scheduler.ts';
+import { autoCycle, caller } from './_shared/trading-runtime.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const PORT = Deno.env.get('PORT') || "8000";
-const ALLOWED_ORIGINS = ["https://triarb.vercel.app"];
+const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') || 'https://repo-reveal.lovable.app').split(',').map(s=>s.trim()).filter(Boolean);
+setInterval(() => { void autoCycle().catch(() => console.error('VPS auto cycle failed')); }, 15000);
 const START_TIME = Date.now();
 
 // Request counter for monitoring
@@ -51,7 +53,7 @@ function getCorsHeaders(origin: string | null) {
   return {
     'Access-Control-Allow-Origin': allowedOrigin,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-idempotency-key, x-supabase-client-platform, x-supabase-client-runtime',
   };
 }
 
@@ -193,7 +195,14 @@ async function handleRequest(req: Request): Promise<Response> {
     return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 
+  const routes = new Set(['arbitrage-scanner','execute-trade','auto-trade-scheduler','validate-api-keys','encrypt-api-keys','fetch-opportunities','clear-user-data']);
+  if (!routes.has(functionName)) return new Response(JSON.stringify({error:'Not found'}), {status:404,headers:corsHeaders});
   try {
+    const auth = await caller(req);
+    if (functionName === 'arbitrage-scanner' && !auth.service) {
+      const {data,error}=await auth.db.from('admin_users').select('id').eq('user_id',auth.userId).maybeSingle();
+      if(error||!data)return new Response(JSON.stringify({error:'Admin required'}),{status:403,headers:corsHeaders});
+    }
     // Check module existence before attempting import to avoid uncaught module-not-found errors
     const moduleUrl = new URL(`./${functionName}/index.ts`, import.meta.url);
     try {
