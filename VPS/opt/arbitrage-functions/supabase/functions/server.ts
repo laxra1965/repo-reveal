@@ -1,5 +1,6 @@
 import './arbitrage-scanner/scheduler.ts';
-import { autoCycle, caller } from './_shared/trading-runtime.ts';
+import {scannerHealth} from './arbitrage-scanner/index.ts';
+import { autoCycle, caller, liveEnabled } from './_shared/trading-runtime.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const PORT = Deno.env.get('PORT') || "8000";
@@ -144,6 +145,8 @@ async function handleRequest(req: Request): Promise<Response> {
       uptime_seconds: uptime,
       requests_total: requestCount,
       database: dbHealth,
+      scanner: {...scannerHealth,status:scannerHealth.lastScanAt && Date.now()-Date.parse(scannerHealth.lastScanAt)<90000 ? (scannerHealth.lastError ? 'degraded' : 'running') : 'unknown'},
+      executor: {status:liveEnabled()?'enabled':'disabled',mode:liveEnabled()?'live':'disabled'},
       opportunities_count: dbHealth.rowCount || 0,
       timestamp: new Date().toISOString()
     }), {
