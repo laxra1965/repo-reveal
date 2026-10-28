@@ -220,7 +220,7 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
       const { data: { session } } = await supabase.auth.getSession();
       const payload = {
         action: 'execute_single',
-        tradeId: tradeEntry!.id,
+        tradeId: tradeEntry?.id,
         userId: user.id,
         opportunityId: opportunity.id,
         idempotencyKey,
@@ -231,41 +231,16 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
         'x-idempotency-key': idempotencyKey,
       };
 
-      let responseData: any;
-
-      // 2. Try VPS executor first
-      const vpsUrl = import.meta.env.VITE_FUNCTIONS_URL;
-      if (vpsUrl) {
-        try {
-          const vpsResponse = await fetch(`${vpsUrl}/functions/execute-trade`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(payload),
-            signal: AbortSignal.timeout(15000),
-          });
-          responseData = await vpsResponse.json();
-          if (!vpsResponse.ok) throw new Error(responseData?.message || 'VPS execution failed');
-        } catch (vpsErr) {
-          console.warn('VPS execution failed, falling back to edge function:', (vpsErr as Error).message);
-          responseData = null;
-        }
-      }
-
-      // 3. Fallback to Supabase edge function
-      if (!responseData) {
-        const { data, error } = await supabase.functions.invoke('execute-trade', {
-          body: payload,
-          headers: { 'x-idempotency-key': idempotencyKey },
-        });
-        if (error) throw error;
-        responseData = data;
-      }
-
+      const vpsUrl = import.meta.env.VITE_FUNCTIONS_URL?.replace(/\/$/, '');
+      if (!vpsUrl) throw new Error('VPS address is not configured. This trade remains pending.');
+      const vpsResponse = await fetch(`${vpsUrl}/functions/execute-trade`, {
+        method: 'POST', headers, body: JSON.stringify(payload), signal: AbortSignal.timeout(60000),
+      });
+      const responseData = await vpsResponse.json();
+      if (!vpsResponse.ok || !responseData.success) throw new Error(responseData.error || 'Check Live Trades before retrying.');
       toast({
-        title: "Trade Executed",
-        description: responseData?.success
-          ? `Trade completed! Profit: ${responseData.actualProfit?.toFixed(4) || 'N/A'}`
-          : "Trade submitted for execution",
+        title: responseData.status === 'completed' ? 'Trade Completed' : 'Trade Status',
+        description: `Status: ${responseData.status}. View recorded fills and fees in Live Trades.`,
       });
     } catch (error: any) {
       console.error('Trade execution error:', error);
@@ -363,7 +338,7 @@ export const ArbitrageOpportunityCard = ({ opportunity, rank }: ArbitrageOpportu
       const { data: { session } } = await supabase.auth.getSession();
       const payload = {
         action: 'execute_single',
-        tradeId: tradeEntry!.id,
+        tradeId: tradeEntry?.id,
         userId: user.id,
         opportunityId: opportunity.id,
         paperTrade: true,

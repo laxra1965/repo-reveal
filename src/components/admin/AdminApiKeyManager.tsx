@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { invokeFunction } from '@/lib/functionsInvoke';
 
 interface ExchangeCredential {
   id: string;
@@ -90,7 +91,7 @@ export const AdminApiKeyManager = () => {
     try {
       setRefreshing(true);
 
-      const { data: encResult, error: encError } = await supabase.functions.invoke(
+      const { data: encResult, error: encError } = await invokeFunction(
         'encrypt-api-keys',
         {
           body: {
@@ -109,13 +110,13 @@ export const AdminApiKeyManager = () => {
       const { error: dbError } = await supabase.from('exchange_credentials').insert({
         user_id: user.id,
         exchange: newCred.exchange as never,
-        api_key: newCred.apiKey.substring(0, 8) + '...',
-        api_secret: '********',
+        api_key: '',
+        api_secret: '',
         encrypted_api_key: encResult.encryptedKey,
         encrypted_api_secret: encResult.encryptedSecret,
         encrypted_api_passphrase: encResult.encryptedPassphrase,
         encryption_version: encResult.version,
-        is_connected: true,
+        is_connected: false,
         test_mode: true,
       });
 

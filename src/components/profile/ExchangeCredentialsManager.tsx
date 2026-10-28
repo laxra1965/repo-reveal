@@ -123,7 +123,6 @@ export function ExchangeCredentialsManager() {
         exchange: newCredential.exchange,
         api_key: '',  // Clear plaintext for security
         api_secret: '',  // Clear plaintext for security
-        api_passphrase: '', // Clear plaintext for security
         encrypted_api_key: encryptedData.encryptedKey,
         encrypted_api_secret: encryptedData.encryptedSecret,
         encrypted_api_passphrase: encryptedData.encryptedPassphrase,
@@ -191,39 +190,8 @@ export function ExchangeCredentialsManager() {
     try {
       console.log(`Testing connection for ${credential.exchange}...`);
 
-      let apiKey = credential.api_key;
-      let apiSecret = credential.api_secret;
-
-      // If credentials are encrypted, decrypt them first
-      if (credential.encrypted_api_key && credential.encrypted_api_secret) {
-        console.log('Decrypting credentials for validation...');
-
-        const decryptResponse = await invokeFunction('encrypt-api-keys', {
-          body: {
-            action: 'decrypt',
-            encryptedKey: credential.encrypted_api_key,
-            encryptedSecret: credential.encrypted_api_secret,
-            encryptedPassphrase: credential.encrypted_api_passphrase
-          }
-        });
-
-        const decryptedData = decryptResponse?.data;
-
-        if (!decryptedData) {
-          throw new Error('Failed to decrypt credentials: Invalid response');
-        }
-
-        apiKey = decryptedData.apiKey;
-        apiSecret = decryptedData.apiSecret;
-        console.log('Credentials decrypted successfully');
-      }
-
       const validateResponse = await invokeFunction('validate-api-keys', {
-        body: {
-          exchange: credential.exchange,
-          apiKey: apiKey,
-          apiSecret: apiSecret
-        }
+        body: { exchange: credential.exchange, credentialId: credential.id }
       });
 
       const data = validateResponse?.data;

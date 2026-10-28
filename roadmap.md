@@ -5,6 +5,7 @@
 - [ ] Explain Supabase's new-table access notice.
 
 # VPS upload readiness
+- [ ] Complete the VPS-to-frontend connection requested on October 28.
 - [ ] Align uploaded scanner startup and Supabase opportunity schema.
 - [ ] Wire queue processing to verified exchange fills with sizing and safety gates.
 - [ ] Replace placeholder exchange verification and align credential decryption.

@@ -133,7 +133,9 @@ export const enqueueStandardOpportunities = (opps: StandardOpportunity[]): void 
   }
 };
 
+let flushing = false;
 const flushBuffer = async (): Promise<void> => {
+  if (flushing) return;
   if (buffer.length === 0) {
     void logInfo('opportunity-buffer', 'Buffer empty, skipping flush', {});
     return;
@@ -145,7 +147,8 @@ const flushBuffer = async (): Promise<void> => {
     return;
   }
 
-  const batch = buffer.splice(0, buffer.length);
+  flushing = true;
+  const batch = buffer.splice(0, 100);
   const rows: BufferedRow[] = batch.map(toBufferedRow);
 
   try {
@@ -168,7 +171,8 @@ const flushBuffer = async (): Promise<void> => {
         rows_count: rows.length,
         rows_inserted: rowsInserted,
       });
-      console.error('[ERROR] Supabase insert failed:', result.error);
+      buffer.unshift(...batch.slice(0, MAX_BUFFER_SIZE - buffer.length));
+      console.error('[writer] insert failed');
       return;
     }
     
@@ -178,10 +182,10 @@ const flushBuffer = async (): Promise<void> => {
         attempted: rows.length,
         actual_inserted: 0,
         likely_cause: 'Row Level Security (RLS) enabled or policy misconfigured',
-        fix: 'Disable RLS: ALTER TABLE public.opportunities DISABLE ROW LEVEL SECURITY;',
+        fix: 'Check service-role configuration and explicit table grants; keep RLS enabled',
       });
       console.error('[RLS-BLOCK] Inserted 0 rows out of', rows.length, 'attempted. RLS is likely blocking inserts!');
-      console.error('[RLS-BLOCK] Fix: Run in Supabase SQL Editor: ALTER TABLE public.opportunities DISABLE ROW LEVEL SECURITY;');
+      console.error('[writer] Keep RLS enabled; check service configuration and grants');
       return;
     }
     
@@ -196,8 +200,9 @@ const flushBuffer = async (): Promise<void> => {
       error: String(err),
       message: err instanceof Error ? err.message : 'Unknown',
     });
-    console.error('[EXCEPTION] Batch insert error:', err);
-  }
+    buffer.unshift(...batch.slice(0, MAX_BUFFER_SIZE - buffer.length));
+    console.error('[writer] insert exception');
+  } finally { flushing = false; }
 };
 
 // Start background flush loop only in long-lived VPS runtime

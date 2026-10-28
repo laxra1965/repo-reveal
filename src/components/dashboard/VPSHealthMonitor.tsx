@@ -38,7 +38,7 @@ interface VPSMetrics {
 }
 
 export const VPSHealthMonitor = () => {
-  const vpsUrl = import.meta.env.VITE_FUNCTIONS_URL || 'https://16.16.143.35/functions';
+  const vpsUrl = import.meta.env.VITE_FUNCTIONS_URL?.replace(/\/$/, '') || '';
   const [metrics, setMetrics] = useState<VPSMetrics>({
     connected: false,
     services: [],
@@ -70,11 +70,11 @@ export const VPSHealthMonitor = () => {
         if (response.ok) {
           const data = await response.json();
           const services: ServiceStatus[] = [
-            { name: 'API Gateway', status: data.status === 'healthy' ? 'running' : 'degraded', lastCheck: new Date(), description: 'HTTP API routing and authentication', icon: <Server className="h-4 w-4" /> },
-            { name: 'Database', status: data.database === 'connected' ? 'running' : 'stopped', lastCheck: new Date(), description: 'Supabase PostgreSQL connection', icon: <Database className="h-4 w-4" /> },
-            { name: 'Scanner Service', status: 'running', lastCheck: new Date(), description: 'Arbitrage opportunity detection', icon: <Radio className="h-4 w-4" /> },
-            { name: 'Market Data', status: 'running', lastCheck: new Date(), description: 'WebSocket price feeds', icon: <Activity className="h-4 w-4" /> },
-            { name: 'Executor', status: 'running', lastCheck: new Date(), description: 'Trade execution engine', icon: <Zap className="h-4 w-4" /> },
+            { name: 'API Gateway', status: data.status === 'ok' ? 'running' : 'degraded', lastCheck: new Date(), description: 'HTTP API routing and authentication', icon: <Server className="h-4 w-4" /> },
+            { name: 'Database', status: data.database?.status === 'healthy' ? 'running' : 'stopped', lastCheck: new Date(), description: 'Supabase PostgreSQL connection', icon: <Database className="h-4 w-4" /> },
+            { name: 'Scanner Service', status: data.scanner?.status || 'unknown', lastCheck: new Date(), description: 'Arbitrage opportunity detection', icon: <Radio className="h-4 w-4" /> },
+            { name: 'Market Data', status: Object.values(data.scanner?.feeds || {}).some((f: any) => Date.now() - Date.parse(f.at) < 90000) ? 'running' : 'unknown', lastCheck: new Date(), description: 'WebSocket price feeds', icon: <Activity className="h-4 w-4" /> },
+            { name: 'Executor', status: data.executor?.status === 'enabled' ? 'running' : 'stopped', lastCheck: new Date(), description: 'Trade execution engine', icon: <Zap className="h-4 w-4" /> },
           ];
           setMetrics({ connected: true, services, lastUpdate: new Date(), vpsUrl, lastOpportunity: null });
           directSuccess = true;
@@ -108,7 +108,7 @@ export const VPSHealthMonitor = () => {
       const overallConnected = hasRecentOpps || hasRecentMetrics;
 
       const services: ServiceStatus[] = [
-        { name: 'Scanner Service', status: scannerStatus, lastCheck: new Date(), description: hasRecentOpps ? `Last opportunity: ${new Date(latestOpp!.detected_at).toLocaleTimeString()}` : 'No recent opportunities detected', icon: <Radio className="h-4 w-4" /> },
+        { name: 'Scanner Service', status: scannerStatus, lastCheck: new Date(), description: hasRecentOpps ? `Last opportunity: ${new Date(latestOpp?.detected_at || 0).toLocaleTimeString()}` : 'No recent opportunities detected', icon: <Radio className="h-4 w-4" /> },
         { name: 'Database Writer', status: overallConnected ? 'running' : 'stopped', lastCheck: new Date(), description: 'Supabase write pipeline', icon: <Database className="h-4 w-4" /> },
         { name: 'Market Data', status: hasRecentOpps ? 'running' : 'unknown', lastCheck: new Date(), description: 'Inferred from scanner activity', icon: <Activity className="h-4 w-4" /> },
         { name: 'Executor', status: 'unknown', lastCheck: new Date(), description: 'Cannot verify without direct VPS access', icon: <Zap className="h-4 w-4" /> },
