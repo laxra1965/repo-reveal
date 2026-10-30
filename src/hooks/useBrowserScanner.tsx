@@ -110,6 +110,7 @@ export const useBrowserScanner = () => {
         all.push(...findTriangular(exchange, book));
       }
       all.sort((a, b) => b.profitPercent - a.profitPercent);
+      opportunitiesRef.current = all;
       setOpportunities(all);
       setFeeds((prev) => {
         const next = { ...prev };
@@ -138,7 +139,6 @@ export const useBrowserScanner = () => {
     if (!enabled || !user) return;
 
     const publish = async () => {
-      console.log("PUB", publishingRef.current, opportunitiesRef.current.length, opportunitiesRef.current[0] && Date.now() - opportunitiesRef.current[0].detectedAt);
       if (publishingRef.current) return;
       const payload = opportunitiesRef.current
         .filter((o) => o.profitPercent > 0 && Date.now() - o.detectedAt < 15_000)
