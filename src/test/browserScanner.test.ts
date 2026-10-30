@@ -41,6 +41,7 @@ describe('Browser market signals', () => {
     await act(async () => { hook.result.current.toggle(true); });
     act(() => { for (const [pair, q] of Object.entries(book())) mocks.quote?.(pair, q.bid, q.ask, q.bidSize, q.askSize); });
     await act(async () => { await vi.advanceTimersByTimeAsync(6_000); });
+    console.log("DBG", hook.result.current.opportunities.length, JSON.stringify(hook.result.current.feeds), hook.result.current.lastPublishError);
     expect(mocks.rpc).toHaveBeenCalledWith('publish_browser_opportunities', { p_opportunities: [expect.objectContaining({ exchange: 'binance', gross_percent: 2, volume_estimate: 500, path: 'USDT > BTC > ETH > USDT' })] });
     expect(hook.result.current.publishedCount).toBe(1);
   });
