@@ -23,34 +23,16 @@ const online = await fetch(`${SUPABASE_URL}/rest/v1/`, { headers: { apikey: ANON
 
 const d = online ? describe : describe.skip;
 
-d('server-side validate_trade_config (UI bypassed)', () => {
-  const invalid: Array<[string, number | null, number | null]> = [
-    ['negative trade amount', -50, 1000],
-    ['zero trade amount', 0, 1000],
-    ['trade amount above the 1,000,000 cap', 1_000_001, null],
-    ['trade amount above max position size', 2000, 1000],
-    ['negative max position size', 100, -1000],
-    ['max position size below the 10 minimum', 100, 5],
-  ];
-
-  for (const [label, amount, maxPos] of invalid) {
-    it(`rejects ${label}`, async () => {
-      const { data, error } = await supabase.rpc('validate_trade_config', {
-        p_trade_amount: amount,
-        p_max_position: maxPos,
-      });
-      expect(error).toBeNull();
-      expect(data).toBe(false);
-    });
-  }
-
-  it('accepts a valid configuration', async () => {
+// validate_trade_config is executable only by signed-in users and the VPS
+// (service role). Anonymous callers must be refused outright.
+d('validate_trade_config is not callable anonymously', () => {
+  it('refuses anonymous callers with a permission error', async () => {
     const { data, error } = await supabase.rpc('validate_trade_config', {
       p_trade_amount: 250,
       p_max_position: 1000,
     });
-    expect(error).toBeNull();
-    expect(data).toBe(true);
+    expect(data).toBeNull();
+    expect(error?.code).toBe('42501');
   });
 });
 
