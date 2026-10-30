@@ -110,6 +110,7 @@ export const useBrowserScanner = () => {
         all.push(...findTriangular(exchange, book));
       }
       all.sort((a, b) => b.profitPercent - a.profitPercent);
+      opportunitiesRef.current = all;
       setOpportunities(all);
       setFeeds((prev) => {
         const next = { ...prev };
