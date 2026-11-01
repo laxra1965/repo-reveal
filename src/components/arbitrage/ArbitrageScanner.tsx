@@ -184,11 +184,9 @@ export const ArbitrageScanner = () => {
   }, [user, userSettings]);
 
   useEffect(() => {
-    const refresh = () => { void loadOpportunitiesFromDB(); };
-    window.addEventListener('browser-opportunities-published', refresh);
     // Poll even while VPS monitoring is paused; also expire stale cards.
-    const timer = setInterval(refresh, 10_000);
-    return () => { window.removeEventListener('browser-opportunities-published', refresh); clearInterval(timer); };
+    const timer = setInterval(() => { void loadOpportunitiesFromDB(); }, 10_000);
+    return () => clearInterval(timer);
   }, [loadOpportunitiesFromDB]);
 
   const loadUserSettings = useCallback(async () => {
@@ -251,82 +249,33 @@ export const ArbitrageScanner = () => {
 
 
 
-  // Auto paper trade function
+  // Auto paper trades run on the server (also when this page is closed).
+  // While the page is open we nudge it so new trades appear immediately.
   const executeAutoPaperTrade = useCallback(async (opportunity: Opportunity) => {
     if (!user || autoTradedIdsRef.current.has(opportunity.id)) return;
-
-    // Mark as traded to prevent duplicates
     autoTradedIdsRef.current.add(opportunity.id);
-
-    try {
-      const symbols = opportunity.path.split(/[→>\/\-]/).map(s => s.trim()).filter(Boolean);
-      const baseSymbol = symbols[0] || 'UNKNOWN';
-      const intermediateSymbol = symbols[1] || 'UNKNOWN';
-      const quoteSymbol = symbols[2] || symbols[0] || 'UNKNOWN';
-      // Respect the user's saved Trading Configuration: trade_amount is the
-      // notional, capped only by max_position_size (paper trades are simulated,
-      // so opportunity liquidity does not constrain the size). Invalid or
-      // out-of-range settings block the trade entirely.
-      const configured = Number(userSettings.trade_amount ?? NaN);
-      const maxPosition = Number(userSettings.max_position_size ?? NaN);
-      const resolved = evaluateTradeConfig(
-        { trade_amount: userSettings.trade_amount ?? null, max_position_size: userSettings.max_position_size ?? null },
-        'paper'
-      );
-      if ('reason' in resolved) {
-        autoTradedIdsRef.current.delete(opportunity.id);
-        setBlockingReason(resolved.reason);
-        if (!invalidConfigNotifiedRef.current) {
-          invalidConfigNotifiedRef.current = true;
-          toast({
-            title: `Auto-simulate blocked: ${resolved.reason.field}`,
-            description: resolved.reason.message,
-            variant: 'destructive',
-          });
-        }
-        return;
+    const resolved = evaluateTradeConfig(
+      { trade_amount: userSettings.trade_amount ?? null, max_position_size: userSettings.max_position_size ?? null },
+      'paper'
+    );
+    if ('reason' in resolved) {
+      autoTradedIdsRef.current.delete(opportunity.id);
+      setBlockingReason(resolved.reason);
+      if (!invalidConfigNotifiedRef.current) {
+        invalidConfigNotifiedRef.current = true;
+        toast({ title: `Auto-simulate blocked: ${resolved.reason.field}`, description: resolved.reason.message, variant: 'destructive' });
       }
-      invalidConfigNotifiedRef.current = false;
-      setBlockingReason(null);
-      const startAmount = resolved.amount;
-      const expectedProfit = startAmount * (opportunity.profit_percent / 100);
-
-      const slippage = (Math.random() - 0.5) * 0.002;
-      const simulatedProfit = expectedProfit * (1 + slippage);
-      const simulatedFinalAmount = startAmount + simulatedProfit;
-
-      await supabase.from('trade_history').insert({
-        user_id: user.id,
-        opportunity_id: opportunity.id,
-        base_symbol: baseSymbol,
-        quote_symbol: quoteSymbol,
-        intermediate_symbol: intermediateSymbol,
-        start_amount: startAmount,
-        expected_profit: expectedProfit,
-        actual_profit: simulatedProfit,
-        final_amount: simulatedFinalAmount,
-        status: 'completed',
-        total_steps: 3,
-        completed_steps: 3,
-        execution_details: {
-          is_paper_trade: true,
-          auto_executed: true,
-          configured_trade_amount: configured || null,
-          max_position_size: maxPosition || null,
-          exchanges: [opportunity.exchange1, opportunity.exchange2, opportunity.exchange3].filter(Boolean).join(' / '),
-          log: [
-            { step: 1, success: true, isPaperTrade: true, orderId: `PAPER_AUTO_${Date.now()}_1`, timestamp: new Date().toISOString() },
-            { step: 2, success: true, isPaperTrade: true, orderId: `PAPER_AUTO_${Date.now()}_2`, timestamp: new Date().toISOString() },
-            { step: 3, success: true, isPaperTrade: true, orderId: `PAPER_AUTO_${Date.now()}_3`, timestamp: new Date().toISOString() }
-          ]
-        }
-      });
-
-      setAutoPaperTradeCount(prev => prev + 1);
-    } catch (error) {
-      console.error('Auto paper trade error:', error);
-      autoTradedIdsRef.current.delete(opportunity.id); // Allow retry on error
+      return;
     }
+    invalidConfigNotifiedRef.current = false;
+    setBlockingReason(null);
+    const { data, error } = await (supabase.rpc as any)('run_my_auto_paper_trades');
+    if (error) {
+      console.error('Auto paper trade error:', error);
+      autoTradedIdsRef.current.delete(opportunity.id);
+      return;
+    }
+    if (Number(data) > 0) setAutoPaperTradeCount(prev => prev + Number(data));
   }, [user, userSettings, toast]);
 
 
