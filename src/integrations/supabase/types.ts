@@ -1249,6 +1249,11 @@ export type Database = {
           trades_cancelled: number
         }[]
       }
+      run_all_auto_paper_trades: { Args: never; Returns: number }
+      run_auto_paper_trades_for: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
       run_auto_trade_cycle: {
         Args: never
         Returns: {
@@ -1259,6 +1264,7 @@ export type Database = {
           users_processed: number
         }[]
       }
+      run_my_auto_paper_trades: { Args: never; Returns: number }
       run_my_auto_trade_cycle: {
         Args: never
         Returns: {
