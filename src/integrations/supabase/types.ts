@@ -14,21 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      __pgcron_test: {
-        Row: {
-          created_at: string | null
-          id: number
-        }
-        Insert: {
-          created_at?: string | null
-          id?: number
-        }
-        Update: {
-          created_at?: string | null
-          id?: number
-        }
-        Relationships: []
-      }
       admin_settings: {
         Row: {
           created_at: string | null
