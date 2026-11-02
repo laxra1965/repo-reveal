@@ -145,7 +145,7 @@ export const ArbitrageScanner = () => {
     if (!user || !mountedRef.current) return;
 
     try {
-      // Both VPS and browser discoveries share this source of truth.
+      // VPS scanner discoveries are the source of truth.
       let query = supabase
         .from('opportunities')
         .select('*')
@@ -307,7 +307,7 @@ export const ArbitrageScanner = () => {
       if (!opts?.silent) {
         toast({
           title: "Scanner Active",
-            description: "Reading shared opportunities from browser and VPS scanners.",
+            description: "Reading opportunities from the VPS scanner.",
         });
       }
 

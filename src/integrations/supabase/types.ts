@@ -14,21 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      __pgcron_test: {
-        Row: {
-          created_at: string | null
-          id: number
-        }
-        Insert: {
-          created_at?: string | null
-          id?: number
-        }
-        Update: {
-          created_at?: string | null
-          id?: number
-        }
-        Relationships: []
-      }
       admin_settings: {
         Row: {
           created_at: string | null
@@ -1214,10 +1199,6 @@ export type Database = {
           processed: number
           succeeded: number
         }[]
-      }
-      publish_browser_opportunities: {
-        Args: { p_opportunities: Json }
-        Returns: number
       }
       queue_auto_trades_for_users: {
         Args: never
