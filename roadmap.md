@@ -18,3 +18,8 @@
 - [ ] Get opportunities flowing again: VPS scanner must run, or decide on the dead
       database-side scanner shortcut (points at an undeployed function).
 - [ ] Confirm a paper trade and a queued live trade appear end to end once scanning resumes.
+
+# Supabase account move (Nov 15)
+- [x] Prepare account-transfer and new-project migration paths with safety and verification steps.
+- [x] Remove hidden fallback credentials that could keep the app pointed at the previous Supabase project.
+- [ ] Connect and verify the destination project after the user creates it and supplies its project reference.
