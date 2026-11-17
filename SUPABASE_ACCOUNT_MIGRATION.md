@@ -66,7 +66,24 @@ If the local migration history must also be preserved, export and restore `supab
 
 5. **VPS credentials:** set VPS `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `SUPABASE_ANON_KEY` to destination values. Preserve the exact VPS `ENCRYPTION_KEY` that encrypted existing `exchange_credentials`; changing it makes those keys unreadable and users must re-enter credentials. Keep it secret and server-side. Start with `TRADING_ENABLED=false` and `EXECUTION_MODE=dry_run`.
 6. **Supabase root encryption key:** with a manual logical restore, if the source uses Vault/pgsodium or root-key-encrypted columns, the source root key may need to be copied through Supabase's documented Management API procedure while both projects are active. Do not put the key or personal access token into chat/Git, and never overwrite a destination root key casually. Managed Restore to a new project handles this key copy. This is separate from the VPS `ENCRYPTION_KEY`.
-7. **Schedules and realtime:** compare extensions, realtime publication membership, Auth redirects, and cron jobs. Recreate the existing 03:00 UTC cron-log cleanup if absent. Keep only one scanner and one automatic live-trade queue consumer; do not run duplicate VPS workers.
+   For a brand-new destination only, and only when such root-key-encrypted data exists, this streams the key directly between Supabase's Management API without printing it. Use a private terminal, a personal access token with the required access, and the actual destination reference; do not run this against a destination whose key must be retained:
+
+   ```bash
+   SOURCE_PROJECT_REF=zupbliefzhnohsoguwuk
+   read -r -p 'Destination project reference: ' TARGET_PROJECT_REF
+   read -r -s -p 'Supabase personal access token: ' SUPABASE_ACCESS_TOKEN; printf '\n'
+   curl --fail --silent --show-error \
+     "https://api.supabase.com/v1/projects/${SOURCE_PROJECT_REF}/pgsodium" \
+     -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+   | curl --fail --silent --show-error \
+     "https://api.supabase.com/v1/projects/${TARGET_PROJECT_REF}/pgsodium" \
+     -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+     -X PUT --json @- --output /dev/null
+   unset SUPABASE_ACCESS_TOKEN TARGET_PROJECT_REF
+   ```
+
+   Supabase documents this source-to-destination procedure for its 64-character encryption root key; do not substitute the VPS `ENCRYPTION_KEY`.
+7. **Schedules and realtime:** compare extensions, realtime publication membership, Auth redirects, and cron jobs. Inspect migrated schedules for hardcoded old project URLs and stale function endpoints before enabling them. Recreate the existing 03:00 UTC cron-log cleanup if absent. Keep only one scanner and one automatic live-trade queue consumer; do not run duplicate VPS workers.
 
 ## Verify, cut over, and retain rollback
 
