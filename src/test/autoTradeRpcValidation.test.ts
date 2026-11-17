@@ -9,15 +9,15 @@ import { createClient } from '@supabase/supabase-js';
  * Skipped automatically when the environment has no network access.
  */
 
-const SUPABASE_URL = 'https://zupbliefzhnohsoguwuk.supabase.co';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
 const ANON_KEY =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp1cGJsaWVmemhub2hzb2d1d3VrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ0MTg5MjksImV4cCI6MjA2OTk5NDkyOX0.onUAdnZILGu2vhjsEDxGqQuhvLfKTwjC3QJPNJcG0n0';
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
 
 const supabase = createClient(SUPABASE_URL, ANON_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-const online = await fetch(`${SUPABASE_URL}/rest/v1/`, { headers: { apikey: ANON_KEY } })
+const online = Boolean(SUPABASE_URL && ANON_KEY) && await fetch(`${SUPABASE_URL}/rest/v1/`, { headers: { apikey: ANON_KEY } })
   .then(() => true)
   .catch(() => false);
 
